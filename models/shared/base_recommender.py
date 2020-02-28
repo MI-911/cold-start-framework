@@ -21,13 +21,14 @@ class RecommenderBase:
         """
         raise NotImplementedError
 
-    def interview(self, answers):
+    def interview(self, answers, max_n_questions=5):
         """
         Predicts the next question(s) to ask a user
         :param answers: A state dictionary of the following format:
             {
                 item_id: sentiment
             }
+        :param max_n_questions: The maximally allowed length of the returned list.
         :return: A list of the following format:
             [
                 item_ids  // Next question(s) to ask the user
