@@ -1,6 +1,12 @@
+class User:
+    """
+    Base class for users. All users, whether cold or warm, have a validation set.
+    """
+    def __init__(self, validation):
+        self.validation = validation
 
 
-class WarmStartUser:
+class WarmStartUser(User):
     """
     For the warmup() method of recommenders.
     """
@@ -10,24 +16,24 @@ class WarmStartUser:
         :param ratings: A dictionary of the format: { entity_id: sentiment }
         :param validation: A pair of the format: (positive, negatives)
         """
+        super().__init__(validation)
         self.training = ratings
-        self.validation = validation
 
 
 class ColdStartUserSet:
-    def __init__(self, answers, positive, negatives):
+    def __init__(self, answers, positive, negative):
         """
         Initialises a cold-start user set.
         :param answers: A dictionary of the format: { entity_id: sentiment }
         :param positive: An entity_id
-        :param negatives: A list of the format [ entity_id ]
+        :param negative: A list of the format [ entity_id ]
         """
         self.answers = answers
         self.positive = positive
-        self.negatives = negatives
+        self.negative = negative
 
 
-class ColdStartUser:
+class ColdStartUser(User):
     """
     For the interview() and predict() methods of Recommenders.
     """
@@ -37,5 +43,5 @@ class ColdStartUser:
         :param sets: A list of the format [ ColdStartUserSet ]
         :param validation: A pair of the format (positive, negatives)
         """
+        super().__init__(validation)
         self.sets = sets
-        self.validation = validation

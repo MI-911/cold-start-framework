@@ -6,6 +6,7 @@ import tqdm
 from loguru import logger
 from os import path
 
+from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
 
 
 class NpEncoder(json.JSONEncoder):
@@ -16,6 +17,12 @@ class NpEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
+        elif isinstance(obj, WarmStartUser):
+            return {'validation': obj.validation, 'training': obj.training}
+        elif isinstance(obj, ColdStartUser):
+            return {'validation': obj.validation, 'sets': obj.sets}
+        elif isinstance(obj, ColdStartUserSet):
+            return {'positive': obj.positive, 'negative': obj.negative, 'answers': obj.answers}
         else:
             return super(NpEncoder, self).default(obj)
 
@@ -95,10 +102,7 @@ def _get_training_data(ratings, warm_start_users, user_idx):
         # Assert negative samples not in training
         assert not set(validation_dict['negative']).intersection(training_dict.keys())
 
-        training_data[user_idx[user]] = {
-            'training': training_dict,
-            'validation': validation_dict
-        }
+        training_data[user_idx[user]] = WarmStartUser(training_dict, validation_dict)
 
     return training_data
 
@@ -137,16 +141,13 @@ def _get_testing_data(ratings, cold_start_users, user_idx, movie_indices):
             # Assert that user cannot answer about the positive item
             assert pos.entityIdx not in answer_dict
 
-            sets.append({**pos_neg_dict, 'answers': answer_dict})
+            sets.append(ColdStartUserSet(answer_dict, **pos_neg_dict))
 
         # Check if user has any valid answer sets
         if not sets:
             continue
 
-        testing_data[user_idx[user]] = {
-            'sets': sets,
-            'validation': validation_dict
-        }
+        testing_data[user_idx[user]] = ColdStartUser(sets, validation_dict)
 
     return testing_data
 
