@@ -2,7 +2,7 @@
 
 class WarmStartUser:
     """
-    For the warmup() method of Recommenders.
+    For the warmup() method of recommenders.
     """
     def __init__(self, ratings, validation):
         """
