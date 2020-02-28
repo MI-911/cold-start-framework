@@ -52,6 +52,7 @@ class RecommenderBase:
                 item_id: score  // The best fitting item gets the highest score.
             }
         """
+        raise NotImplementedError
 
     def get_params(self):
         """
