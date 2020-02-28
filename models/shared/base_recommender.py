@@ -21,29 +21,36 @@ class RecommenderBase:
         """
         raise NotImplementedError
 
-    def interview(self, users):
+    def interview(self, answers):
         """
-        Predicts a score for all items given a user.
-        :param users: A dictionary of the following format:
+        Predicts the next question(s) to ask a user
+        :param answers: A state dictionary of the following format:
             {
-                userId : {
-                    validation: {
-                        negative: [ item_ids ]
-                        positive: item_id
-                    },
-                    sets: [
-                        answers: { item_id: sentiment },
-                        negative: [ item_ids ],
-                        positive: item_id
-                    ]
-                }
+                item_id: sentiment
+            }
+        :return: A list of the following format:
+            [
+                item_ids  // Next question(s) to ask the user
+            ]
+        """
+        raise NotImplementedError
+
+    def predict(self, items, answers):
+        """
+        Predicts the ranking of the provided items given a user's answers.
+        :param items: A list of the following format:
+            [
+                item_ids  // The items to rank
+            ]
+        :param answers: A state dictionary of the following format:
+            {
+                item_id: sentiment
             }
         :return: A dictionary of the following format:
             {
-                item_id : score  // Best fitting item --> highest score
+                item_id: score  // The best fitting item gets the highest score.
             }
         """
-        raise NotImplementedError
 
     def get_params(self):
         """
