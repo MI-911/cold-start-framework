@@ -151,7 +151,14 @@ def _get_testing_data(ratings, cold_start_users, user_idx, movie_indices):
     return testing_data
 
 
-def generate(ratings_path, output_directory, random_seed=42, warm_start_ratio=0.75, include_unknown=False):
+def _get_entities(entities_path):
+    entities = pd.read_csv(entities_path)
+
+    return {row['uri']: {'name': row['name'], 'labels': row['labels'].split('|')} for idx, row in entities.iterrows()}
+
+
+def generate(ratings_path, entities_path, output_directory, random_seed=42, warm_start_ratio=0.75,
+             include_unknown=False):
     random.seed(random_seed)
 
     # Load ratings data
@@ -182,10 +189,12 @@ def generate(ratings_path, output_directory, random_seed=42, warm_start_ratio=0.
 
     with open(path.join(output_directory, 'meta.json'), 'w') as fp:
         json.dump({
+            'entities': _get_entities(entities_path),
             'uri_idx': entity_idx,
             'idx_item': {row.entityIdx: row.isItem for idx, row in ratings.iterrows()}
         }, fp, cls=NpEncoder)
 
 
 if __name__ == '__main__':
-    generate(ratings_path='../sources/mindreader/ratings-100k.csv', output_directory='data')
+    generate(ratings_path='../sources/mindreader/ratings-100k.csv', entities_path='../sources/mindreader/entities.csv',
+             output_directory='data')
