@@ -158,8 +158,8 @@ def _get_entities(entities_path):
     return {row['uri']: {'name': row['name'], 'labels': row['labels'].split('|')} for idx, row in entities.iterrows()}
 
 
-def generate(ratings_path, entities_path, output_directory, random_seed=42, warm_start_ratio=0.75,
-             include_unknown=False):
+def partition(ratings_path, entities_path, output_directory, random_seed=42, warm_start_ratio=0.75,
+              include_unknown=False):
     random.seed(random_seed)
 
     # Load ratings data
@@ -174,7 +174,7 @@ def generate(ratings_path, entities_path, output_directory, random_seed=42, warm
     # Find movie indices
     movie_indices = set(ratings[ratings.isItem].entityIdx.unique())
 
-    # Generate training/testing data from users
+    # Partition training/testing data from users
     training_data = _get_training_data(ratings, warm_users, user_idx)
     testing_data = _get_testing_data(ratings, cold_users, user_idx, movie_indices)
 
@@ -197,5 +197,5 @@ def generate(ratings_path, entities_path, output_directory, random_seed=42, warm
 
 
 if __name__ == '__main__':
-    generate(ratings_path='../sources/mindreader/ratings-100k.csv', entities_path='../sources/mindreader/entities.csv',
-             output_directory='data')
+    partition(ratings_path='../sources/mindreader/ratings-100k.csv', entities_path='../sources/mindreader/entities.csv',
+              output_directory='data')

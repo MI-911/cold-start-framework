@@ -47,9 +47,9 @@ class NaiveRecommender(RecommenderBase):
 
 
 if __name__ == '__main__':
-    training = json.load(open('../data_generation/data/training.json'))
-    testing = json.load(open('../data_generation/data/testing.json'))
-    meta = json.load(open('../data_generation/data/meta.json'))
+    training = json.load(open('../data_partitioner/data/training.json'))
+    testing = json.load(open('../data_partitioner/data/testing.json'))
+    meta = json.load(open('../data_partitioner/data/meta.json'))
 
     naive = NaiveRecommender()
     naive.warmup(training)
