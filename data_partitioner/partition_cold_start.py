@@ -4,7 +4,7 @@ import json
 import numpy as np
 import tqdm
 from loguru import logger
-from os import path
+import os
 
 from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
 
@@ -181,14 +181,17 @@ def partition(ratings_path, entities_path, output_directory, random_seed=42, war
     logger.info(f'Created {len(training_data)} training entries and {len(testing_data)} testing entries')
 
     # Write data to disk
+    if not os.path.exists(output_directory):
+        os.makedirs(output_directory)
+
     logger.info(f'Writing dataset to {output_directory}')
-    with open(path.join(output_directory, 'training.json'), 'w') as fp:
+    with open(os.path.join(output_directory, 'training.json'), 'w') as fp:
         json.dump(training_data, fp, cls=NpEncoder)
 
-    with open(path.join(output_directory, 'testing.json'), 'w') as fp:
+    with open(os.path.join(output_directory, 'testing.json'), 'w') as fp:
         json.dump(testing_data, fp, cls=NpEncoder)
 
-    with open(path.join(output_directory, 'meta.json'), 'w') as fp:
+    with open(os.path.join(output_directory, 'meta.json'), 'w') as fp:
         json.dump({
             'entities': _get_entities(entities_path),
             'uri_idx': entity_idx,
