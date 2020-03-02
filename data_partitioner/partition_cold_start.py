@@ -199,6 +199,20 @@ def partition(ratings_path, entities_path, output_directory, random_seed=42, war
         }, fp, cls=NpEncoder)
 
 
+def load(from_path):
+    """
+    Converts JSON keys to integers if they can be converted without error.
+    """
+    def _keys_to_ints(x):
+        try:
+            return {int(k): v for k, v in x.items()} if isinstance(x, dict) else x
+        except ValueError:
+            return x
+
+    with open(from_path) as fp:
+        return json.load(fp, object_hook=_keys_to_ints)
+
+
 if __name__ == '__main__':
     partition(ratings_path='../sources/mindreader/ratings-100k.csv', entities_path='../sources/mindreader/entities.csv',
               output_directory='data')
