@@ -1,12 +1,9 @@
-
-from typing import Dict
+from typing import Dict, List
 from models.shared.user import WarmStartUser
 
 
 class RecommenderBase:
-
-
-    def warmup(self, training: Dict[int, WarmStartUser]):
+    def warmup(self, training: Dict[int, WarmStartUser]) -> None:
         """
         Fits the model to the training data.
         :param training: A dictionary of the following format:
@@ -25,7 +22,7 @@ class RecommenderBase:
         """
         raise NotImplementedError
 
-    def interview(self, answers: Dict[int, int], max_n_questions: int) -> List[int]:
+    def interview(self, answers: Dict[int, int], max_n_questions=5) -> List[int]:
         """
         Predicts the next question(s) to ask a user
         :param answers: A state dictionary of the following format:
