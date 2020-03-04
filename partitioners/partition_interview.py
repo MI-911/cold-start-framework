@@ -9,7 +9,6 @@ from models.shared.meta import Meta
 from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
 
 
-
 def _sample_positive(from_ratings):
     return random.choice(from_ratings[from_ratings.sentiment == 1 & from_ratings.isItem].entityIdx.unique())
 

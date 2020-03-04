@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 import operator
 
+from data_loader.data_loader import DataLoader
 from models.shared.base_recommender import RecommenderBase
 
 
@@ -48,9 +49,10 @@ class NaiveRecommender(RecommenderBase):
 
 
 if __name__ == '__main__':
-    training = pickle.load(open('../partitioners/data/training.pkl', 'rb'))
-    testing = pickle.load(open('../partitioners/data/testing.pkl', 'rb'))
-    meta = pickle.load(open('../partitioners/data/meta.pkl', 'rb'))
+    data_loader = DataLoader('../partitioners/data')
+    training = data_loader.load_training()
+    testing = data_loader.load_testing()
+    meta = data_loader.load_meta()
 
     naive = NaiveRecommender()
     naive.warmup(training)
