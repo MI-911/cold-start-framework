@@ -1,5 +1,8 @@
 import numpy as np
 from models.lrmf.decision_tree import DecisionTree
+from numpy.linalg import inv
+from loguru import logger
+from tqdm import tqdm
 
 
 class LRMF:
@@ -22,19 +25,34 @@ class LRMF:
         self.alpha = 0.001
         self.beta = 0.001
 
+        self.tree = None
+
     def fit(self, R, candidates):
         self.R = R
-        # 1. Build the tree
-        tree = DecisionTree(
-            depth=self.l1 + self.l2,
-            users=[u for u in range(self.n_users)],
-            parent_interview=[],
-            LRMF=self)
-        tree.grow(candidates)
-        tree.show()
 
-        pass
+        for iteration in range(100):
+            logger.info(f'Iteration {iteration}')
+            logger.info('--------------------')
+            # 1. Build the tree
+            logger.info(f'Building tree...')
+            self.tree = DecisionTree(
+                depth=self.l1 + self.l2,
+                users=[u for u in range(self.n_users)],
+                parent_interview=[],
+                LRMF=self)
+            self.tree.grow(candidates)
+            self.tree.show()
 
-    def solve_T(self, users):
-        # Solve the sylvester equation AX + XB = Q for X
-        pass
+            # 2. Optimise item embeddings
+            logger.info('Optimising item embeddings...')
+            self.V = self.solve_item_embeddings()
+
+    def solve_item_embeddings(self):
+        S = np.zeros((self.n_users, self.kk))
+
+        for u in tqdm(range(self.n_users), desc='[Optimizing item embeddings]'):
+            S[u] = self.tree.interview(u, self.R[u])
+
+        # Ordinary least squares solution
+        # NOTE: Paper says I_l, but it should be I_k'
+        return inv(S.T @ S + np.eye(self.kk)) @ S.T @ self.R

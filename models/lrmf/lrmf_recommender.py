@@ -24,7 +24,7 @@ def get_rating_matrix(training, n_users, n_entities, rating_map=None):
 
 def choose_candidates(rating_matrix, n=100):
     n_ratings = rating_matrix.sum(axis=0)
-    n_ratings = sorted([(entity, rs) for entity, rs in enumerate(n_ratings)], key=lambda x: x[1])
+    n_ratings = sorted([(entity, rs) for entity, rs in enumerate(n_ratings)], key=lambda x: x[1], reverse=True)
     return [entity for entity, rs in n_ratings][:n]
 
 
