@@ -1,8 +1,10 @@
+from typing import Dict
+from models.shared.user import WarmStartUser
 
 
 class RecommenderBase:
 
-    def warmup(self, training):
+    def warmup(self, training: Dict[int, WarmStartUser]):
         """
         Fits the model to the training data.
         :param training: A dictionary of the following format:

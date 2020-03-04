@@ -52,6 +52,10 @@ if __name__ == '__main__':
     testing = pickle.load(open('../partitioners/data/testing.pkl', 'rb'))
     meta = pickle.load(open('../partitioners/data/meta.pkl', 'rb'))
 
+    input(training)
+    input(testing)
+    input(meta)
+
     naive = NaiveRecommender()
     naive.warmup(training)
     idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
