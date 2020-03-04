@@ -1,7 +1,7 @@
 import numpy as np
 from numpy.linalg import inv, norm
 from scipy.linalg import solve_sylvester
-from typing import List
+from typing import List, Dict
 from loguru import logger
 from tqdm import tqdm
 
@@ -31,7 +31,7 @@ class DecisionTree:
             return
 
         # Find split item
-        self.candidate = self.choose_candidate(candidates)
+        self.candidate = self.choose_candidate_test(candidates)
         u_l, u_d = self.split_users(self.candidate)
         interview = self.parent_interview + [self.candidate]
 
@@ -69,7 +69,7 @@ class DecisionTree:
         base[:, :-1] = user_rep  # Leave the last column all 1s
         return base
 
-    def interview(self, user_id: int, user_ratings: List[int]):
+    def get_representation(self, user_id: int, user_ratings: List[int]):
         # User should be a row from R
         def _transform_user(id):
             return self.represent([id], self.parent_interview) @ self.T
@@ -82,16 +82,7 @@ class DecisionTree:
 
         if next is None:
             return _transform_user(user_id)
-        return next.interview(user_id, user_ratings)
-
-    def transform_leaves(self):
-        # NOTE: DEPRECATED
-        if not self.is_leaf() and self.has_children():
-            return np.vstack((
-                child.transform_leaves() for rating, child in self.children.items()
-                if child is not None
-            ))
-        return self.represent(self.users, self.parent_interview) @ self.T
+        return next.get_representation(user_id, user_ratings)
 
     def choose_candidate_test(self, candidates):
         return np.random.choice(candidates)
@@ -123,6 +114,42 @@ class DecisionTree:
         u_d, = np.where(u_all[:, candidate] == DISLIKE)
 
         return u_l, u_d
+
+    def interview(self, answers: Dict[int, int]):
+        if not answers:
+            return [self.candidate]
+        else:
+            for rating, child in self.children.items():
+                if child.candidate in answers and answers[child.candidate] == rating:
+                    remaining = {
+                        entity: answer
+                        for entity, answer in answers.items()
+                        if not entity == child.candidate
+                    }
+                    return child.interview(remaining)
+
+            raise LookupError(f'Could not find a fitting interview question for this user.'
+                              f'This may be caused by the interviewer taking the wrong path'
+                              f'through the decision tree. Consider removing split candidates'
+                              f'globally so no two nodes in the decision tree can share their'
+                              f'split items.')
+
+    def get_interview_representation(self, answers, representation_acc):
+        representation_acc.append(answers[self.candidate])
+        remaining = {
+            entity: answer
+            for entity, answer in answers.items()
+            if not entity == self.candidate
+        }
+
+        if len(remaining) > 0 and not self.is_leaf() and self.has_children():
+            for rating, child in remaining.items():
+                if child.candidate in remaining and remaining[child.candidate] == rating:
+                    return child.get_interview_representation(remaining, representation_acc)
+
+            raise LookupError(f'Could not find a fitting interview question for this user.')
+        else:
+            return representation_acc @ self.T
 
     def show(self):
         indent = ''.join([' |' for _ in range(len(self.parent_interview))])

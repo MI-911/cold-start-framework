@@ -1,4 +1,5 @@
 import pickle
+from abc import ABC
 from typing import Dict, List
 from models.lrmf.lrmf import LRMF
 from models.lrmf.decision_tree import LIKE, DISLIKE
@@ -23,6 +24,7 @@ def get_rating_matrix(training, n_users, n_entities, rating_map=None):
 
 
 def choose_candidates(rating_matrix, n=100):
+    # TODO: Choose candidate items with a mix between popularity and diversity
     n_ratings = rating_matrix.sum(axis=0)
     n_ratings = sorted([(entity, rs) for entity, rs in enumerate(n_ratings)], key=lambda x: x[1], reverse=True)
     return [entity for entity, rs in n_ratings][:n]
@@ -52,15 +54,15 @@ class LRMFRecommender(RecommenderBase):
         self.model.fit(R, candidates)
 
     def interview(self, answers: Dict[int, int], max_n_questions=5) -> List[int]:
-        pass
+        return self.model.interview(answers)
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
+        return self.model.rank(items, answers)
+
+    def get_parameters(self):
         pass
 
-    def get_params(self) -> Dict:
-        pass
-
-    def load_params(self, params: Dict) -> None:
+    def load_parameters(self, params):
         pass
 
 

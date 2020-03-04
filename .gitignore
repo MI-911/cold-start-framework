@@ -2,3 +2,4 @@
 /.env
 *.pyc
 /venv/
+/data_partitioner/data

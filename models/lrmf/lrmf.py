@@ -17,8 +17,8 @@ class LRMF:
         self.k = l1 + l2 + 1                         # Question dimension
         self.kk = kk                                 # Embedding dimension
 
-        self.R = np.zeros((n_users, n_entities))     # Ratings matrix
-        self.T = np.zeros((self.k, kk))              # Transformation matrix
+        self.R = np.zeros((n_users, n_entities))         # Ratings matrix
+        self.T = np.zeros((self.k, kk))                  # Transformation matrix
         self.V = np.random.rand(self.kk, n_entities)     # Item embeddings
 
         # Regularisation
@@ -30,7 +30,7 @@ class LRMF:
     def fit(self, R, candidates):
         self.R = R
 
-        for iteration in range(100):
+        for iteration in range(1):
             logger.info(f'Iteration {iteration}')
             logger.info('--------------------')
             # 1. Build the tree
@@ -47,12 +47,22 @@ class LRMF:
             logger.info('Optimising item embeddings...')
             self.V = self.solve_item_embeddings()
 
+        self.rank(0)
+
+    def rank(self, items, answers):
+        u = self.tree.get_interview_representation(answers, [])
+        similarities = u @ self.V[items]
+        return {entity_id: similarity for entity_id, similarity in zip(items, similarities)}
+
+    def interview(self, answers):
+        return self.tree.interview(answers)
+
     def solve_item_embeddings(self):
         S = np.zeros((self.n_users, self.kk))
 
         for u in tqdm(range(self.n_users), desc='[Optimizing item embeddings]'):
-            S[u] = self.tree.interview(u, self.R[u])
+            S[u] = self.tree.get_representation(u, self.R[u])
 
         # Ordinary least squares solution
         # NOTE: Paper says I_l, but it should be I_k'
-        return inv(S.T @ S + np.eye(self.kk)) @ S.T @ self.R
+        return inv(S.T @ S + self.beta * np.eye(self.kk)) @ S.T @ self.R
