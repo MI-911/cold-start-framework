@@ -54,6 +54,10 @@ if __name__ == '__main__':
     testing = data_loader.load_testing()
     meta = data_loader.load_meta()
 
+    input(training)
+    input(testing)
+    input(meta)
+
     naive = NaiveRecommender()
     naive.warmup(training)
     idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
