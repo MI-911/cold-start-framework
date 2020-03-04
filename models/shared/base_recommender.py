@@ -54,14 +54,14 @@ class RecommenderBase:
         """
         raise NotImplementedError
 
-    def get_params(self):
+    def get_parameters(self):
         """
         Returns the model's current parameters so they can be reused later.
         :return: A dictionary of { param_key: value } key-value pairs.
         """
         raise NotImplementedError
 
-    def load_params(self, params):
+    def load_parameters(self, params):
         """
         Loads the provided model parameters. Parameters should be provided from an outside source (e.g. the runner).
         :param params: A dictionary of { param_key: value } key-value pairs.

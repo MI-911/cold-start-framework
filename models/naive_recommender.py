@@ -20,7 +20,8 @@ class NaiveRecommender(RecommenderBase):
         valid_items = {k: v for k, v in self.entity_weight.items() if k not in answers.keys()}
         return sorted(valid_items.items(), key=operator.itemgetter(1), reverse=True)[0][0]
 
-    def _compute_weight(self, popularity, variance):
+    @staticmethod
+    def _compute_weight(popularity, variance):
         return np.log2(popularity) * variance
 
     def warmup(self, train):
@@ -39,10 +40,10 @@ class NaiveRecommender(RecommenderBase):
         self.entity_weight = {int(idx): self._compute_weight(self.entity_popularity[idx], self.entity_variance[idx])
                               for idx in entity_ratings.keys()}
 
-    def get_params(self):
+    def get_parameters(self):
         pass
 
-    def load_params(self, params):
+    def load_parameters(self, parameters):
         pass
 
 
