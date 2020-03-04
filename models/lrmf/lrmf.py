@@ -30,29 +30,28 @@ class LRMF:
     def fit(self, R, candidates):
         self.R = R
 
-        for iteration in range(1):
-            logger.info(f'Iteration {iteration}')
-            logger.info('--------------------')
-            # 1. Build the tree
-            logger.info(f'Building tree...')
-            self.tree = DecisionTree(
-                depth=self.l1 + self.l2,
-                users=[u for u in range(self.n_users)],
-                parent_interview=[],
-                LRMF=self)
-            self.tree.grow(candidates)
-            self.tree.show()
+        # 1. Build the tree, optimise transformations
+        logger.info(f'Building tree...')
+        self.tree = DecisionTree(
+            depth=self.l1 + self.l2,
+            users=[u for u in range(self.n_users)],
+            parent_interview=[],
+            LRMF=self)
+        self.tree.grow(candidates)
 
-            # 2. Optimise item embeddings
-            logger.info('Optimising item embeddings...')
-            self.V = self.solve_item_embeddings()
-
-        self.rank(0)
+        # 2. Optimise item embeddings
+        logger.info('Optimising item embeddings...')
+        self.V = self.solve_item_embeddings()
 
     def rank(self, items, answers):
         u = self.tree.get_interview_representation(answers, [])
         similarities = u @ self.V[items]
         return {entity_id: similarity for entity_id, similarity in zip(items, similarities)}
+
+    def validate(self, user_id, items):
+        u = self.tree.get_representation(user_id, self.R[user_id])
+        similarities = u @ self.V[items]
+        return {item: similarity for item, similarity in zip(items, similarities)}
 
     def interview(self, answers):
         return self.tree.interview(answers)

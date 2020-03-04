@@ -5,6 +5,8 @@ from models.lrmf.lrmf import LRMF
 from models.lrmf.decision_tree import LIKE, DISLIKE
 from models.shared.base_recommender import RecommenderBase
 import numpy as np
+import pickle
+from loguru import logger
 
 
 def get_rating_matrix(training, n_users, n_entities, rating_map=None):
@@ -30,6 +32,21 @@ def choose_candidates(rating_matrix, n=100):
     return [entity for entity, rs in n_ratings][:n]
 
 
+def validate_hit(model, training):
+    hits = []
+    for user, data in training.items():
+        pos = data['validation']['positive']
+        neg = data['validation']['negative']
+        to_val = neg + [pos]
+
+        scores = model.validate(user, to_val)
+        sorted_scores = sorted([(item, score) for item, score in scores.items()], key=lambda x: x[1], reverse=True)
+        top_items = [item for item, score in sorted_scores][:10]
+        hits.append(1 if pos in top_items else 0)
+
+    return np.mean(hits)
+
+
 class LRMFRecommender(RecommenderBase):
     def __init__(self, meta):
         super(LRMFRecommender, self).__init__()
@@ -42,8 +59,25 @@ class LRMFRecommender(RecommenderBase):
         self.n_entities = len(meta.entities)
 
         self.params = None
+        self.best_model = None
+        self.best_hit = 0
 
     def warmup(self, training: Dict) -> None:
+        self.best_model = None
+        self.best_hit = 0
+
+        if not self.params:
+            for kk in [1, 2, 5, 10, 20]:
+                self.model = LRMF(n_users=self.n_users, n_entities=self.n_entities, l1=3, l2=3, kk=kk)
+                self._fit(training)
+
+            self.model = self.best_model
+            self.params = {'kk': self.model.kk}
+
+        else:
+            self.model = LRMF(n_users=self.n_users, n_entities=self.n_entities, l1=3, l2=3, kk=self.params['kk'])
+
+    def _fit(self, training):
         R = get_rating_matrix(training, self.n_users, self.n_entities, {
             1: 1,
             0: 0,
@@ -52,8 +86,16 @@ class LRMFRecommender(RecommenderBase):
 
         candidates = choose_candidates(R, n=100)
 
-        self.model = LRMF(n_users=self.n_users, n_entities=self.n_entities, l1=3, l2=3, kk=20)
-        self.model.fit(R, candidates)
+        for i in range(100):
+            logger.debug(f'LRMF starting iteration {i}')
+            self.model.fit(R, candidates)
+            hit = validate_hit(self.model, training)
+            if hit > self.best_hit:
+                logger.debug(f'LRMF found new best model at {hit} Hit@10')
+                self.best_hit = hit
+                self.best_model = pickle.loads(pickle.dumps(self.model))  # Save the model
+
+        self.model = self.best_model
 
     def interview(self, answers: Dict[int, int], max_n_questions=5) -> List[int]:
         return self.model.interview(answers)
@@ -62,10 +104,10 @@ class LRMFRecommender(RecommenderBase):
         return self.model.rank(items, answers)
 
     def get_parameters(self):
-        pass
+        return self.params
 
     def load_parameters(self, params):
-        pass
+        self.params = params
 
 
 if __name__ == '__main__':

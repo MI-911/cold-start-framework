@@ -149,6 +149,7 @@ class DecisionTree:
 
             raise LookupError(f'Could not find a fitting interview question for this user.')
         else:
+            # No more answers, no more children, reached a left - either way, the interview is over.
             return representation_acc @ self.T
 
     def show(self):
