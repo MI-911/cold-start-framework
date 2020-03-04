@@ -195,7 +195,8 @@ def partition(ratings_path, entities_path, output_directory, random_seed=42, war
         json.dump({
             'entities': _get_entities(entities_path),
             'uri_idx': entity_idx,
-            'idx_item': {row.entityIdx: row.isItem for idx, row in ratings.iterrows()}
+            'idx_item': {row.entityIdx: row.isItem for idx, row in ratings.iterrows()},
+            'users': list(user_idx.values())
         }, fp, cls=NpEncoder)
 
 
