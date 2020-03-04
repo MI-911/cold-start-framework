@@ -1,4 +1,4 @@
-import json
+import pickle
 
 import numpy as np
 import operator
@@ -20,7 +20,8 @@ class NaiveRecommender(RecommenderBase):
         valid_items = {k: v for k, v in self.entity_weight.items() if k not in answers.keys()}
         return sorted(valid_items.items(), key=operator.itemgetter(1), reverse=True)[0][0]
 
-    def _compute_weight(self, popularity, variance):
+    @staticmethod
+    def _compute_weight(popularity, variance):
         return np.log2(popularity) * variance
 
     def warmup(self, train):
@@ -28,7 +29,7 @@ class NaiveRecommender(RecommenderBase):
 
         # Aggregate ratings per entity
         for user, data in train.items():
-            for idx, sentiment in data['training'].items():
+            for idx, sentiment in data.training.items():
                 entity_ratings.setdefault(idx, []).append(sentiment)
 
         # Map entities to variance and popularity
@@ -39,23 +40,26 @@ class NaiveRecommender(RecommenderBase):
         self.entity_weight = {int(idx): self._compute_weight(self.entity_popularity[idx], self.entity_variance[idx])
                               for idx in entity_ratings.keys()}
 
-    def get_params(self):
+    def get_parameters(self):
         pass
 
-    def load_params(self, params):
+    def load_parameters(self, parameters):
         pass
 
 
 if __name__ == '__main__':
-    from data_partitioner.partition_cold_start import load
-    training = load('../data_partitioner/data/training.json')
-    testing = load('../data_partitioner/data/testing.json')
-    meta = load('../data_partitioner/data/meta.json')
+    training = pickle.load(open('../partitioners/data/training.pkl', 'rb'))
+    testing = pickle.load(open('../partitioners/data/testing.pkl', 'rb'))
+    meta = pickle.load(open('../partitioners/data/meta.pkl', 'rb'))
+
+    input(training)
+    input(testing)
+    input(meta)
 
     naive = NaiveRecommender()
     naive.warmup(training)
-    idx_uri = {int(v): k for k, v in meta['uri_idx'].items()}
-    entities = meta['entities']
+    idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
+    entities = meta.entities
 
     state = {}
     while True:

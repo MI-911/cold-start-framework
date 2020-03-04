@@ -1,11 +1,12 @@
-from typing import List, Dict
 
+from typing import Dict
 from models.shared.user import WarmStartUser
 
 
 class RecommenderBase:
 
-    def warmup(self, training: List[WarmStartUser]) -> None:
+
+    def warmup(self, training: Dict[int, WarmStartUser]):
         """
         Fits the model to the training data.
         :param training: A dictionary of the following format:
@@ -57,14 +58,14 @@ class RecommenderBase:
         """
         raise NotImplementedError
 
-    def get_params(self) -> Dict:
+    def get_parameters(self):
         """
         Returns the model's current parameters so they can be reused later.
         :return: A dictionary of { param_key: value } key-value pairs.
         """
         raise NotImplementedError
 
-    def load_params(self, params: Dict) -> None:
+    def load_parameters(self, params):
         """
         Loads the provided model parameters. Parameters should be provided from an outside source (e.g. the runner).
         :param params: A dictionary of { param_key: value } key-value pairs.
