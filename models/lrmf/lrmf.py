@@ -5,6 +5,7 @@ class LRMF:
     def __init__(self, l1, l2, n_users, n_entities, k):
         self.n_users = n_users
         self.n_entities = n_entities
+        self.candidates = None
 
         self.l1 = l1                                # Num. global questions
         self.l2 = l2                                # Num. local questions
@@ -19,7 +20,7 @@ class LRMF:
         self.l1_questions = [0 for _ in range(l1)]  # Indices of global questions
         self.l2_questions = [0 for _ in range(l2)]  # Indices of local questions
 
-    def fit(self, training):
+    def fit(self, training, candidates):
         # 1. Build the tree
         self.build_tree(training, 5)
         # 2. Solve for user and transformation embeddings
