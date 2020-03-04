@@ -57,14 +57,14 @@ if __name__ == '__main__':
     testing = data_loader.testing()
     meta = data_loader.meta()
 
-    naive = NaiveRecommender()
+    naive = NaiveRecommender(meta)
     naive.warmup(training)
     idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
     entities = meta.entities
 
     state = {}
     while True:
-        question = int(naive.interview(state))
+        question = int(naive.interview(state)[0])
 
         answer = input(f'What do you think about {entities[idx_uri[question]]["name"]}?')
         state[question] = int(answer)
