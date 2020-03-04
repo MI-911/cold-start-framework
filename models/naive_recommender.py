@@ -1,34 +1,38 @@
-import pickle
-
 import numpy as np
 import operator
 
+from experiments.data_loader import DataLoader
 from models.shared.base_recommender import RecommenderBase
+from models.shared.meta import Meta
 
 
 class NaiveRecommender(RecommenderBase):
-    def __init__(self):
+    def __init__(self, meta: Meta):
+        super().__init__(meta)
+
         self.entity_variance = None
         self.entity_popularity = None
         self.entity_weight = None
 
     def predict(self, items, answers):
-        pass
+        from random import randint
+        return {item: randint(0, 1000) for item in items}
+        # raise NotImplementedError()
 
     def interview(self, answers, max_n_questions=5):
         # Exclude answers to entities already asked about
         valid_items = {k: v for k, v in self.entity_weight.items() if k not in answers.keys()}
-        return sorted(valid_items.items(), key=operator.itemgetter(1), reverse=True)[0][0]
+        return [item[0] for item in sorted(valid_items.items(), key=operator.itemgetter(1), reverse=True)]
 
     @staticmethod
     def _compute_weight(popularity, variance):
         return np.log2(popularity) * variance
 
-    def warmup(self, train):
+    def warmup(self, training):
         entity_ratings = dict()
 
         # Aggregate ratings per entity
-        for user, data in train.items():
+        for user, data in training.items():
             for idx, sentiment in data.training.items():
                 entity_ratings.setdefault(idx, []).append(sentiment)
 
@@ -48,22 +52,19 @@ class NaiveRecommender(RecommenderBase):
 
 
 if __name__ == '__main__':
-    training = pickle.load(open('../partitioners/data/training.pkl', 'rb'))
-    testing = pickle.load(open('../partitioners/data/testing.pkl', 'rb'))
-    meta = pickle.load(open('../partitioners/data/meta.pkl', 'rb'))
+    data_loader = DataLoader('../data/basic/data')
+    training = data_loader.training()
+    testing = data_loader.testing()
+    meta = data_loader.meta()
 
-    input(training)
-    input(testing)
-    input(meta)
-
-    naive = NaiveRecommender()
+    naive = NaiveRecommender(meta)
     naive.warmup(training)
     idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
     entities = meta.entities
 
     state = {}
     while True:
-        question = int(naive.interview(state))
+        question = int(naive.interview(state)[0])
 
         answer = input(f'What do you think about {entities[idx_uri[question]]["name"]}?')
         state[question] = int(answer)

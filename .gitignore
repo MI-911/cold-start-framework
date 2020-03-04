@@ -1,5 +1,7 @@
-.idea/*
+/.idea
 /.env
+/venv
+/data
 *.pyc
 /venv/
 /data_partitioner/data

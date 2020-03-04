@@ -37,7 +37,7 @@ class ColdStartUser(User):
     """
     For the interview() and predict() methods of Recommenders.
     """
-    def __init__(self, sets, validation):
+    def __init__(self, sets: ColdStartUserSet, validation):
         """
         Initialises a cold-start user.
         :param sets: A list of the format [ ColdStartUserSet ]
