@@ -1,30 +1,13 @@
 import pandas as pd
 import random
-import json
-import numpy as np
+import pickle
 import tqdm
 from loguru import logger
 import os
 
+from models.shared.meta import Meta
 from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
 
-
-class NpEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
-        elif isinstance(obj, np.ndarray):
-            return obj.tolist()
-        elif isinstance(obj, WarmStartUser):
-            return {'validation': obj.validation, 'training': obj.training}
-        elif isinstance(obj, ColdStartUser):
-            return {'validation': obj.validation, 'sets': obj.sets}
-        elif isinstance(obj, ColdStartUserSet):
-            return {'positive': obj.positive, 'negative': obj.negative, 'answers': obj.answers}
-        else:
-            return super(NpEncoder, self).default(obj)
 
 
 def _sample_positive(from_ratings):
@@ -185,33 +168,15 @@ def partition(ratings_path, entities_path, output_directory, random_seed=42, war
         os.makedirs(output_directory)
 
     logger.info(f'Writing dataset to {output_directory}')
-    with open(os.path.join(output_directory, 'training.json'), 'w') as fp:
-        json.dump(training_data, fp, cls=NpEncoder)
+    with open(os.path.join(output_directory, 'training.pkl'), 'wb') as fp:
+        pickle.dump(training_data, fp)
 
-    with open(os.path.join(output_directory, 'testing.json'), 'w') as fp:
-        json.dump(testing_data, fp, cls=NpEncoder)
+    with open(os.path.join(output_directory, 'testing.pkl'), 'wb') as fp:
+        pickle.dump(testing_data, fp)
 
-    with open(os.path.join(output_directory, 'meta.json'), 'w') as fp:
-        json.dump({
-            'entities': _get_entities(entities_path),
-            'uri_idx': entity_idx,
-            'idx_item': {row.entityIdx: row.isItem for idx, row in ratings.iterrows()},
-            'users': list(user_idx.values())
-        }, fp, cls=NpEncoder)
-
-
-def load(from_path):
-    """
-    Converts JSON keys to integers if they can be converted without error.
-    """
-    def _keys_to_ints(x):
-        try:
-            return {int(k): v for k, v in x.items()} if isinstance(x, dict) else x
-        except ValueError:
-            return x
-
-    with open(from_path) as fp:
-        return json.load(fp, object_hook=_keys_to_ints)
+    with open(os.path.join(output_directory, 'meta.pkl'), 'wb') as fp:
+        pickle.dump(Meta(entities=_get_entities(entities_path), uri_idx=entity_idx, users=list(user_idx.values()),
+                         idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()}), fp)
 
 
 if __name__ == '__main__':

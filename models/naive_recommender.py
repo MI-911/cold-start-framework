@@ -1,4 +1,4 @@
-import json
+import pickle
 
 import numpy as np
 import operator
@@ -29,7 +29,7 @@ class NaiveRecommender(RecommenderBase):
 
         # Aggregate ratings per entity
         for user, data in train.items():
-            for idx, sentiment in data['training'].items():
+            for idx, sentiment in data.training.items():
                 entity_ratings.setdefault(idx, []).append(sentiment)
 
         # Map entities to variance and popularity
@@ -48,15 +48,14 @@ class NaiveRecommender(RecommenderBase):
 
 
 if __name__ == '__main__':
-    from data_partitioner.partition_cold_start import load
-    training = load('../data_partitioner/data/training.json')
-    testing = load('../data_partitioner/data/testing.json')
-    meta = load('../data_partitioner/data/meta.json')
+    training = pickle.load(open('../partitioners/data/training.pkl', 'rb'))
+    testing = pickle.load(open('../partitioners/data/testing.pkl', 'rb'))
+    meta = pickle.load(open('../partitioners/data/meta.pkl', 'rb'))
 
     naive = NaiveRecommender()
     naive.warmup(training)
-    idx_uri = {int(v): k for k, v in meta['uri_idx'].items()}
-    entities = meta['entities']
+    idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
+    entities = meta.entities
 
     state = {}
     while True:
