@@ -2,13 +2,16 @@ import argparse
 import json
 import os
 import sys
-from typing import List
+import time
+from typing import Dict, Set
 
 from loguru import logger
 
+from experiments.experiment import Dataset, Split, Experiment
 from models.naive_recommender import NaiveRecommender
 from models.shared.base_recommender import RecommenderBase
-from models.shared.user import WarmStartUser
+from models.shared.meta import Meta
+from models.shared.user import WarmStartUser, ColdStartUser
 
 models = {
     'naive': {
@@ -35,52 +38,71 @@ def _parse_args():
     return model_selection
 
 
-def _instantiate_model(model_name, meta, parameters=None):
+def _instantiate_model(model_name, experiment: Experiment, meta):
     kwargs = {
         'meta': meta
     }
 
-    return models[model_name]['class'](**kwargs)
+    instance = models[model_name]['class'](**kwargs)
+    parameters = _get_parameters(model_name, experiment)
+    if parameters:
+        instance.load_parameters(parameters)
+
+    return instance
 
 
-def _get_parameter_path(model_name, parameter_base):
-    return os.path.join(model_name, 'parameters.json')
+def _get_parameter_path(parameter_base, model_name):
+    return os.path.join(parameter_base, f'parameters_{model_name}.json')
 
 
-def _get_parameters(model_name, parameter_base):
-    parameter_path = _get_parameter_path(model_name, parameter_base)
+def _get_parameters(model_name, experiment: Experiment):
+    parameter_path = _get_parameter_path(experiment.path, model_name)
     if not os.path.exists(parameter_path):
         return None
 
     return json.load(open(parameter_path, 'r'))
 
 
-def _write_parameters(model_name, parameter_base, model: RecommenderBase):
+def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase):
     parameters = model.get_parameters()
-    parameter_path = _get_parameter_path(model_name, parameter_base)
+    parameter_path = _get_parameter_path(experiment.path, model_name)
 
     if not parameters and os.path.exists(parameter_path):
-        os.remove(parameter_base)
+        os.remove(parameter_path)
     elif parameters:
         json.dump(parameters, open(parameter_path, 'w'))
 
 
-def _run_model(model_name, experiment_base, training: List[WarmStartUser], testing, meta):
-    parameter_dir = os.path.join(experiment_base, model_name)
-    if not os.path.exists(parameter_dir):
-        os.mkdir(parameter_dir)
+def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[int, WarmStartUser],
+               testing: Dict[int, ColdStartUser]):
+    model_instance = _instantiate_model(model_name, experiment, meta)
+    model_instance.warmup(training)
 
-    model_instance = _instantiate_model(model_name, meta)
-    parameters = _get_parameters(model_name, parameter_dir)
-    if parameters:
-        model_instance.load_parameters(parameters)
+    _write_parameters(model_name, experiment, model_instance)
 
-    _write_parameters(model_name, parameter_dir, model_instance)
+
+def _run_split(model_selection: Set[str], split: Split):
+    training = split.data_loader.training()
+    testing = split.data_loader.testing()
+    meta = split.data_loader.meta()
+
+    for model in model_selection:
+        start_time = time.time()
+        logger.info(f'Running {model} on {split}')
+
+        _run_model(model, split.experiment, meta, training, testing)
+        # Add logic to handle results here
+
+        logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 
 
 def run():
     model_selection = _parse_args()
-    print(model_selection)
+
+    dataset = Dataset('../data')
+    for experiment in dataset.experiments():
+        for split in experiment.splits():
+            _run_split(model_selection, split)
 
 
 if __name__ == '__main__':

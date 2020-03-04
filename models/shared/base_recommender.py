@@ -1,8 +1,12 @@
 from typing import Dict, List
+
+from models.shared.meta import Meta
 from models.shared.user import WarmStartUser
 
 
 class RecommenderBase:
+    def __init__(self, meta: Meta):
+        self.meta = meta
 
     def warmup(self, training: Dict[int, WarmStartUser]) -> None:
         """

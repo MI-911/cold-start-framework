@@ -1,14 +1,15 @@
-import pickle
-
 import numpy as np
 import operator
 
-from data_loader.data_loader import DataLoader
+from experiments.data_loader import DataLoader
 from models.shared.base_recommender import RecommenderBase
+from models.shared.meta import Meta
 
 
 class NaiveRecommender(RecommenderBase):
-    def __init__(self):
+    def __init__(self, meta: Meta):
+        super().__init__(meta)
+
         self.entity_variance = None
         self.entity_popularity = None
         self.entity_weight = None
@@ -25,11 +26,11 @@ class NaiveRecommender(RecommenderBase):
     def _compute_weight(popularity, variance):
         return np.log2(popularity) * variance
 
-    def warmup(self, train):
+    def warmup(self, training):
         entity_ratings = dict()
 
         # Aggregate ratings per entity
-        for user, data in train.items():
+        for user, data in training.items():
             for idx, sentiment in data.training.items():
                 entity_ratings.setdefault(idx, []).append(sentiment)
 
@@ -49,14 +50,10 @@ class NaiveRecommender(RecommenderBase):
 
 
 if __name__ == '__main__':
-    data_loader = DataLoader('../partitioners/data')
-    training = data_loader.load_training()
-    testing = data_loader.load_testing()
-    meta = data_loader.load_meta()
-
-    input(training)
-    input(testing)
-    input(meta)
+    data_loader = DataLoader('../data/basic/data')
+    training = data_loader.training()
+    testing = data_loader.testing()
+    meta = data_loader.meta()
 
     naive = NaiveRecommender()
     naive.warmup(training)
