@@ -1,18 +1,17 @@
 import pickle
 from typing import Dict, List
-
-from models.lrmf.lrmf import LRMF, DecisionTree
+from models.lrmf.lrmf import LRMF
+from models.lrmf.decision_tree import LIKE, DISLIKE
 from models.shared.base_recommender import RecommenderBase
-from models.shared.user import WarmStartUser
 import numpy as np
 
 
 def get_rating_matrix(training, n_users, n_entities, rating_map=None):
     if not rating_map:
         rating_map = {
-            1: 1,
-            0: 0,
-            -1: -1
+            1: LIKE,
+            0: DISLIKE,
+            -1: DISLIKE
         }
 
     R = np.zeros((n_users, n_entities))
@@ -23,9 +22,9 @@ def get_rating_matrix(training, n_users, n_entities, rating_map=None):
     return R
 
 
-def extract_candidates(rating_matrix, n=100):
+def choose_candidates(rating_matrix, n=100):
     n_ratings = rating_matrix.sum(axis=0)
-    n_ratings = sorted([(entity, rs) for entity, rs in enumerate(n_ratings)])
+    n_ratings = sorted([(entity, rs) for entity, rs in enumerate(n_ratings)], key=lambda x: x[1])
     return [entity for entity, rs in n_ratings][:n]
 
 
@@ -47,8 +46,7 @@ class LRMFRecommender(RecommenderBase):
             -1: 0
         })
 
-        R = get_rating_matrix(training, self.n_users, self.n_entities)
-        candidates = extract_candidates(R, n=100)
+        candidates = choose_candidates(R, n=100)
 
         self.model = LRMF(n_users=self.n_users, n_entities=self.n_entities, l1=3, l2=3, kk=20)
         self.model.fit(R, candidates)
