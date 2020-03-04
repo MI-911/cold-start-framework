@@ -7,12 +7,16 @@ from typing import List
 from loguru import logger
 
 from models.naive_recommender import NaiveRecommender
+from models.lrmf.lrmf_recommender import LRMFRecommender
 from models.shared.base_recommender import RecommenderBase
 from models.shared.user import WarmStartUser
 
 models = {
     'naive': {
         'class': NaiveRecommender
+    },
+    'lrmf': {
+        'class': LRMFRecommender
     }
 }
 

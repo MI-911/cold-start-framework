@@ -41,6 +41,8 @@ class LRMFRecommender(RecommenderBase):
         self.n_users = len(meta.users)
         self.n_entities = len(meta.entities)
 
+        self.params = None
+
     def warmup(self, training: Dict) -> None:
         R = get_rating_matrix(training, self.n_users, self.n_entities, {
             1: 1,
