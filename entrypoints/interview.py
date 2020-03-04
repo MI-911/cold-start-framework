@@ -1,5 +1,6 @@
 import argparse
 import json
+import operator
 import os
 import sys
 import time
@@ -11,7 +12,7 @@ from experiments.experiment import Dataset, Split, Experiment
 from models.naive_recommender import NaiveRecommender
 from models.shared.base_recommender import RecommenderBase
 from models.shared.meta import Meta
-from models.shared.user import WarmStartUser, ColdStartUser
+from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
 
 models = {
     'naive': {
@@ -73,10 +74,44 @@ def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase
         json.dump(parameters, open(parameter_path, 'w'))
 
 
+def _conduct_interview(model: RecommenderBase, answer_set: ColdStartUserSet, n_questions=5):
+    answer_state = dict()
+
+    while len(answer_state) < n_questions:
+        next_questions = model.interview(answer_state)[:n_questions - len(answer_state)]
+
+        for question in next_questions:
+            # Specify answer as unknown if the user has no answer to it
+            answer_state[question] = answer_set.answers.get(question, 0)
+
+    assert len(answer_state) <= n_questions
+
+    return answer_state
+
+
+def _produce_ranking(model: RecommenderBase, answer_set: ColdStartUserSet, answers: Dict):
+    to_rank = [answer_set.positive] + answer_set.negative
+    item_scores = sorted(model.predict(to_rank, answers).items(), key=operator.itemgetter(1), reverse=True)
+
+    return [item[0] for item in item_scores]
+
+
 def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[int, WarmStartUser],
                testing: Dict[int, ColdStartUser]):
     model_instance = _instantiate_model(model_name, experiment, meta)
     model_instance.warmup(training)
+
+    splits, hits = 0, 0
+    for idx, user in testing.items():
+        for answer_set in user.sets:
+            answers = _conduct_interview(model_instance, answer_set)
+            ranking = _produce_ranking(model_instance, answer_set, answers)
+
+            if answer_set.positive in ranking[:10]:
+                hits += 1
+            splits += 1
+
+    logger.info(f'{hits / splits * 100:.2f}% HR@10')
 
     _write_parameters(model_name, experiment, model_instance)
 
@@ -91,7 +126,6 @@ def _run_split(model_selection: Set[str], split: Split):
         logger.info(f'Running {model} on {split}')
 
         _run_model(model, split.experiment, meta, training, testing)
-        # Add logic to handle results here
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 

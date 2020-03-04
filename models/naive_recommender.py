@@ -15,12 +15,14 @@ class NaiveRecommender(RecommenderBase):
         self.entity_weight = None
 
     def predict(self, items, answers):
-        pass
+        from random import randint
+        return {item: randint(0, 1000) for item in items}
+        # raise NotImplementedError()
 
     def interview(self, answers, max_n_questions=5):
         # Exclude answers to entities already asked about
         valid_items = {k: v for k, v in self.entity_weight.items() if k not in answers.keys()}
-        return sorted(valid_items.items(), key=operator.itemgetter(1), reverse=True)[0][0]
+        return [item[0] for item in sorted(valid_items.items(), key=operator.itemgetter(1), reverse=True)]
 
     @staticmethod
     def _compute_weight(popularity, variance):
