@@ -35,8 +35,8 @@ def choose_candidates(rating_matrix, n=100):
 def validate_hit(model, training):
     hits = []
     for user, data in training.items():
-        pos = data['validation']['positive']
-        neg = data['validation']['negative']
+        pos = data.validation['positive']
+        neg = data.validation['negative']
         to_val = neg + [pos]
 
         scores = model.validate(user, to_val)
@@ -49,7 +49,7 @@ def validate_hit(model, training):
 
 class LRMFRecommender(RecommenderBase):
     def __init__(self, meta):
-        super(LRMFRecommender, self).__init__()
+        super(LRMFRecommender, self).__init__(meta)
         self.meta = meta
         self.model = None
 
@@ -67,7 +67,8 @@ class LRMFRecommender(RecommenderBase):
         self.best_hit = 0
 
         if not self.params:
-            for kk in [1, 2, 5, 10, 20]:
+            for kk in [5, 10, 20]:
+                logger.info(f'Fitting LRMF with kk = {kk}')
                 self.model = LRMF(n_users=self.n_users, n_entities=self.n_entities, l1=3, l2=3, kk=kk)
                 self._fit(training)
 
@@ -86,10 +87,11 @@ class LRMFRecommender(RecommenderBase):
 
         candidates = choose_candidates(R, n=100)
 
-        for i in range(100):
+        for i in range(10):
             logger.debug(f'LRMF starting iteration {i}')
             self.model.fit(R, candidates)
             hit = validate_hit(self.model, training)
+            logger.debug(f'Training: {hit} Hit@10')
             if hit > self.best_hit:
                 logger.debug(f'LRMF found new best model at {hit} Hit@10')
                 self.best_hit = hit

@@ -31,7 +31,7 @@ class DecisionTree:
             return
 
         # Find split item
-        self.candidate = self.choose_candidate_test(candidates)
+        self.candidate = self.choose_candidate(candidates)
         u_l, u_d = self.split_users(self.candidate)
         interview = self.parent_interview + [self.candidate]
 

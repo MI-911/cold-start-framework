@@ -50,7 +50,7 @@ class LRMF:
 
     def validate(self, user_id, items):
         u = self.tree.get_representation(user_id, self.R[user_id])
-        similarities = u @ self.V[items]
+        similarities, = u @ self.V[:, items]
         return {item: similarity for item, similarity in zip(items, similarities)}
 
     def interview(self, answers):
