@@ -1,9 +1,10 @@
-import pandas as pd
-import random
+import os
 import pickle
+import random
+
+import pandas as pd
 import tqdm
 from loguru import logger
-import os
 
 from models.shared.meta import Meta
 from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
@@ -140,9 +141,12 @@ def _get_entities(entities_path):
     return {row['uri']: {'name': row['name'], 'labels': row['labels'].split('|')} for idx, row in entities.iterrows()}
 
 
-def partition(ratings_path, entities_path, output_directory, random_seed=42, warm_start_ratio=0.75,
+def partition(input_directory, output_directory, random_seed=42, warm_start_ratio=0.75,
               include_unknown=False):
     random.seed(random_seed)
+
+    ratings_path = os.path.join(input_directory, 'ratings.csv')
+    entities_path = os.path.join(input_directory, 'entities.csv')
 
     # Load ratings data
     ratings, warm_users, cold_users, users = _get_ratings(ratings_path, include_unknown, warm_start_ratio)
@@ -176,8 +180,3 @@ def partition(ratings_path, entities_path, output_directory, random_seed=42, war
     with open(os.path.join(output_directory, 'meta.pkl'), 'wb') as fp:
         pickle.dump(Meta(entities=_get_entities(entities_path), uri_idx=entity_idx, users=list(user_idx.values()),
                          idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()}), fp)
-
-
-if __name__ == '__main__':
-    partition(ratings_path='../sources/mindreader/ratings-100k.csv', entities_path='../sources/mindreader/entities.csv',
-              output_directory='data')

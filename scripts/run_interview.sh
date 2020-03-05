@@ -1,3 +1,4 @@
+#!/bin/bash
 cd ..
-docker build -t mindreader/interview .
-docker run -d --rm mindreader/interview
+docker build -f Dockerfile.interview -t mindreader/interview .
+docker run --rm -v "${PWD}"/data:/app/data mindreader/interview --input data
