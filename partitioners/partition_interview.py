@@ -1,11 +1,10 @@
-import argparse
+import os
+import pickle
+import random
 
 import pandas as pd
-import random
-import pickle
 import tqdm
 from loguru import logger
-import os
 
 from models.shared.meta import Meta
 from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet

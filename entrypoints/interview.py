@@ -13,6 +13,7 @@ from models.naive_recommender import NaiveRecommender
 from models.shared.base_recommender import RecommenderBase
 from models.shared.meta import Meta
 from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
+from shared.validators import valid_dir
 
 models = {
     'naive': {
@@ -21,6 +22,7 @@ models = {
 }
 
 parser = argparse.ArgumentParser()
+parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
 parser.add_argument('--include', nargs='*', type=str, choices=models.keys(), help='models to include')
 parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), help='models to exclude')
 parser.add_argument('--debug', action='store_true', help='enable debug mode')
@@ -127,13 +129,13 @@ def _parse_args():
         logger.remove()
         logger.add(sys.stderr, level='INFO')
 
-    return model_selection
+    return model_selection, args.input[0]
 
 
 def run():
-    model_selection = _parse_args()
+    model_selection, input_path = _parse_args()
 
-    dataset = Dataset('../data')
+    dataset = Dataset(input_path)
     for experiment in dataset.experiments():
         for split in experiment.splits():
             _run_split(model_selection, split)
