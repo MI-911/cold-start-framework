@@ -26,19 +26,6 @@ parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), hel
 parser.add_argument('--debug', action='store_true', help='enable debug mode')
 
 
-def _parse_args():
-    args = parser.parse_args()
-    model_selection = set(models.keys()) if not args.include else set(args.include)
-    if args.exclude:
-        model_selection = model_selection.difference(set(args.exclude))
-
-    if not args.debug:
-        logger.remove()
-        logger.add(sys.stderr, level='INFO')
-
-    return model_selection
-
-
 def _instantiate_model(model_name, experiment: Experiment, meta):
     kwargs = {
         'meta': meta
@@ -130,6 +117,19 @@ def _run_split(model_selection: Set[str], split: Split):
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 
 
+def _parse_args():
+    args = parser.parse_args()
+    model_selection = set(models.keys()) if not args.include else set(args.include)
+    if args.exclude:
+        model_selection = model_selection.difference(set(args.exclude))
+
+    if not args.debug:
+        logger.remove()
+        logger.add(sys.stderr, level='INFO')
+
+    return model_selection
+
+
 def run():
     model_selection = _parse_args()
 
@@ -143,4 +143,3 @@ if __name__ == '__main__':
     logger.info(f'Working directory: {os.getcwd()}')
 
     run()
-
