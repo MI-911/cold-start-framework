@@ -9,7 +9,7 @@ from typing import Dict, Set
 from loguru import logger
 
 from experiments.experiment import Dataset, Split, Experiment
-from models.naive_recommender import NaiveRecommender
+from models.naive.naive_recommender import NaiveRecommender
 from models.lrmf.lrmf_recommender import LRMFRecommender
 from models.shared.base_recommender import RecommenderBase
 from models.shared.meta import Meta
