@@ -4,4 +4,4 @@
 /data
 *.pyc
 /venv/
-/data_partitioner/data
+/.venv
