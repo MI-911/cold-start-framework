@@ -7,6 +7,7 @@ from models.shared.base_recommender import RecommenderBase
 import numpy as np
 import pickle
 from loguru import logger
+from utilities.utils import get_combinations
 
 
 def get_rating_matrix(training, n_users, n_entities, rating_map=None):
@@ -67,16 +68,35 @@ class LRMFRecommender(RecommenderBase):
         self.best_hit = 0
 
         if not self.params:
-            for kk in [5, 10, 20]:
-                logger.info(f'Fitting LRMF with kk = {kk}')
-                self.model = LRMF(n_users=self.n_users, n_entities=self.n_entities, l1=3, l2=3, kk=kk)
+            for params in get_combinations({
+                'kk': [1, 2, 5, 10, 20],
+                'reg': [0.001, 0.0001, 0.00001]
+            }):
+                logger.info(f'Fitting LRMF with params {params}')
+
+                self.model = LRMF(
+                    n_users=self.n_users,
+                    n_entities=self.n_entities,
+                    l1=3, l2=3,
+                    kk=params['kk'],
+                    alpha=params['reg'],
+                    beta=params['reg'])
+
                 self._fit(training)
 
             self.model = self.best_model
             self.params = {'kk': self.model.kk}
 
         else:
-            self.model = LRMF(n_users=self.n_users, n_entities=self.n_entities, l1=3, l2=3, kk=self.params['kk'])
+            self.model = LRMF(
+                n_users=self.n_users,
+                n_entities=self.n_entities,
+                l1=3, l2=3,
+                kk=self.params['kk'],
+                alpha=self.params['reg'],
+                beta=self.params['reg'])
+
+            self._fit(training)
 
     def _fit(self, training):
         R = get_rating_matrix(training, self.n_users, self.n_entities, {
