@@ -7,7 +7,8 @@ from models.shared.base_recommender import RecommenderBase
 import numpy as np
 import pickle
 from loguru import logger
-from utilities.utils import get_combinations
+
+from shared.utility import get_combinations
 
 
 def get_rating_matrix(training, n_users, n_entities, rating_map=None):
