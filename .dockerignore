@@ -3,3 +3,5 @@
 /sources
 /data
 /.venv
+/.vscode
+/scripts
