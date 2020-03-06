@@ -4,16 +4,20 @@ import operator
 import os
 import sys
 import time
+from collections import defaultdict
 from typing import Dict, Set
 
+import numpy as np
 from loguru import logger
 
 from experiments.experiment import Dataset, Split, Experiment
+from experiments.metrics import ndcg_at_k
 from models.naive.naive_recommender import NaiveRecommender
 from models.lrmf.lrmf_recommender import LRMFRecommender
 from models.shared.base_recommender import RecommenderBase
 from models.shared.meta import Meta
 from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
+from shared.utility import join_paths
 from shared.validators import valid_dir
 
 models = {
@@ -89,24 +93,51 @@ def _produce_ranking(model: RecommenderBase, answer_set: ColdStartUserSet, answe
     return [item[0] for item in item_scores]
 
 
+def _get_relevance_list(ranking, positive_item):
+    return [int(item == positive_item) for item in ranking]
+
+
 def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[int, WarmStartUser],
-               testing: Dict[int, ColdStartUser]):
+               testing: Dict[int, ColdStartUser], upper_cutoff=50):
     model_instance = _instantiate_model(model_name, experiment, meta)
     model_instance.warmup(training)
 
-    splits, hits = 0, 0
+    hits = defaultdict(list)
+    ndcgs = defaultdict(list)
+
     for idx, user in testing.items():
         for answer_set in user.sets:
             answers = _conduct_interview(model_instance, answer_set)
             ranking = _produce_ranking(model_instance, answer_set, answers)
+            relevance = _get_relevance_list(ranking, answer_set.positive)
 
-            if answer_set.positive in ranking[:10]:
-                hits += 1
-            splits += 1
+            for k in range(1, upper_cutoff + 1):
+                cutoff = relevance[:k]
 
-    logger.info(f'{hits / splits * 100:.2f}% HR@10')
+                hits[k].append(1 in cutoff)
+                ndcgs[k].append(ndcg_at_k(cutoff, k))
+
+    hr = dict()
+    ndcg = dict()
+
+    for k in range(1, upper_cutoff + 1):
+        hr[k] = np.mean(hits[k])
+        ndcg[k] = np.mean(ndcgs[k])
 
     _write_parameters(model_name, experiment, model_instance)
+
+    return hr, ndcg
+
+
+def _write_results(model_name, hr, ndcg, split: Split):
+    results_dir = join_paths('results', split.experiment.name, model_name)
+    os.makedirs(results_dir, exist_ok=True)
+
+    with open(os.path.join(results_dir, f'{split.name}.json'), 'w') as fp:
+        json.dump({
+            'hr': hr,
+            'ndcg': ndcg
+        }, fp)
 
 
 def _run_split(model_selection: Set[str], split: Split):
@@ -118,7 +149,8 @@ def _run_split(model_selection: Set[str], split: Split):
         start_time = time.time()
         logger.info(f'Running {model} on {split}')
 
-        _run_model(model, split.experiment, meta, training, testing)
+        hr, ndcg = _run_model(model, split.experiment, meta, training, testing)
+        _write_results(model, hr, ndcg, split)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 
