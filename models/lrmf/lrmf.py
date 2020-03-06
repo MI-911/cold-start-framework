@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 
 class LRMF:
-    def __init__(self, l1, l2, n_users, n_entities, kk):
+    def __init__(self, l1, l2, n_users, n_entities, kk, alpha, beta):
         self.n_users = n_users
         self.n_entities = n_entities
         self.candidates = None
@@ -22,8 +22,8 @@ class LRMF:
         self.V = np.random.rand(self.kk, n_entities)     # Item embeddings
 
         # Regularisation
-        self.alpha = 0.001
-        self.beta = 0.001
+        self.alpha = alpha
+        self.beta = beta
 
         self.tree = None
 
