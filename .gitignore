@@ -6,3 +6,4 @@
 /venv/
 /.venv
 *.pkl
+/results
