@@ -115,42 +115,44 @@ class DecisionTree:
 
         return u_l, u_d
 
-    def interview(self, answers: Dict[int, int]):
+    def get_next_question(self, answers: Dict[int, int]):
         if not answers:
+            # No more information, ask towards this entity next
             return [self.candidate]
-        else:
-            for rating, child in self.children.items():
-                if child.candidate in answers and answers[child.candidate] == rating:
-                    remaining = {
-                        entity: answer
-                        for entity, answer in answers.items()
-                        if not entity == child.candidate
-                    }
-                    return child.interview(remaining)
 
-            raise LookupError(f'Could not find a fitting interview question for this user.'
-                              f'This may be caused by the interviewer taking the wrong path'
-                              f'through the decision tree. Consider removing split candidates'
-                              f'globally so no two nodes in the decision tree can share their'
-                              f'split items.')
+        # What did the user think about this entity?
+        # Let the corresponding child node determine
+        # the question selection
+        rating = LIKE if self.candidate in answers and answers[self.candidate] == LIKE else DISLIKE
 
-    def get_interview_representation(self, answers, representation_acc):
-        representation_acc.append(answers[self.candidate])
+        # Remove this answer from the answer set so it eventually
+        # becomes empty, terminating the recursion
         remaining = {
             entity: answer
             for entity, answer in answers.items()
             if not entity == self.candidate
         }
 
-        if len(remaining) > 0 and not self.is_leaf() and self.has_children():
-            for rating, child in remaining.items():
-                if child.candidate in remaining and remaining[child.candidate] == rating:
-                    return child.get_interview_representation(remaining, representation_acc)
+        return self.children[rating].get_next_question(remaining)
 
-            raise LookupError(f'Could not find a fitting interview question for this user.')
-        else:
-            # No more answers, no more children, reached a left - either way, the interview is over.
+    def get_interview_representation(self, answers, representation_acc):
+        if not answers or self.is_leaf() or not self.has_children():
+            # No more answers, no more children, reached a leaf - either way, the
+            # interview is over. Terminate the recursion
             return representation_acc @ self.T
+
+        # Provide the user's answer for this entity, continue to the child
+        rating = LIKE if self.candidate in answers and answers[self.candidate] == LIKE else DISLIKE
+        representation_acc.append(rating)
+
+        # Remove this entity from the answer set so the recursion eventually terminates
+        remaining = {
+            entity: answer
+            for entity, answer in answers.items()
+            if not entity == self.candidate
+        }
+
+        return self.children[rating].get_interview_representation(remaining, representation_acc)
 
     def show(self):
         indent = ''.join([' |' for _ in range(len(self.parent_interview))])

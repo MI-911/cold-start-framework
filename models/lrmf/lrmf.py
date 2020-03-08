@@ -54,7 +54,7 @@ class LRMF:
         return {item: similarity for item, similarity in zip(items, similarities)}
 
     def interview(self, answers):
-        return self.tree.interview(answers)
+        return self.tree.get_next_question(answers)
 
     def solve_item_embeddings(self):
         S = np.zeros((self.n_users, self.kk))
