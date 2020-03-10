@@ -82,10 +82,12 @@ def benchmark_particles():
             uris_to_rank = [positive_uri] + [idx_uri[idx] for idx in data.validation['negative']]
             shuffle(uris_to_rank)
 
+            assert not set(liked_uris).intersection(set(uris_to_rank))
+
             if not liked_uris or not uris_to_rank:
                 continue
 
-            ranked_list = run_ppr(0.25, cutoff, liked_uris, uris_to_rank)
+            # ranked_list = run_ppr(0.25, cutoff, liked_uris, uris_to_rank)
             ranked_list = run_filtering(particles, cutoff, liked_uris, uris_to_rank)
 
             hits.append(positive_uri in ranked_list)
