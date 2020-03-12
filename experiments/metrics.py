@@ -45,3 +45,22 @@ def dcg_at_k(r, k, method=0):
         else:
             raise ValueError('method must be 0 or 1.')
     return 0.
+
+
+def ser_at_k(ranked_labeled_items, top_pop_items, k, normalize=False):
+    serendipitous_labeled_items = [
+        (item, relevance)
+        for item, relevance in ranked_labeled_items
+        if item not in top_pop_items[:k]
+    ]
+
+    if l := len(serendipitous_labeled_items) == 0:
+        return 0
+
+    return sum([relevance for item, relevance in serendipitous_labeled_items]) / (
+        l if normalize else 1
+    )
+
+
+def coverage(recommended_entities, recommendable_entities):
+    return len(recommended_entities) / len(recommendable_entities)

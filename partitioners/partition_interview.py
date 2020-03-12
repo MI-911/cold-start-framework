@@ -179,4 +179,5 @@ def partition(input_directory, output_directory, random_seed=42, warm_start_rati
 
     with open(os.path.join(output_directory, 'meta.pkl'), 'wb') as fp:
         pickle.dump(Meta(entities=_get_entities(entities_path), uri_idx=entity_idx, users=list(user_idx.values()),
-                         idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()}), fp)
+                         idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()},
+                         recommendable_entities=list(movie_indices)), fp)

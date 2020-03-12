@@ -5,13 +5,13 @@ import os
 import sys
 import time
 from collections import defaultdict
-from typing import Dict, Set
+from typing import Dict, Set, List
 
 import numpy as np
 from loguru import logger
 
 from experiments.experiment import Dataset, Split, Experiment
-from experiments.metrics import ndcg_at_k
+from experiments.metrics import ndcg_at_k, ser_at_k, coverage
 from models.naive.naive_recommender import NaiveRecommender
 from models.lrmf.lrmf_recommender import LRMFRecommender
 from models.shared.base_recommender import RecommenderBase
@@ -97,6 +97,18 @@ def _get_relevance_list(ranking, positive_item):
     return [int(item == positive_item) for item in ranking]
 
 
+def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser]):
+    recent_counts = {r: 0 for r in recents}
+    for u, data in training.items():
+        for idx, sentiment in data.training.items():
+            if idx in recent_counts and not sentiment == 0:
+                recent_counts[idx] += 1
+
+    return [recent
+            for recent, count
+            in sorted(recent_counts.items(), key=lambda x: x[1], reverse=True)]
+
+
 def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[int, WarmStartUser],
                testing: Dict[int, ColdStartUser], upper_cutoff=50):
     model_instance = _instantiate_model(model_name, experiment, meta)
@@ -104,6 +116,10 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
     hits = defaultdict(list)
     ndcgs = defaultdict(list)
+    sers = defaultdict(list)
+    covs = defaultdict(set)
+
+    popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
     for idx, user in testing.items():
         for answer_set in user.sets:
@@ -116,27 +132,35 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
                 hits[k].append(1 in cutoff)
                 ndcgs[k].append(ndcg_at_k(cutoff, k))
+                sers[k].append(ser_at_k(zip(ranking[:k], cutoff), popular_items, k, normalize=False))
+                covs[k] = covs[k].union(set(ranking[:k]))
 
     hr = dict()
     ndcg = dict()
+    ser = dict()
+    cov = dict()
 
     for k in range(1, upper_cutoff + 1):
         hr[k] = np.mean(hits[k])
         ndcg[k] = np.mean(ndcgs[k])
+        ser[k] = np.mean(sers[k])
+        cov[k] = coverage(covs[k], meta.recommendable_entities)
 
     _write_parameters(model_name, experiment, model_instance)
 
-    return hr, ndcg
+    return hr, ndcg, ser, cov
 
 
-def _write_results(model_name, hr, ndcg, split: Split):
+def _write_results(model_name, hr, ndcg, ser, cov, split: Split):
     results_dir = join_paths('results', split.experiment.name, model_name)
     os.makedirs(results_dir, exist_ok=True)
 
     with open(os.path.join(results_dir, f'{split.name}.json'), 'w') as fp:
         json.dump({
             'hr': hr,
-            'ndcg': ndcg
+            'ndcg': ndcg,
+            'ser': ser,
+            'cov': cov
         }, fp)
 
 
@@ -149,8 +173,8 @@ def _run_split(model_selection: Set[str], split: Split):
         start_time = time.time()
         logger.info(f'Running {model} on {split}')
 
-        hr, ndcg = _run_model(model, split.experiment, meta, training, testing)
-        _write_results(model, hr, ndcg, split)
+        hr, ndcg, ser, cov = _run_model(model, split.experiment, meta, training, testing)
+        _write_results(model, hr, ndcg, ser, cov, split)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 
@@ -164,6 +188,9 @@ def _parse_args():
     if not args.debug:
         logger.remove()
         logger.add(sys.stderr, level='INFO')
+
+    if not args.input:
+        args.input = ['../data']
 
     return model_selection, args.input[0]
 
