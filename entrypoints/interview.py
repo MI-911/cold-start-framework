@@ -24,9 +24,9 @@ models = {
     'naive': {
         'class': NaiveRecommender
     },
-    'lrmf': {
-        'class': LRMFRecommender
-    }
+    # 'lrmf': {
+    #     'class': LRMFRecommender
+    # }
 }
 
 parser = argparse.ArgumentParser()
@@ -101,7 +101,7 @@ def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser])
     recent_counts = {r: 0 for r in recents}
     for u, data in training.items():
         for idx, sentiment in data.training.items():
-            if idx in recent_counts and sentiment == 1:
+            if idx in recent_counts and not sentiment == 0:
                 recent_counts[idx] += 1
 
     return [recent
@@ -133,7 +133,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
                 hits[k].append(1 in cutoff)
                 ndcgs[k].append(ndcg_at_k(cutoff, k))
                 sers[k].append(ser_at_k(zip(ranking[:k], cutoff), popular_items, k))
-                covs[k] = covs[k].union(set(ranking))
+                covs[k] = covs[k].union(set(ranking[:k]))
 
     hr = dict()
     ndcg = dict()
@@ -144,7 +144,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         hr[k] = np.mean(hits[k])
         ndcg[k] = np.mean(ndcgs[k])
         ser[k] = np.mean(sers[k])
-        cov[k] = coverage(covs[k], popular_items)
+        cov[k] = coverage(covs[k], meta.recommendable_entities)
 
     _write_parameters(model_name, experiment, model_instance)
 
@@ -188,6 +188,9 @@ def _parse_args():
     if not args.debug:
         logger.remove()
         logger.add(sys.stderr, level='INFO')
+
+    if not args.input:
+        args.input = ['../data']
 
     return model_selection, args.input[0]
 
