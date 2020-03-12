@@ -54,7 +54,10 @@ def ser_at_k(ranked_labeled_items, top_pop_items, k):
         if item not in top_pop_items[:k]
     ]
 
-    return sum([relevance for item, relevance in serendipitous_labeled_items])
+    if l := len(serendipitous_labeled_items) == 0:
+        return 0
+
+    return sum([relevance for item, relevance in serendipitous_labeled_items]) / l
 
 
 def coverage(recommended_entities, recommendable_entities):
