@@ -11,7 +11,7 @@ import numpy as np
 from loguru import logger
 
 from experiments.experiment import Dataset, Split, Experiment
-from experiments.metrics import ndcg_at_k
+from experiments.metrics import ndcg_at_k, ser_at_k
 from models.naive.naive_recommender import NaiveRecommender
 from models.lrmf.lrmf_recommender import LRMFRecommender
 from models.shared.base_recommender import RecommenderBase
@@ -104,6 +104,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
     hits = defaultdict(list)
     ndcgs = defaultdict(list)
+    sers = defaultdict(list)
 
     for idx, user in testing.items():
         for answer_set in user.sets:
@@ -116,6 +117,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
                 hits[k].append(1 in cutoff)
                 ndcgs[k].append(ndcg_at_k(cutoff, k))
+                sers[k].append(ser_at_k(zip(ranking[:k], cutoff), [], k))
 
     hr = dict()
     ndcg = dict()
