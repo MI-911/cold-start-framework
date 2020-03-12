@@ -57,3 +57,5 @@ def ser_at_k(ranked_labeled_items, top_pop_items, k):
     return sum([relevance for item, relevance in serendipitous_labeled_items])
 
 
+def coverage(recommended_entities, recommendable_entities):
+    return len(recommended_entities) / len(recommendable_entities)
