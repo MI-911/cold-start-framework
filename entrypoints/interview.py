@@ -24,9 +24,9 @@ models = {
     'naive': {
         'class': NaiveRecommender
     },
-    # 'lrmf': {
-    #     'class': LRMFRecommender
-    # }
+    'lrmf': {
+        'class': LRMFRecommender
+    }
 }
 
 parser = argparse.ArgumentParser()
@@ -132,7 +132,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
                 hits[k].append(1 in cutoff)
                 ndcgs[k].append(ndcg_at_k(cutoff, k))
-                sers[k].append(ser_at_k(zip(ranking[:k], cutoff), popular_items, k))
+                sers[k].append(ser_at_k(zip(ranking[:k], cutoff), popular_items, k, normalize=False))
                 covs[k] = covs[k].union(set(ranking[:k]))
 
     hr = dict()
