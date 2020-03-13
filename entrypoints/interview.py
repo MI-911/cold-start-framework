@@ -9,6 +9,7 @@ from typing import Dict, Set, List
 
 import numpy as np
 from loguru import logger
+from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
@@ -128,7 +129,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
     popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
-    for idx, user in testing.items():
+    for idx, user in tqdm(testing.items(), desc='[Testing]'):
         for answer_set in user.sets:
             answers = _conduct_interview(model_instance, answer_set)
             ranking = _produce_ranking(model_instance, answer_set, answers)
