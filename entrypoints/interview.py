@@ -129,7 +129,6 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
     popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
     for idx, user in testing.items():
-        logger.info(f'Testing user {user}...')
         for answer_set in user.sets:
             answers = _conduct_interview(model_instance, answer_set)
             ranking = _produce_ranking(model_instance, answer_set, answers)
@@ -169,7 +168,7 @@ def _write_results(model_name, hr, ndcg, ser, cov, split: Split):
             'ndcg': ndcg,
             'ser': ser,
             'cov': cov
-        }, fp)
+        }, fp, indent=True)
 
 
 def _run_split(model_selection: Set[str], split: Split):
