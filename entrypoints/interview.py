@@ -14,6 +14,7 @@ from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
 from models.naive.naive_recommender import NaiveRecommender
 from models.lrmf.lrmf_recommender import LRMFRecommender
+from models.naive.mf.mf_recommender import MatrixFactorisationRecommender
 from models.shared.base_recommender import RecommenderBase
 from models.shared.meta import Meta
 from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
@@ -21,11 +22,14 @@ from shared.utility import join_paths
 from shared.validators import valid_dir
 
 models = {
-    'naive': {
-        'class': NaiveRecommender
-    },
-    'lrmf': {
-        'class': LRMFRecommender
+    # 'naive': {
+    #     'class': NaiveRecommender
+    # },
+    # 'lrmf': {
+    #     'class': LRMFRecommender
+    # },
+    'mf': {
+        'class': MatrixFactorisationRecommender
     }
 }
 
@@ -74,12 +78,15 @@ def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase
 def _conduct_interview(model: RecommenderBase, answer_set: ColdStartUserSet, n_questions=5):
     answer_state = dict()
 
-    while len(answer_state) < n_questions:
+    for q in range(n_questions):
         next_questions = model.interview(answer_state)[:n_questions - len(answer_state)]
 
         for question in next_questions:
             # Specify answer as unknown if the user has no answer to it
             answer_state[question] = answer_set.answers.get(question, 0)
+
+        if len(answer_state) >= n_questions:
+            break
 
     assert len(answer_state) <= n_questions
 
@@ -122,6 +129,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
     popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
     for idx, user in testing.items():
+        logger.info(f'Testing user {user}...')
         for answer_set in user.sets:
             answers = _conduct_interview(model_instance, answer_set)
             ranking = _produce_ranking(model_instance, answer_set, answers)
