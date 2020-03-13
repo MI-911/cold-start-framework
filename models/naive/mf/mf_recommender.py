@@ -56,15 +56,9 @@ class MatrixFactorisationRecommender(RecommenderBase):
         hit_rates = []
         training, validation = flatten_dataset(training)
 
-        self.optimal_params = {
-                # 'k': [1, 2, 5, 10, 15, 25, 50]
-                'k': 1
-            }
-
         if self.optimal_params is None:
             parameters = {
-                # 'k': [1, 2, 5, 10, 15, 25, 50]
-                'k': [1, 2]
+                'k': [1, 2, 5, 10, 15, 25, 50]
             }
             for params in get_combinations(parameters):
                 logger.debug(f'Fitting MF with params: {params}')
