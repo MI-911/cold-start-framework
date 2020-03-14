@@ -3,3 +3,4 @@ numpy
 tqdm
 loguru
 scipy
+torch
