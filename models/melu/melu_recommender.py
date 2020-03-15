@@ -1,7 +1,7 @@
 from collections import OrderedDict, Counter
 from copy import deepcopy
 from random import shuffle
-from typing import Dict
+from typing import Dict, List
 
 from loguru import logger
 from torch.autograd import Variable
@@ -28,12 +28,14 @@ class MeLURecommender(RecommenderBase):
         self.entity_metadata = self._create_metadata()
 
         self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons, self.n_companies = \
-            len(self.meta.entities), len(self.decade_index), len(self.movie_index), len(self.category_index), len(self.person_index), len(self.company_index)
+            len(self.meta.entities), len(self.decade_index), len(self.movie_index), len(self.category_index), \
+            len(self.person_index), len(self.company_index)
 
         self.model = MeLU(self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons,
                           self.n_companies, 32)
 
         # Initialise variables
+        self.candidate_items = None
         self.optimal_params = None
         self.keep_weight = None
         self.weight_name = None
@@ -87,9 +89,9 @@ class MeLURecommender(RecommenderBase):
         return decade_index, movie_index, category_index, person_index, company_index
 
     def _create_metadata(self):
-        df = pd.read_csv(self.split.experiment.dataset.triples_path)
+        df = pd.read_csv(self.meta.triples_path)
         triples = [(h, r, t) for h, r, t in df[['head_uri', 'relation', 'tail_uri']].values]
-        e_idx_map = self.split.experiment.dataset.e_idx_map
+        e_idx_map = self.meta.uri_idx
 
         entities = {v: {'d': set(), 'm': set(), 'cat': set(), 'p': set(), 'com': set()}
                     for v in e_idx_map.values()}
@@ -131,6 +133,8 @@ class MeLURecommender(RecommenderBase):
             shuffle(ratings)
             support = ratings[:num_support]
             query = ratings[num_support:]
+            if not support or not query:
+                continue
             user_ratings[user] = [support, query]
             items.extend([e_id for e_id, _ in support])
 
@@ -154,6 +158,8 @@ class MeLURecommender(RecommenderBase):
                 else:
                     support_x = tt.cat((support_x, onehots), 0)
 
+            if support_x is None:
+                print('what')
             support_y = tt.FloatTensor([rating for _, rating in support])
 
             # Create query data
@@ -186,7 +192,9 @@ class MeLURecommender(RecommenderBase):
 
         val = []
         logger.debug(f'Creating validation set')
-        for user, warm in training.items():
+        for user, warm in list(training.items())[:50]:
+            if user not in user_ratings:
+                continue
             pos_sample = warm.validation['positive']
             neg_samples = warm.validation['negative']
             u_val = None
@@ -198,7 +206,7 @@ class MeLURecommender(RecommenderBase):
             for item in samples:
                 meta = self.entity_metadata[item]
                 meta = [tt.tensor([[0, x] for x in type]).t() for type in meta]
-                e = tt.tensor([[0, r.e_idx] for r in support]).t()
+                e = tt.tensor([[0, r] for r,_ in support]).t()
                 onehots = self.to_onehot(e, *meta)
 
                 if u_val is None:
@@ -208,7 +216,7 @@ class MeLURecommender(RecommenderBase):
 
             val.append((rank, u_val, support_train))
 
-        del user_ratings
+        del user_ratings, training
 
         batch_size = 16
         n_batches = (len(train_data) // batch_size) + 1
@@ -216,7 +224,7 @@ class MeLURecommender(RecommenderBase):
         logger.debug('Starting training')
         last_hitrate = -1
         # Go through all epochs
-        for i in range(max_iterations):
+        for i in range(100):
             logger.debug(f'Starting epoch {i+1}')
             # Ensure random order
             shuffle(train_data)
@@ -247,6 +255,43 @@ class MeLURecommender(RecommenderBase):
                 break
             else:
                 last_hitrate = hitrate
+
+        logger.debug('Find candidate set')
+        grad_norms = {}
+        start = 0
+        for i, (support_x, support_y, _, _) in enumerate(train_data):
+            entity_vec = support_x[:, :self.n_entities]
+            stop = start + len(entity_vec)
+            norm = self.get_weight_avg_norm(support_x, support_y)
+
+            for item in items[start:stop]:
+                try:
+                    grad_norms[item]['discriminative_value'] += norm.item()
+                    grad_norms[item]['popularity_value'] += 1
+                except:
+                    grad_norms[item] = {
+                        'discriminative_value': norm.item(),
+                        'popularity_value': 1
+                    }
+
+            start = stop
+
+        d_value_max = 0
+        p_value_max = 0
+        for item_id in grad_norms.keys():
+            grad_norms[item_id]['discriminative_value'] /= grad_norms[item_id]['popularity_value']
+            if grad_norms[item_id]['discriminative_value'] > d_value_max:
+                d_value_max = grad_norms[item_id]['discriminative_value']
+            if grad_norms[item_id]['popularity_value'] > p_value_max:
+                p_value_max = grad_norms[item_id]['popularity_value']
+        for item_id in grad_norms.keys():
+            grad_norms[item_id]['discriminative_value'] /= float(d_value_max)
+            grad_norms[item_id]['popularity_value'] /= float(p_value_max)
+            grad_norms[item_id]['final_score'] = grad_norms[item_id]['discriminative_value'] * grad_norms[item_id][
+                'popularity_value']
+
+        self.candidate_items = list(sorted(grad_norms.keys(), key=lambda x: grad_norms[x]['final_score'],
+                                           reverse=True))[:20]
 
     def forward(self, support_set_x, support_set_y, query_set_x, num_local_update=1):
         for idx in range(num_local_update):
@@ -314,7 +359,7 @@ class MeLURecommender(RecommenderBase):
         return tmp / num_local_update
 
     def to_onehot(self, entities, decade, movie, category, person, company):
-        entity = self.create_onehot(entities, (1, self.split.n_entities))
+        entity = self.create_onehot(entities, (1, self.n_entities))
         decade = self.create_onehot(decade, (1, self.n_decade))
         movie = self.create_onehot(movie, (1, self.n_movies))
         category = self.create_onehot(category, (1, self.n_categories))
@@ -331,14 +376,28 @@ class MeLURecommender(RecommenderBase):
                 t[indices.tolist()] = 1
         return t
 
-    def predict(self, user, items):
-        support, data = self.support[user]
+    def predict(self, items: List[int], answers: Dict) -> Dict[int, float]:
+        support_x = None
+        support_y = []
+        for item, rating in answers.items():
+            support_y.append(float(rating))
+            meta = self.entity_metadata[item]
+            meta = [tt.tensor([[0, x] for x in type]).t() for type in meta]
+            # e = tt.tensor([[0, r.e_idx, float(r.rating)] for r in support if r.e_idx != item.e_idx]).t()
+            onehots = self.to_onehot([], *meta)
+
+            if support_x is None:
+                support_x = onehots
+            else:
+                support_x = tt.cat((support_x, onehots), 0)
+
+        support_y = tt.tensor(support_y)
 
         query = None
         for item in items:
             meta = self.entity_metadata[item]
             meta = [tt.tensor([[0, x] for x in type]).t() for type in meta]
-            e = tt.tensor([[0, r.e_idx] for r in support if r.e_idx != item]).t()
+            e = tt.tensor([[0, r] for r in answers.keys() if r != item]).t()
             onehots = self.to_onehot(e, *meta)
 
             if query is None:
@@ -346,5 +405,14 @@ class MeLURecommender(RecommenderBase):
             else:
                 query = tt.cat((query, onehots), 0)
 
-        preds = self.forward(*data, query)
+        preds = self.forward(support_x, support_y, query)
         return {k: v for k, v in zip(items, preds)}
+
+    def interview(self, answers: Dict) -> List[int]:
+        return self.candidate_items
+
+    def get_parameters(self):
+        return []
+
+    def load_parameters(self, params):
+        return
