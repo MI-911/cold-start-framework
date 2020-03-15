@@ -13,6 +13,7 @@ from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
+from models.melu.melu_recommender import MeLURecommender
 from models.naive.naive_recommender import NaiveRecommender
 from models.lrmf.lrmf_recommender import LRMFRecommender
 from models.naive.mf.mf_recommender import MatrixFactorisationRecommender
@@ -31,6 +32,9 @@ models = {
     # },
     'mf': {
         'class': MatrixFactorisationRecommender
+    },
+    'melu': {
+        'class': MeLURecommender
     }
 }
 
