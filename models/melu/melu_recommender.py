@@ -10,10 +10,10 @@ import torch as tt
 from torch.nn import functional as F
 
 
-from models.melu import MeLU
 import pandas as pd
 import numpy as np
 
+from models.melu.melu import MeLU
 from models.shared.base_recommender import RecommenderBase
 from models.shared.user import WarmStartUser
 
@@ -56,33 +56,27 @@ class MeLURecommender(RecommenderBase):
         self.fast_weights = OrderedDict()
 
     def _get_indices(self):
-        df = pd.read_csv(self.split.experiment.dataset.triples_path)
-        triples = [(h, r, t) for h, r, t in df[['head_uri', 'relation', 'tail_uri']].values]
-        e_idx_map = self.meta.uri_idx
-
+        idx = self.meta.uri_idx
         decades = set()
         movies = set()
         categories = set()
         persons = set()
         companies = set()
 
-        for h, r, t in triples:
-            if h not in e_idx_map or t not in e_idx_map:
-                continue
+        tmp = set([l for _, e in self.meta.entities.items() for l in e['labels']])
 
-            if r != 'SUBCLASS_OF':
-                movies.add(e_idx_map[h])
-            else:
-                categories.add(e_idx_map[t])
-
-            if r == 'FROM_DECADE':
-                decades.add(e_idx_map[t])
-            elif r == 'DIRECTED_BY' or r == 'STARRING':
-                persons.add(e_idx_map[t])
-            elif r == 'HAS_SUBJECT' or r == 'HAS_GENRE':
-                categories.add(e_idx_map[t])
-            elif r == 'PRODUCED_BY':
-                companies.add(e_idx_map[t])
+        for entity, info in self.meta.entities.items():
+            for label in info['labels']:
+                if label == 'Decade':
+                    decades.add(idx[entity])
+                elif label == 'Movie':
+                    movies.add(idx[entity])
+                elif label == 'Category':
+                    categories.add(idx[entity])
+                elif label == 'Person':
+                    persons.add(idx[entity])
+                elif label == 'Company':
+                    companies.add(idx[entity])
 
         decade_index = {e_idx: i for i, e_idx in enumerate(decades)}
         movie_index = {e_idx: i for i, e_idx in enumerate(movies)}
