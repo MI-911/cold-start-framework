@@ -25,6 +25,12 @@ def download_ratings(path):
     urlretrieve(f'{BASE_URL}/ratings?versions=100k,100k-newer,100k-fix', os.path.join(path, 'ratings.csv'))
 
 
+def download_triples(path):
+    logger.info('Downloading triples')
+
+    urlretrieve(f'{BASE_URL}/triples', os.path.join(path, 'triples.csv'))
+
+
 if __name__ == '__main__':
     if len(sys.argv) < 2:
         parser.print_help(sys.stderr)
@@ -36,3 +42,4 @@ if __name__ == '__main__':
 
     download_ratings(output_path)
     download_entities(output_path)
+    download_triples(output_path)
