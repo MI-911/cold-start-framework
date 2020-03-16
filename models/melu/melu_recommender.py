@@ -1,3 +1,4 @@
+import sys
 from collections import OrderedDict, Counter
 from copy import deepcopy
 from random import shuffle
@@ -208,7 +209,7 @@ class MeLURecommender(RecommenderBase):
 
     def _get_all_parameters(self):
         learning_rates = [(5e-4, 5e-5)]  # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
-        latent_factors = [64, 128]  # [8, 16, 32, 64]
+        latent_factors = [64]  # [8, 16, 32, 64]
         hidden_units = [64]  # [32, 64]
         all_params = []
         param = {}
@@ -224,7 +225,9 @@ class MeLURecommender(RecommenderBase):
 
     def _train(self, train_data, validation_data, batch_size, max_iteration=100):
         n_batches = (len(train_data) // batch_size) + 1
-        last_hitrate = -1
+        best_hitrate = -1
+        best_loss = sys.float_info.max
+        best_model = None
         no_increase = 0
         # Go through all epochs
         for j in range(max_iteration):
@@ -253,18 +256,22 @@ class MeLURecommender(RecommenderBase):
 
             hitrate = hit / len(validation_data)
             loss = F.mse_loss(p, t)
-            # logger.debug(f'Hit at 10: {hitrate}, Loss: {loss}')
+            logger.debug(f'Hit at 10: {hitrate}, Loss: {loss}')
 
             # Stop if no increase last two iterations.
-            if hitrate < last_hitrate:
-                if no_increase:
+            if hitrate <= best_hitrate:
+                if hitrate == best_hitrate and loss < best_loss:
+                    best_model = deepcopy(self.model.state_dict())
+                if no_increase > 5:
                     break
                 no_increase += 1
             else:
-                last_hitrate = hitrate
+                best_hitrate = hitrate
+                best_loss = loss
+                best_model = deepcopy(self.model.state_dict())
                 no_increase = 0
 
-        return last_hitrate
+        return best_hitrate, best_model
 
     def _forward(self, support_set_x, support_set_y, query_set_x, num_local_update=1):
         for idx in range(num_local_update):
@@ -397,18 +404,21 @@ class MeLURecommender(RecommenderBase):
         logger.debug('Starting training')
         best_param = None
         best_hitrate = -1
+        best_model = None
         for param in self._get_all_parameters():
             logger.debug(f'Trying with params: {param}')
             self.load_parameters(param)
-            hr = self._train(train_data, val, batch_size)
+            hr, model = self._train(train_data, val, batch_size)
             if hr > best_hitrate:
                 logger.debug(f'New best param with HR:{hr}')
                 best_hitrate = hr
+                best_model = model
                 best_param = param.copy()
 
         self.load_parameters(best_param)
-        hr = self._train(train_data, val, batch_size)
-        logger.debug(f'Found best param with HR:{hr}')
+        self.model.load_state_dict(best_model)
+        self.store_parameters()
+        logger.debug(f'Found best param with HR:{best_hitrate}')
 
         grad_norms = self._calculate_grad_norms(train_data, items)
 

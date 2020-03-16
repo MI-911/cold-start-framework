@@ -4,5 +4,6 @@ From: pytorch/pytorch:latest
     . /app/
 %post
     cd /app
-    pip install -r requirements
+    apt install -y python3-pip
+    pip3 install -r requirements
     export PYTHONPATH=/app
