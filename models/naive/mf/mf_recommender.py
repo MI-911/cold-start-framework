@@ -25,7 +25,7 @@ def flatten_dataset(training: Dict[int, WarmStartUser]):
 class MatrixFactorisationRecommender(RecommenderBase):
 
     # MF doesn't conduct an interview
-    def interview(self, answers: Dict) -> List[int]:
+    def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
         return [0]
 
     def get_parameters(self):
