@@ -27,7 +27,7 @@ class RecommenderBase:
         """
         raise NotImplementedError
 
-    def interview(self, answers: Dict) -> List[int]:
+    def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
         """
         Predicts the next question(s) to ask a user
         :param answers: A state dictionary of the following format:
