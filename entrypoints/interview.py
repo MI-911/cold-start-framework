@@ -26,12 +26,12 @@ models = {
     # 'naive': {
     #     'class': NaiveRecommender
     # },
-    # 'lrmf': {
-    #     'class': LRMFRecommender
-    # },
-    'mf': {
-        'class': MatrixFactorisationRecommender
-    }
+    'lrmf': {
+        'class': LRMFRecommender
+    },
+    # 'mf': {
+    #     'class': MatrixFactorisationRecommender
+    # }
 }
 
 parser = argparse.ArgumentParser()

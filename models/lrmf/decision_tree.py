@@ -31,7 +31,7 @@ class DecisionTree:
             return
 
         # Find split item
-        self.candidate = self.choose_candidate(candidates)
+        self.candidate = self.choose_candidate_test(candidates)
         u_l, u_d = self.split_users(self.candidate)
         interview = self.parent_interview + [self.candidate]
 
@@ -139,6 +139,17 @@ class DecisionTree:
         if not answers or self.is_leaf() or not self.has_children():
             # No more answers, no more children, reached a leaf - either way, the
             # interview is over. Terminate the recursion
+
+            # Make the answer vector fit the matrix dims by either adding "0" answers
+            # or taking away answers where we got too many
+            if l := (len(self.T) - len(answers)) > 0:
+                # Padd with 0's
+                base = np.zeros(len(self.T))
+                base[:-l] = representation_acc
+                representation_acc = base
+            elif l < 0:
+                # Slice to length
+                representation_acc = representation_acc[:len(self.T)]
             return representation_acc @ self.T
 
         # Provide the user's answer for this entity, continue to the child

@@ -121,7 +121,7 @@ class LRMFRecommender(RecommenderBase):
         self.model = self.best_model
 
     def interview(self, answers: Dict[int, int], max_n_questions=5) -> List[int]:
-        return self.model.get_next_question(answers)
+        return self.model.interview(answers)
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         return self.model.rank(items, answers)
