@@ -12,6 +12,7 @@ from torch.nn import functional as F
 
 import pandas as pd
 import numpy as np
+from tqdm import tqdm
 
 from models.melu.melu import MeLU
 from models.shared.base_recommender import RecommenderBase
@@ -31,9 +32,6 @@ class MeLURecommender(RecommenderBase):
             len(self.meta.entities), len(self.decade_index), len(self.movie_index), len(self.category_index), \
             len(self.person_index), len(self.company_index)
 
-        self.model = MeLU(self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons,
-                          self.n_companies, 32)
-
         # Initialise variables
         self.candidate_items = None
         self.optimal_params = None
@@ -42,12 +40,17 @@ class MeLURecommender(RecommenderBase):
         self.weight_len = None
         self.fast_weights = None
         self.use_cuda = False
-        self.local_lr = 1e-6
+        self.local_lr = None
+        self.global_lr = None
+        self.latent = None
+        self.hidden = None
+
+        self.model = None
+
 
         self.support = {}
 
-        self.store_parameters()
-        self.meta_optim = tt.optim.Adam(self.model.parameters(), lr=1e-5)
+        self.meta_optim = None
         self.local_update_target_weight_name = ['fc1.weight', 'fc1.bias', 'fc2.weight', 'fc2.bias',
                                                 'linear_out.weight', 'linear_out.bias']
 
@@ -88,6 +91,24 @@ class MeLURecommender(RecommenderBase):
 
         return decade_index, movie_index, category_index, person_index, company_index
 
+    def _to_onehot(self, entities, decade, movie, category, person, company):
+        entity = self._create_onehot(entities, (1, self.n_entities))
+        decade = self._create_onehot(decade, (1, self.n_decade))
+        movie = self._create_onehot(movie, (1, self.n_movies))
+        category = self._create_onehot(category, (1, self.n_categories))
+        person = self._create_onehot(person, (1, self.n_persons))
+        company = self._create_onehot(company, (1, self.n_companies))
+        return tt.cat((entity, decade, movie, category, person, company), 1)
+
+    def _create_onehot(self, indices, shape, multi_value=False):
+        t = tt.zeros(shape)
+        if len(indices) > 0:
+            if multi_value:
+                t[indices[:2].tolist()] = indices[-1]
+            else:
+                t[indices.tolist()] = 1
+        return t
+
     def _create_metadata(self):
         df = pd.read_csv(self.meta.triples_path)
         triples = [(h, r, t) for h, r, t in df[['head_uri', 'relation', 'tail_uri']].values]
@@ -123,146 +144,39 @@ class MeLURecommender(RecommenderBase):
 
         return entity_metadata
 
-    def warmup(self, training: Dict[int, WarmStartUser]):
-        user_ratings = {}
-        items = []
-        for user, datasets in training.items():
-            ratings = list(datasets.training.items())
-            tmp = max(len(ratings) - 3, len(ratings) // 2)
-            num_support = min(tmp, 10)
-            shuffle(ratings)
-            support = ratings[:num_support]
-            query = ratings[num_support:]
-            if not support or not query:
-                continue
-            user_ratings[user] = [support, query]
-            items.extend([e_id for e_id, _ in support])
+    def _create_combined_onehots(self, entity_ids, targets=None, support=None):
+        # Create data
+        x = None
+        for e_id in entity_ids:
+            meta = self.entity_metadata[e_id]
+            meta = [tt.tensor([[0, x] for x in type]).t() for type in meta]
 
-        support_xs = []
-        support_ys = []
-        query_xs = []
-        query_ys = []
-
-        logger.debug(f'Creating train data')
-        for user, (support, query) in user_ratings.items():
-            # Create support data
-            support_x = None
-            for item, rating in support:
-                meta = self.entity_metadata[item]
-                meta = [tt.tensor([[0, x] for x in type]).t() for type in meta]
-                # e = tt.tensor([[0, r.e_idx, float(r.rating)] for r in support if r.e_idx != item.e_idx]).t()
-                onehots = self.to_onehot([], *meta)
-
-                if support_x is None:
-                    support_x = onehots
-                else:
-                    support_x = tt.cat((support_x, onehots), 0)
-
-            if support_x is None:
-                print('what')
-            support_y = tt.FloatTensor([rating for _, rating in support])
-
-            # Create query data
-            query_x = None
-            for item, rating in query:
-                meta = self.entity_metadata[item]
-                meta = [tt.tensor([[0, x] for x in type]).t() for type in meta]
-                e = tt.tensor([[0, r] for r, rating in support]).t()
-                onehots = self.to_onehot(e, *meta)
-
-                if query_x is None:
-                    query_x = onehots
-                else:
-                    query_x = tt.cat((query_x, onehots), 0)
-
-            query_y = tt.FloatTensor([rating for r, rating in query])
-
-            support_xs.append(support_x)
-            support_ys.append(support_y)
-
-            tmp = [support_x, support_y]  # [tt.cat((support_x, query_x),0), tt.cat((support_y, query_y), 0)]
-            user_ratings[user].append(tmp)
-            self.support[user] = [support, tmp]
-
-            query_xs.append(query_x)
-            query_ys.append(query_y)
-
-        train_data = list(zip(support_xs, support_ys, query_xs, query_ys))
-        del support_xs, support_ys, query_xs, query_ys
-
-        val = []
-        logger.debug(f'Creating validation set')
-        for user, warm in list(training.items())[:50]:
-            if user not in user_ratings:
-                continue
-            pos_sample = warm.validation['positive']
-            neg_samples = warm.validation['negative']
-            u_val = None
-            support, query, support_train = user_ratings[user]
-            samples = np.array([pos_sample] + neg_samples)
-            shuffle(samples)
-            rank = np.argwhere(samples == pos_sample)[0]
-
-            for item in samples:
-                meta = self.entity_metadata[item]
-                meta = [tt.tensor([[0, x] for x in type]).t() for type in meta]
-                e = tt.tensor([[0, r] for r,_ in support]).t()
-                onehots = self.to_onehot(e, *meta)
-
-                if u_val is None:
-                    u_val = onehots
-                else:
-                    u_val = tt.cat((u_val, onehots), 0)
-
-            val.append((rank, u_val, support_train))
-
-        del user_ratings, training
-
-        batch_size = 16
-        n_batches = (len(train_data) // batch_size) + 1
-
-        logger.debug('Starting training')
-        last_hitrate = -1
-        # Go through all epochs
-        for i in range(100):
-            logger.debug(f'Starting epoch {i+1}')
-            # Ensure random order
-            shuffle(train_data)
-
-            self.model.train()
-            # go through all batches
-            for batch_n in range(n_batches):
-                batch = train_data[batch_size*batch_n:batch_size*(batch_n+1)]
-                self.global_update(*zip(*batch))
-
-            logger.debug('Starting validation')
-            t = tt.ones(len(val))
-            p = tt.zeros(len(val)).float()
-            hit = 0.
-            for i, (rank, val_data, (support_x, support_y)) in enumerate(val):
-                lst = np.arange(len(val_data))
-                preds = self.forward(support_x, support_y, val_data)
-                p[i] = preds[rank]
-                ordered = sorted(zip(preds, lst), reverse=True)
-                hit += 1. if rank in [r for _, r in ordered][:10] else 0.
-
-            hitrate = hit / len(val)
-            loss = F.mse_loss(p, t)
-            logger.debug(f'Hit at 10: {hitrate}, Loss: {loss}')
-
-            # Stop if no increase last two iterations.
-            if hitrate < last_hitrate:
-                break
+            if support:
+                e = tt.tensor([[0, item] for item, _ in support]).t()
+                onehots = self._to_onehot(e, *meta)
             else:
-                last_hitrate = hitrate
+                onehots = self._to_onehot(tt.tensor([[0, e_id]]).t(), *meta)
 
+            if x is None:
+                x = onehots
+            else:
+                x = tt.cat((x, onehots), 0)
+        if targets:
+            y = tt.tensor(targets)
+            y = y.float()
+        else:
+            y = None
+
+        return x, y
+
+    def _calculate_grad_norms(self, train_data, items):
         logger.debug('Find candidate set')
         grad_norms = {}
         start = 0
         for i, (support_x, support_y, _, _) in enumerate(train_data):
             entity_vec = support_x[:, :self.n_entities]
             stop = start + len(entity_vec)
-            norm = self.get_weight_avg_norm(support_x, support_y)
+            norm = self._get_weight_avg_norm(support_x, support_y)
 
             for item in items[start:stop]:
                 try:
@@ -290,10 +204,69 @@ class MeLURecommender(RecommenderBase):
             grad_norms[item_id]['final_score'] = grad_norms[item_id]['discriminative_value'] * grad_norms[item_id][
                 'popularity_value']
 
-        self.candidate_items = list(sorted(grad_norms.keys(), key=lambda x: grad_norms[x]['final_score'],
-                                           reverse=True))[:20]
+        return grad_norms
 
-    def forward(self, support_set_x, support_set_y, query_set_x, num_local_update=1):
+    def _get_all_parameters(self):
+        learning_rates = [(5e-4, 5e-5)]  # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
+        latent_factors = [64, 128]  # [8, 16, 32, 64]
+        hidden_units = [64]  # [32, 64]
+        all_params = []
+        param = {}
+        for learning_rate in learning_rates:
+            param['lr'] = learning_rate
+            for latent_factor in latent_factors:
+                param['lf'] = latent_factor
+                for hidden_unit in hidden_units:
+                    param['hu'] = hidden_unit
+                    all_params.append(param.copy())
+
+        return all_params
+
+    def _train(self, train_data, validation_data, batch_size, max_iteration=100):
+        n_batches = (len(train_data) // batch_size) + 1
+        last_hitrate = -1
+        no_increase = 0
+        # Go through all epochs
+        for j in range(max_iteration):
+            if j == max_iteration - 1:
+                logger.debug(f'Reached final iteration')
+            # logger.debug(f'Starting epoch {i + 1}')
+            # Ensure random order
+            shuffle(train_data)
+
+            self.model.train()
+            # go through all batches
+            for batch_n in range(n_batches):
+                batch = train_data[batch_size * batch_n:batch_size * (batch_n + 1)]
+                self._global_update(*zip(*batch))
+
+            # logger.debug('Starting validation')
+            t = tt.ones(len(validation_data))
+            p = tt.zeros(len(validation_data)).float()
+            hit = 0.
+            for i, (rank, val_data, (support_x, support_y)) in enumerate(validation_data):
+                lst = np.arange(len(val_data))
+                preds = self._forward(support_x, support_y, val_data)
+                p[i] = preds[rank]
+                ordered = sorted(zip(preds, lst), reverse=True)
+                hit += 1. if rank in [r for _, r in ordered][:10] else 0.
+
+            hitrate = hit / len(validation_data)
+            loss = F.mse_loss(p, t)
+            # logger.debug(f'Hit at 10: {hitrate}, Loss: {loss}')
+
+            # Stop if no increase last two iterations.
+            if hitrate < last_hitrate:
+                if no_increase:
+                    break
+                no_increase += 1
+            else:
+                last_hitrate = hitrate
+                no_increase = 0
+
+        return last_hitrate
+
+    def _forward(self, support_set_x, support_set_y, query_set_x, num_local_update=1):
         for idx in range(num_local_update):
             if idx > 0:
                 self.model.load_state_dict(self.fast_weights)
@@ -314,7 +287,7 @@ class MeLURecommender(RecommenderBase):
         self.model.load_state_dict(self.keep_weight)
         return query_set_y_pred
 
-    def global_update(self, support_set_xs, support_set_ys, query_set_xs, query_set_ys, num_local_update=1):
+    def _global_update(self, support_set_xs, support_set_ys, query_set_xs, query_set_ys, num_local_update=1):
         batch_sz = len(support_set_xs)
         losses_q = []
         if self.use_cuda:
@@ -324,7 +297,7 @@ class MeLURecommender(RecommenderBase):
                 query_set_xs[i] = query_set_xs[i].cuda()
                 query_set_ys[i] = query_set_ys[i].cuda()
         for i in range(batch_sz):
-            query_set_y_pred = self.forward(support_set_xs[i], support_set_ys[i], query_set_xs[i], num_local_update)
+            query_set_y_pred = self._forward(support_set_xs[i], support_set_ys[i], query_set_xs[i], num_local_update)
             loss_q = F.mse_loss(query_set_y_pred, query_set_ys[i].view(-1, 1))
             losses_q.append(loss_q)
         losses_q = tt.stack(losses_q).mean(0)
@@ -334,7 +307,7 @@ class MeLURecommender(RecommenderBase):
         self.store_parameters()
         return
 
-    def get_weight_avg_norm(self, support_set_x, support_set_y, num_local_update=1):
+    def _get_weight_avg_norm(self, support_set_x, support_set_y, num_local_update=1):
         tmp = 0.
         if self.use_cuda:
             support_set_x = support_set_x.cuda()
@@ -358,61 +331,112 @@ class MeLURecommender(RecommenderBase):
                     self.fast_weights[self.weight_name[i]] = weight_for_local_update[i]
         return tmp / num_local_update
 
-    def to_onehot(self, entities, decade, movie, category, person, company):
-        entity = self.create_onehot(entities, (1, self.n_entities))
-        decade = self.create_onehot(decade, (1, self.n_decade))
-        movie = self.create_onehot(movie, (1, self.n_movies))
-        category = self.create_onehot(category, (1, self.n_categories))
-        person = self.create_onehot(person, (1, self.n_persons))
-        company = self.create_onehot(company, (1, self.n_companies))
-        return tt.cat((entity, decade, movie, category, person, company), 1)
+    def warmup(self, training: Dict[int, WarmStartUser]):
+        user_ratings = {}
+        items = []
+        for user, datasets in training.items():
+            ratings = list(datasets.training.items())
+            tmp = max(len(ratings) - 3, len(ratings) // 2)
+            num_support = min(tmp, 10)
+            shuffle(ratings)
+            support = ratings[:num_support]
+            query = ratings[num_support:]
+            if not support or not query:
+                continue
+            user_ratings[user] = [support, query]
+            items.extend([e_id for e_id, _ in support])
 
-    def create_onehot(self, indices, shape, multi_value=False):
-        t = tt.zeros(shape)
-        if len(indices) > 0:
-            if multi_value:
-                t[indices[:2].tolist()] = indices[-1]
-            else:
-                t[indices.tolist()] = 1
-        return t
+        del user, datasets, ratings, tmp, num_support, support, query
+
+        support_xs = []
+        support_ys = []
+        query_xs = []
+        query_ys = []
+
+        logger.debug(f'Creating train data')
+        for user, (support, query) in user_ratings.items():
+            support_x, support_y = self._create_combined_onehots(*zip(*support))
+            query_x, query_y = self._create_combined_onehots(*zip(*query), support)
+
+            support_xs.append(support_x)
+            support_ys.append(support_y)
+
+            tmp = [support_x, support_y]  # [tt.cat((support_x, query_x),0), tt.cat((support_y, query_y), 0)]
+            user_ratings[user].append(tmp)
+            self.support[user] = [support, tmp]
+
+            query_xs.append(query_x)
+            query_ys.append(query_y)
+
+        train_data = list(zip(support_xs, support_ys, query_xs, query_ys))
+        validation = list(training.items())
+        del support_xs, support_ys, query_xs, query_ys, support_x, support_y, query_x, query_y, tmp, user, support, \
+            query, training
+
+        val = []
+        shuffle(validation)
+        logger.debug(f'Creating validation set')
+        for user, warm in validation[:300]:
+            if user not in user_ratings:
+                continue
+            pos_sample = warm.validation['positive']
+            neg_samples = warm.validation['negative']
+            support, query, support_train = user_ratings[user]
+            samples = np.array([pos_sample] + neg_samples)
+            shuffle(samples)
+            rank = np.argwhere(samples == pos_sample)[0]
+
+            u_val, _ = self._create_combined_onehots(samples)
+
+            val.append((rank, u_val, support_train))
+
+        del user_ratings, validation
+
+        batch_size = 32
+
+        logger.debug('Starting training')
+        best_param = None
+        best_hitrate = -1
+        for param in self._get_all_parameters():
+            logger.debug(f'Trying with params: {param}')
+            self.load_parameters(param)
+            hr = self._train(train_data, val, batch_size)
+            if hr > best_hitrate:
+                logger.debug(f'New best param with HR:{hr}')
+                best_hitrate = hr
+                best_param = param.copy()
+
+        self.load_parameters(best_param)
+        hr = self._train(train_data, val, batch_size)
+        logger.debug(f'Found best param with HR:{hr}')
+
+        grad_norms = self._calculate_grad_norms(train_data, items)
+
+        self.candidate_items = list(sorted(grad_norms.keys(), key=lambda x: grad_norms[x]['final_score'],
+                                           reverse=True))
 
     def predict(self, items: List[int], answers: Dict) -> Dict[int, float]:
-        support_x = None
-        support_y = []
-        for item, rating in answers.items():
-            support_y.append(float(rating))
-            meta = self.entity_metadata[item]
-            meta = [tt.tensor([[0, x] for x in type]).t() for type in meta]
-            # e = tt.tensor([[0, r.e_idx, float(r.rating)] for r in support if r.e_idx != item.e_idx]).t()
-            onehots = self.to_onehot([], *meta)
+        support_x, support_y = self._create_combined_onehots(*zip(*answers.items()))
+        query, _ = self._create_combined_onehots(items, support=answers.items())
 
-            if support_x is None:
-                support_x = onehots
-            else:
-                support_x = tt.cat((support_x, onehots), 0)
-
-        support_y = tt.tensor(support_y)
-
-        query = None
-        for item in items:
-            meta = self.entity_metadata[item]
-            meta = [tt.tensor([[0, x] for x in type]).t() for type in meta]
-            e = tt.tensor([[0, r] for r in answers.keys() if r != item]).t()
-            onehots = self.to_onehot(e, *meta)
-
-            if query is None:
-                query = onehots
-            else:
-                query = tt.cat((query, onehots), 0)
-
-        preds = self.forward(support_x, support_y, query)
+        preds = self._forward(support_x, support_y, query)
         return {k: v for k, v in zip(items, preds)}
 
     def interview(self, answers: Dict) -> List[int]:
-        return self.candidate_items
+        return self.candidate_items[:20]
 
     def get_parameters(self):
-        return []
+        return self.optimal_params
 
     def load_parameters(self, params):
-        return
+        self.optimal_params = params
+        self.local_lr, self.global_lr = params['lr']
+        self.latent = params['lf']
+        self.hidden = params['hu']
+
+        self.model = MeLU(self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons,
+             self.n_companies, self.latent, self.hidden)
+
+        self.store_parameters()
+
+        self.meta_optim = tt.optim.Adam(self.model.parameters(), lr=self.global_lr)

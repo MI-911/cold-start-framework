@@ -50,7 +50,8 @@ class User(nn.Module):
 
 
 class MeLU(nn.Module):
-    def __init__(self, n_entities, n_decade, n_movies, n_categories, n_persons, n_companies, latent_factor):
+    def __init__(self, n_entities, n_decade, n_movies, n_categories, n_persons, n_companies, latent_factor=32,
+                 hidden_units=64):
         super(MeLU, self).__init__()
         self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons, self.n_companies = \
             n_entities, n_decade, n_movies, n_categories, n_persons, n_companies
@@ -58,9 +59,9 @@ class MeLU(nn.Module):
         self.item_emb = Item(n_decade, n_movies, n_categories, n_persons, n_companies, latent_factor)
         self.user_emb = User(n_entities, latent_factor)
 
-        self.fc1 = nn.Linear(latent_factor*6, 64)
-        self.fc2 = nn.Linear(64, 64)
-        self.linear_out = nn.Linear(64, 1)
+        self.fc1 = nn.Linear(latent_factor*6, hidden_units)
+        self.fc2 = nn.Linear(hidden_units, hidden_units)
+        self.linear_out = nn.Linear(hidden_units, 1)
 
         self.activation = F.relu
         self.implicit_activation = tt.tanh
