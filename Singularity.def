@@ -1,0 +1,8 @@
+Bootstrap: docker
+From: pytorch/pytorch:latest
+%files
+    . /app/
+%post
+    cd /app
+    pip install -r requirements
+    export PYTHONPATH=/app
