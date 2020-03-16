@@ -432,8 +432,8 @@ class MeLURecommender(RecommenderBase):
         preds = self._forward(support_x, support_y, query)
         return {k: v for k, v in zip(items, preds)}
 
-    def interview(self, answers: Dict) -> List[int]:
-        return self.candidate_items[:20]
+    def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
+        return self.candidate_items[:max_n_questions]
 
     def get_parameters(self):
         return self.optimal_params
