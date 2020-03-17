@@ -20,9 +20,10 @@ from models.shared.base_recommender import RecommenderBase
 from models.shared.user import WarmStartUser
 
 
-class MeLURecommender(RecommenderBase):
+class MeLURecommender(RecommenderBase, tt.nn.Module):
     def __init__(self, meta):
-        super(MeLURecommender, self).__init__(meta)
+        RecommenderBase.__init__(self, meta)
+        tt.nn.Module.__init__(self)
 
         self.decade_index, self.movie_index, self.category_index, self.person_index, \
             self.company_index = self._get_indices()
@@ -48,6 +49,8 @@ class MeLURecommender(RecommenderBase):
 
         self.model = None
 
+        if self.use_cuda:
+            self.cuda()
 
         self.support = {}
 
@@ -446,7 +449,7 @@ class MeLURecommender(RecommenderBase):
         self.hidden = params['hu']
 
         self.model = MeLU(self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons,
-             self.n_companies, self.latent, self.hidden)
+             self.n_companies, self.use_cuda, self.latent, self.hidden)
 
         self.store_parameters()
 
