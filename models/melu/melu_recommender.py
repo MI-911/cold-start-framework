@@ -451,6 +451,9 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
         self.model = MeLU(self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons,
              self.n_companies, self.use_cuda, self.latent, self.hidden)
 
+        if self.use_cuda:
+            self.model.cuda()
+
         self.store_parameters()
 
         self.meta_optim = tt.optim.Adam(self.model.parameters(), lr=self.global_lr)
