@@ -40,7 +40,7 @@ class MeLURecommender(RecommenderBase):
         self.weight_name = None
         self.weight_len = None
         self.fast_weights = None
-        self.use_cuda = False
+        self.use_cuda = True
         self.local_lr = None
         self.global_lr = None
         self.latent = None
@@ -241,7 +241,8 @@ class MeLURecommender(RecommenderBase):
             # go through all batches
             for batch_n in range(n_batches):
                 batch = train_data[batch_size * batch_n:batch_size * (batch_n + 1)]
-                self._global_update(*zip(*batch))
+                batch = [list(b) for b in zip(*batch)]
+                self._global_update(*batch)
 
             # logger.debug('Starting validation')
             t = tt.ones(len(validation_data))
@@ -383,7 +384,7 @@ class MeLURecommender(RecommenderBase):
         val = []
         shuffle(validation)
         logger.debug(f'Creating validation set')
-        for user, warm in validation[:300]:
+        for user, warm in validation[:20]:
             if user not in user_ratings:
                 continue
             pos_sample = warm.validation['positive']
