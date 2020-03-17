@@ -28,7 +28,7 @@ class NaiveRecommender(RecommenderBase):
     def _compute_weight(popularity, variance):
         return np.log2(popularity) * variance
 
-    def warmup(self, training):
+    def warmup(self, training, interview_length=5):
         entity_ratings = dict()
 
         # Aggregate ratings per entity

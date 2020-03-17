@@ -64,9 +64,12 @@ class LRMFRecommender(RecommenderBase):
         self.best_model = None
         self.best_hit = 0
 
-    def warmup(self, training: Dict) -> None:
+    def warmup(self, training: Dict, interview_length=5) -> None:
         self.best_model = None
         self.best_hit = 0
+
+        l1 = interview_length // 2
+        l2 = interview_length - l1
 
         if not self.params:
             for params in get_combinations({
@@ -78,7 +81,7 @@ class LRMFRecommender(RecommenderBase):
                 self.model = LRMF(
                     n_users=self.n_users,
                     n_entities=self.n_entities,
-                    l1=3, l2=3,
+                    l1=l1, l2=l2,
                     kk=params['kk'],
                     alpha=params['reg'],
                     beta=params['reg'])

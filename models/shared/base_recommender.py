@@ -8,7 +8,7 @@ class RecommenderBase:
     def __init__(self, meta: Meta):
         self.meta = meta
 
-    def warmup(self, training: Dict[int, WarmStartUser]) -> None:
+    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
         """
         Fits the model to the training data.
         :param training: A dictionary of the following format:
@@ -23,6 +23,7 @@ class RecommenderBase:
                     }
                 }
             }
+        :param interview_length: The length of the interview that should be learned.
         :return: None
         """
         raise NotImplementedError

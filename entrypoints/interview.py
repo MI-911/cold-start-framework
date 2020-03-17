@@ -27,7 +27,8 @@ models = {
     #     'class': NaiveRecommender
     # },
     'lrmf': {
-        'class': LRMFRecommender
+        'class': LRMFRecommender,
+        'requires_length': True
     },
     # 'mf': {
     #     'class': MatrixFactorisationRecommender
@@ -41,34 +42,34 @@ parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), hel
 parser.add_argument('--debug', action='store_true', help='enable debug mode')
 
 
-def _instantiate_model(model_name, experiment: Experiment, meta):
+def _instantiate_model(model_name, experiment: Experiment, meta, interview_length=0):
     kwargs = {
         'meta': meta
     }
 
     instance = models[model_name]['class'](**kwargs)
-    parameters = _get_parameters(model_name, experiment)
+    parameters = _get_parameters(model_name, experiment, interview_length)
     if parameters:
         instance.load_parameters(parameters)
 
-    return instance
+    return instance, models[model_name]['requires_length']
 
 
-def _get_parameter_path(parameter_base, model_name):
-    return os.path.join(parameter_base, f'parameters_{model_name}.json')
+def _get_parameter_path(parameter_base, model_name, interview_length):
+    return os.path.join(parameter_base, f'parameters_{model_name}_{interview_length}q.json')
 
 
-def _get_parameters(model_name, experiment: Experiment):
-    parameter_path = _get_parameter_path(experiment.path, model_name)
+def _get_parameters(model_name, experiment: Experiment, interview_length):
+    parameter_path = _get_parameter_path(experiment.path, model_name, interview_length)
     if not os.path.exists(parameter_path):
         return None
 
     return json.load(open(parameter_path, 'r'))
 
 
-def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase):
+def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase, interview_length):
     parameters = model.get_parameters()
-    parameter_path = _get_parameter_path(experiment.path, model_name)
+    parameter_path = _get_parameter_path(experiment.path, model_name, interview_length)
 
     if not parameters and os.path.exists(parameter_path):
         os.remove(parameter_path)
@@ -118,58 +119,63 @@ def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser])
 
 
 def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[int, WarmStartUser],
-               testing: Dict[int, ColdStartUser], upper_cutoff=50):
-    model_instance = _instantiate_model(model_name, experiment, meta)
-    model_instance.warmup(training)
+               testing: Dict[int, ColdStartUser], max_n_questions=5, upper_cutoff=50):
+    model_instance, requires_interview_length = _instantiate_model(model_name, experiment, meta)
 
-    hits = defaultdict(list)
-    ndcgs = defaultdict(list)
-    sers = defaultdict(list)
-    covs = defaultdict(set)
+    qs = defaultdict(list)
 
-    popular_items = _get_popular_recents(meta.recommendable_entities, training)
+    if not requires_interview_length:
+        model_instance.warmup(training)
 
-    for idx, user in tqdm(testing.items(), desc='[Testing]'):
-        for answer_set in user.sets:
-            answers = _conduct_interview(model_instance, answer_set)
-            ranking = _produce_ranking(model_instance, answer_set, answers)
-            relevance = _get_relevance_list(ranking, answer_set.positive)
+    for nq in range(1, max_n_questions + 1, 1):
+        hits = defaultdict(list)
+        ndcgs = defaultdict(list)
+        sers = defaultdict(list)
+        covs = defaultdict(set)
 
-            for k in range(1, upper_cutoff + 1):
-                cutoff = relevance[:k]
+        if requires_interview_length:
+            model_instance, _ = _instantiate_model(model_name, experiment, meta, nq)
+            model_instance.warmup(training, nq)
 
-                hits[k].append(1 in cutoff)
-                ndcgs[k].append(ndcg_at_k(cutoff, k))
-                sers[k].append(ser_at_k(zip(ranking[:k], cutoff), popular_items, k, normalize=False))
-                covs[k] = covs[k].union(set(ranking[:k]))
+        popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
-    hr = dict()
-    ndcg = dict()
-    ser = dict()
-    cov = dict()
+        for idx, user in tqdm(testing.items(), desc='[Testing]'):
+            for answer_set in user.sets:
+                answers = _conduct_interview(model_instance, answer_set)
+                ranking = _produce_ranking(model_instance, answer_set, answers)
+                relevance = _get_relevance_list(ranking, answer_set.positive)
 
-    for k in range(1, upper_cutoff + 1):
-        hr[k] = np.mean(hits[k])
-        ndcg[k] = np.mean(ndcgs[k])
-        ser[k] = np.mean(sers[k])
-        cov[k] = coverage(covs[k], meta.recommendable_entities)
+                for k in range(1, upper_cutoff + 1):
+                    cutoff = relevance[:k]
 
-    _write_parameters(model_name, experiment, model_instance)
+                    hits[k].append(1 in cutoff)
+                    ndcgs[k].append(ndcg_at_k(cutoff, k))
+                    sers[k].append(ser_at_k(zip(ranking[:k], cutoff), popular_items, k, normalize=False))
+                    covs[k] = covs[k].union(set(ranking[:k]))
 
-    return hr, ndcg, ser, cov
+        hr = dict()
+        ndcg = dict()
+        ser = dict()
+        cov = dict()
+
+        for k in range(1, upper_cutoff + 1):
+            hr[k] = np.mean(hits[k])
+            ndcg[k] = np.mean(ndcgs[k])
+            ser[k] = np.mean(sers[k])
+            cov[k] = coverage(covs[k], meta.recommendable_entities)
+
+        _write_parameters(model_name, experiment, model_instance, nq)
+        qs[nq] = [hr, ndcg, ser, cov]
+
+    return qs
 
 
-def _write_results(model_name, hr, ndcg, ser, cov, split: Split):
+def _write_results(model_name, qs, split: Split):
     results_dir = join_paths('results', split.experiment.name, model_name)
     os.makedirs(results_dir, exist_ok=True)
 
     with open(os.path.join(results_dir, f'{split.name}.json'), 'w') as fp:
-        json.dump({
-            'hr': hr,
-            'ndcg': ndcg,
-            'ser': ser,
-            'cov': cov
-        }, fp, indent=True)
+        json.dump(qs, fp, indent=True)
 
 
 def _run_split(model_selection: Set[str], split: Split):
@@ -181,8 +187,8 @@ def _run_split(model_selection: Set[str], split: Split):
         start_time = time.time()
         logger.info(f'Running {model} on {split}')
 
-        hr, ndcg, ser, cov = _run_model(model, split.experiment, meta, training, testing)
-        _write_results(model, hr, ndcg, ser, cov, split)
+        qs = _run_model(model, split.experiment, meta, training, testing, max_n_questions=2)
+        _write_results(model, qs, split)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 

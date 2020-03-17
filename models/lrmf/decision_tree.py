@@ -1,8 +1,7 @@
 import numpy as np
-from numpy.linalg import inv, norm
+from numpy.linalg import inv, norm, LinAlgError
 from scipy.linalg import solve_sylvester
 from typing import List, Dict
-from loguru import logger
 from tqdm import tqdm
 
 LIKE = 1
@@ -53,14 +52,17 @@ class DecisionTree:
         R = self.LRMF.R[users]
         B = self.represent(users, questions)
 
-        # Solve the sylvester equation AX + XB = Q
-        VVT = inv(V @ V.T)
+        try:
+            # Solve the sylvester equation AX + XB = Q
+            VVT = inv(V @ V.T)
+            _A = B.T @ B
+            _B = alpha * VVT
+            _Q = B.T @ R @ V.T @ VVT
 
-        _A = B.T @ B
-        _B = alpha * VVT
-        _Q = B.T @ R @ V.T @ VVT
+            return solve_sylvester(_A, _B, _Q)
 
-        return solve_sylvester(_A, _B, _Q)
+        except LinAlgError:
+            return np.zeros((self.depth, self.LRMF.kk))
 
     def represent(self, users, questions):
         # Returns a matrix representation of group Ug ; e
@@ -72,13 +74,14 @@ class DecisionTree:
     def get_representation(self, user_id: int, user_ratings: List[int]):
         # User should be a row from R
         def _transform_user(id):
-            return self.represent([id], self.parent_interview) @ self.T
+            r = self.represent([id], self.parent_interview)
+            return r @ self.T
 
         if self.is_leaf():
             return _transform_user(user_id)
 
         answer = user_ratings[self.candidate]
-        next = self.children[answer]
+        next = self.children[answer] if self.children[answer].T is not None else None
 
         if next is None:
             return _transform_user(user_id)
@@ -95,7 +98,9 @@ class DecisionTree:
             loss = 0
             for us in [u_l, u_d]:
                 questions = self.parent_interview + [candidate]
+
                 T = self.solve_transformation(us, questions)
+
                 B = self.represent(us, questions)
                 R = self.LRMF.R[us]
                 V = self.LRMF.V
@@ -116,7 +121,7 @@ class DecisionTree:
         return u_l, u_d
 
     def get_next_question(self, answers: Dict[int, int]):
-        if not answers:
+        if not answers or self.is_leaf():
             # No more information, ask towards this entity next
             return [self.candidate]
 
@@ -140,17 +145,14 @@ class DecisionTree:
             # No more answers, no more children, reached a leaf - either way, the
             # interview is over. Terminate the recursion
 
-            # Make the answer vector fit the matrix dims by either adding "0" answers
-            # or taking away answers where we got too many
-            if l := (len(self.T) - len(answers)) > 0:
-                # Padd with 0's
-                base = np.zeros(len(self.T))
-                base[:-l] = representation_acc
-                representation_acc = base
-            elif l < 0:
-                # Slice to length
-                representation_acc = representation_acc[:len(self.T)]
-            return representation_acc @ self.T
+            # Pad the representation in case we don't have quite enough
+            if not (l := self.depth - len(representation_acc)):
+                return representation_acc @ self.T.T
+
+            base_rep = np.zeros(self.depth)
+            base_rep[:l] = representation_acc
+
+            return representation_acc @ self.T.T
 
         # Provide the user's answer for this entity, continue to the child
         rating = LIKE if self.candidate in answers and answers[self.candidate] == LIKE else DISLIKE
@@ -162,6 +164,16 @@ class DecisionTree:
             for entity, answer in answers.items()
             if not entity == self.candidate
         }
+
+        next = self.children[rating] if self.children[rating].T is not None else None
+
+        if next is None:
+            # Singular matrix in the children, just return this representation
+            if l := len(representation_acc) < self.depth:
+                base_rep = np.zeros(self.depth)
+                base_rep[:l] = representation_acc
+
+            return representation_acc @ self.T.T
 
         return self.children[rating].get_interview_representation(remaining, representation_acc)
 

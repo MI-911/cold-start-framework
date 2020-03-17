@@ -52,7 +52,7 @@ class MatrixFactorisationRecommender(RecommenderBase):
         for i in range(0, len(triples), n):
             yield triples[i:i + n]
 
-    def warmup(self, training: Dict[int, WarmStartUser]) -> None:
+    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
         hit_rates = []
         training, validation = flatten_dataset(training)
 
