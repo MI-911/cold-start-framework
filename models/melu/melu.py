@@ -20,19 +20,19 @@ class Item(nn.Module):
 
     def forward(self, decade_idxs, movie_idxs, category_idxs, person_idxs, company_idxs):
         decades, s = self.decade_emb(decade_idxs.float()), tt.sum(decade_idxs.float(), 1).view(-1, 1)
-        decades[np.flatnonzero(s)] /= s[np.flatnonzero(s)].view(-1, 1)
+        decades[tt.nonzero(s)[:, 0]] /= s[tt.nonzero(s)[:, 0]].view(-1, 1)
 
         movies, s = self.movie_emb(movie_idxs.float()), tt.sum(movie_idxs.float(), 1)
-        decades[np.flatnonzero(s)] /= s[np.flatnonzero(s)].view(-1, 1)
+        decades[tt.nonzero(s)[:, 0]] /= s[tt.nonzero(s)[:, 0]].view(-1, 1)
 
         categories, s = self.category_emb(category_idxs.float()), tt.sum(category_idxs.float(), 1)
-        categories[np.flatnonzero(s)] /= s[np.flatnonzero(s)].view(-1, 1)
+        categories[tt.nonzero(s)[:, 0]] /= s[tt.nonzero(s)[:, 0]].view(-1, 1)
 
         persons, s = self.person_emb(person_idxs.float()), tt.sum(person_idxs.float(), 1)
-        persons[np.flatnonzero(s)] /= s[np.flatnonzero(s)].view(-1, 1)
+        persons[tt.nonzero(s)[:, 0]] /= s[tt.nonzero(s)[:, 0]].view(-1, 1)
 
         companies, s = self.company_emb(company_idxs.float()), tt.sum(company_idxs.float(), 1)
-        companies[np.flatnonzero(s)] /= s[np.flatnonzero(s)].view(-1, 1)
+        companies[tt.nonzero(s)[:, 0]] /= s[tt.nonzero(s)[:, 0]].view(-1, 1)
 
         return tt.cat((decades, movies, categories, persons, companies), 1)
 
@@ -44,7 +44,7 @@ class User(nn.Module):
 
     def forward(self, entity_idxs):
         entities, s = self.entity_emb(entity_idxs.float()), tt.sum(entity_idxs.float(), 1)
-        entities[np.flatnonzero(s)] /= s[np.flatnonzero(s)].view(-1, 1)
+        entities[tt.nonzero(s)[:, 0]] /= s[tt.nonzero(s)[:, 0]].view(-1, 1)
 
         return entities
 
