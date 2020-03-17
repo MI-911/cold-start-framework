@@ -212,8 +212,8 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
 
     def _get_all_parameters(self):
         learning_rates = [(5e-4, 5e-5)]  # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
-        latent_factors = [64]  # [8, 16, 32, 64]
-        hidden_units = [64]  # [32, 64]
+        latent_factors = [64, 128]  # [8, 16, 32, 64]
+        hidden_units = [64, 128]  # [32, 64]
         all_params = []
         param = {}
         for learning_rate in learning_rates:
@@ -256,6 +256,8 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
                 if self.use_cuda:
                     val_data, support_x, support_y = val_data.cuda(), support_x.cuda(), support_y.cuda()
                 preds = self._forward(support_x, support_y, val_data)
+                if self.use_cuda:
+                    val_data, support_x, support_y = val_data.cpu(), support_x.cpu(), support_y.cpu()
                 p[i] = preds[rank]
                 ordered = sorted(zip(preds, lst), reverse=True)
                 hit += 1. if rank in [r for _, r in ordered][:10] else 0.
@@ -432,6 +434,9 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
     def predict(self, items: List[int], answers: Dict) -> Dict[int, float]:
         support_x, support_y = self._create_combined_onehots(*zip(*answers.items()))
         query, _ = self._create_combined_onehots(items, support=answers.items())
+
+        if self.use_cuda:
+            support_x, support_y, query = support_x.cuda(), support_y.cuda(), query.cuda()
 
         preds = self._forward(support_x, support_y, query)
         return {k: v for k, v in zip(items, preds)}
