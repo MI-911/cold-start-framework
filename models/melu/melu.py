@@ -19,7 +19,7 @@ class Item(nn.Module):
         self.company_emb = nn.Linear(n_companies, latent_factor, bias=False)
 
     def forward(self, decade_idxs, movie_idxs, category_idxs, person_idxs, company_idxs):
-        decades, s = self.decade_emb(decade_idxs.float()), tt.sum(decade_idxs.float(), 1).view(-1, 1)
+        decades, s = self.decade_emb(decade_idxs.float()), tt.sum(decade_idxs.float(), 1)
         decades[tt.nonzero(s)[:, 0]] /= s[tt.nonzero(s)[:, 0]].view(-1, 1)
 
         movies, s = self.movie_emb(movie_idxs.float()), tt.sum(movie_idxs.float(), 1)
@@ -58,10 +58,6 @@ class MeLU(nn.Module):
 
         self.item_emb = Item(n_decade, n_movies, n_categories, n_persons, n_companies, latent_factor)
         self.user_emb = User(n_entities, latent_factor)
-
-        if use_cuda:
-            self.item_emb.cuda()
-            self.user_emb.cuda()
 
         self.fc1 = nn.Linear(latent_factor*6, hidden_units)
         self.fc2 = nn.Linear(hidden_units, hidden_units)

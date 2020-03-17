@@ -253,6 +253,8 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
             hit = 0.
             for i, (rank, val_data, (support_x, support_y)) in enumerate(validation_data):
                 lst = np.arange(len(val_data))
+                if self.use_cuda:
+                    val_data, support_x, support_y = val_data.cuda(), support_x.cuda(), support_y.cuda()
                 preds = self._forward(support_x, support_y, val_data)
                 p[i] = preds[rank]
                 ordered = sorted(zip(preds, lst), reverse=True)
