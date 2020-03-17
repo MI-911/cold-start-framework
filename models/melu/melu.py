@@ -56,10 +56,12 @@ class MeLU(nn.Module):
         self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons, self.n_companies = \
             n_entities, n_decade, n_movies, n_categories, n_persons, n_companies
 
-        self.use_cuda = use_cuda
-
         self.item_emb = Item(n_decade, n_movies, n_categories, n_persons, n_companies, latent_factor)
         self.user_emb = User(n_entities, latent_factor)
+
+        if use_cuda:
+            self.item_emb.cuda()
+            self.user_emb.cuda()
 
         self.fc1 = nn.Linear(latent_factor*6, hidden_units)
         self.fc2 = nn.Linear(hidden_units, hidden_units)
