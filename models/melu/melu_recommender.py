@@ -262,7 +262,6 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
 
             hitrate = hit / len(validation_data)
             loss = F.mse_loss(p, t)
-            logger.debug(f'Hit at 10: {hitrate}, Loss: {loss}')
 
             # Stop if no increase last two iterations.
             if hitrate <= best_hitrate:
@@ -387,9 +386,8 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
             query, training
 
         val = []
-        shuffle(validation)
         logger.debug(f'Creating validation set')
-        for user, warm in validation[:20]:
+        for user, warm in validation:
             if user not in user_ratings:
                 continue
             pos_sample = warm.validation['positive']
