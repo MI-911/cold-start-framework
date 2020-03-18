@@ -80,13 +80,17 @@ class LRMFRecommender(RecommenderBase):
 
         if not self.params:
             for params in get_combinations({
-                'k': [1, 2, 5, 10, 20],
                 'reg': [0.01, 0.001, 0.0001]
             }):
                 logger.info(f'Fitting FMF with params {params}')
 
                 self.model = LRMF(
-
+                    n_users=self.n_users,
+                    n_entities=self.n_entities,
+                    l1=l1,
+                    l2=l2,
+                    kk=-1,  # See notes
+                    regularisation=params['reg']
                 )
 
                 self._fit(training)
@@ -96,7 +100,12 @@ class LRMFRecommender(RecommenderBase):
 
         else:
             self.model = LRMF(
-
+                n_users=self.n_users,
+                n_entities=self.n_entities,
+                l1=l1,
+                l2=l2,
+                kk=-1,  # See notes
+                regularisation=self.params['reg']
             )
 
             self._fit(training)

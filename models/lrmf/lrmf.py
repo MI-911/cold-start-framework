@@ -63,8 +63,19 @@ def group_loss(users: List[int], global_questions: List[int], local_questions: L
     return loss + regularisation
 
 
-def optimise_entity_embeddings(ratings: np.ndarray, tree) -> np.ndarray:
-    pass
+def optimise_entity_embeddings(ratings: np.ndarray, tree, k: int, kk: int, regularisation: float) -> np.ndarray:
+    n_users, n_entities = ratings.shape
+    _S = np.zeros((n_users, k))
+
+    for u in tqdm(range(n_users), desc="[Optimizing entity embeddings...]"):
+        _S[u] = tree.interview_existing_user(u)
+
+    try:
+        _A = inv(_S.T @ _S) + np.eye(k) * regularisation
+        _B = _S.T @ ratings
+        return (_A @ _B).T
+    except LinAlgError:
+        return np.zeros((n_entities, kk))
 
 
 class LRMF:
@@ -104,6 +115,7 @@ class LRMF:
         all_users = [u for u in range(self.n_users)]
 
         self.T.grow(all_users, candidates)
+        self.entity_embeddings = optimise_entity_embeddings(ratings, self.T, self.k, self.kk, self.regularisation)
 
     def validate(self, user: int, to_validate: List[int]) -> Dict[int, float]:
         pass
@@ -136,7 +148,7 @@ class Tree:
         self.users = users
 
         min_loss, best_question = np.inf, None
-        for candidate in candidates:
+        for candidate in tqdm(candidates, desc=f'[Selecting question at depth {self.depth} ]'):
             likes, dislikes = split_users(users, candidate, self.lrmf.ratings)
 
             loss = 0
