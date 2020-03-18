@@ -5,8 +5,9 @@ from models.shared.user import WarmStartUser
 
 
 class RecommenderBase:
-    def __init__(self, meta: Meta):
+    def __init__(self, meta: Meta, use_cuda=False):
         self.meta = meta
+        self.use_cuda = use_cuda
 
     def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
         """

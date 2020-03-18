@@ -7,8 +7,8 @@ from models.shared.meta import Meta
 
 
 class NaiveRecommender(RecommenderBase):
-    def __init__(self, meta: Meta):
-        super().__init__(meta)
+    def __init__(self, meta: Meta, use_cuda=False):
+        super().__init__(meta, use_cuda)
 
         self.entity_variance = None
         self.entity_popularity = None

@@ -23,16 +23,21 @@ from shared.utility import join_paths
 from shared.validators import valid_dir
 
 models = {
-    # 'naive': {
-    #     'class': NaiveRecommender
-    # },
+    'naive': {
+        'class': NaiveRecommender,
+        'requires_interview_length': False,
+        'use_cuda': False
+    },
     'fmf': {
         'class': FMFRecommender,
-        'requires_interview_length': True
+        'requires_interview_length': True,
+        'use_cuda': False
     },
-    # 'mf': {
-    #     'class': MatrixFactorisationRecommender
-    # }
+    'mf': {
+        'class': MatrixFactorisationRecommender,
+        'requires_interview_length': False,
+        'use_cuda': False
+    }
 }
 
 parser = argparse.ArgumentParser()
@@ -44,7 +49,8 @@ parser.add_argument('--debug', action='store_true', help='enable debug mode')
 
 def _instantiate_model(model_name, experiment: Experiment, meta, interview_length=-1):
     kwargs = {
-        'meta': meta
+        'meta': meta,
+        'use_cuda': models[model_name]['use_cuda']
     }
 
     instance = models[model_name]['class'](**kwargs)
@@ -52,7 +58,9 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
     if parameters:
         instance.load_parameters(parameters)
 
-    return instance, models[model_name]['requires_interview_length']
+    requires_interview_length = models[model_name]['requires_interview_length']
+
+    return instance, requires_interview_length
 
 
 def _get_parameter_path(parameter_base, model_name, interview_length):

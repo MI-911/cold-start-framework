@@ -56,8 +56,8 @@ def validate_hit(model, training):
 
 
 class FMFRecommender(RecommenderBase):
-    def __init__(self, meta):
-        super(FMFRecommender, self).__init__(meta)
+    def __init__(self, meta, use_cuda=False):
+        super(FMFRecommender, self).__init__(meta, use_cuda)
         self.meta = meta
         self.model: FMF = Union[FMF, None]
 
