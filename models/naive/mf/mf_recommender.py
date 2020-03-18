@@ -34,8 +34,8 @@ class MatrixFactorisationRecommender(RecommenderBase):
     def load_parameters(self, params):
         self.optimal_params = params
 
-    def __init__(self, meta: Meta):
-        super(MatrixFactorisationRecommender, self).__init__(meta)
+    def __init__(self, meta: Meta, use_cuda=False):
+        super(MatrixFactorisationRecommender, self).__init__(meta, use_cuda)
         self.meta = meta
         self.optimal_params = None
 
@@ -52,7 +52,7 @@ class MatrixFactorisationRecommender(RecommenderBase):
         for i in range(0, len(triples), n):
             yield triples[i:i + n]
 
-    def warmup(self, training: Dict[int, WarmStartUser]) -> None:
+    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
         hit_rates = []
         training, validation = flatten_dataset(training)
 

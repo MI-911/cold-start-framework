@@ -5,10 +5,11 @@ from models.shared.user import WarmStartUser
 
 
 class RecommenderBase:
-    def __init__(self, meta: Meta):
+    def __init__(self, meta: Meta, use_cuda=False):
         self.meta = meta
+        self.use_cuda = use_cuda
 
-    def warmup(self, training: Dict[int, WarmStartUser]) -> None:
+    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
         """
         Fits the model to the training data.
         :param training: A dictionary of the following format:
@@ -23,6 +24,7 @@ class RecommenderBase:
                     }
                 }
             }
+        :param interview_length: The length of the interview that should be learned.
         :return: None
         """
         raise NotImplementedError

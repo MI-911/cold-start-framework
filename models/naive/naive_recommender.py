@@ -7,8 +7,8 @@ from models.shared.meta import Meta
 
 
 class NaiveRecommender(RecommenderBase):
-    def __init__(self, meta: Meta):
-        super().__init__(meta)
+    def __init__(self, meta: Meta, use_cuda=False):
+        super().__init__(meta, use_cuda)
 
         self.entity_variance = None
         self.entity_popularity = None
@@ -28,7 +28,7 @@ class NaiveRecommender(RecommenderBase):
     def _compute_weight(popularity, variance):
         return np.log2(popularity) * variance
 
-    def warmup(self, training):
+    def warmup(self, training, interview_length=5):
         entity_ratings = dict()
 
         # Aggregate ratings per entity
