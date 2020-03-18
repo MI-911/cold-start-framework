@@ -1,13 +1,31 @@
 import pickle
 from abc import ABC
 from typing import Dict, List, Union
-from models.fmf.fmf import LIKE, DISLIKE, UNKNOWN, FMF
+from models.fmf.fmf import LIKE, DISLIKE, UNKNOWN, FMF, Tree
 from models.shared.base_recommender import RecommenderBase
 import numpy as np
 import pickle
 from loguru import logger
 
+from models.shared.meta import Meta
 from shared.utility import get_combinations
+
+
+def visualise_tree(tree: Tree, meta: Meta):
+    reverse_entity_map = {idx: uri for uri, idx in meta.uri_idx.items()}
+
+    def _idx_to_name(idx: int):
+        uri = reverse_entity_map[idx]
+        return meta.entities[uri]['name']
+
+    indentation = ''.join(['|-' for _ in range(tree.depth)])
+
+    questions = _idx_to_name(tree.question) if not tree.is_leaf() else "(Make recommendation)"
+
+    print(f'{indentation}|-> {questions}')
+    if not tree.is_leaf():
+        visualise_tree(tree.children[LIKE], meta)
+        visualise_tree(tree.children[DISLIKE], meta)
 
 
 def get_rating_matrix(training, n_users, n_entities, rating_map=None):
@@ -90,6 +108,7 @@ class FMFRecommender(RecommenderBase):
                 )
 
                 self._fit(training)
+                # visualise_tree(self.model.T, self.meta)
 
             self.model = self.best_model
             self.params = {'kk': self.model.kk}
@@ -109,7 +128,7 @@ class FMFRecommender(RecommenderBase):
         R = get_rating_matrix(training, self.n_users, self.n_entities)
         candidates = choose_candidates(R, n=100)
 
-        n_iterations = 10
+        n_iterations = 5
         for i in range(n_iterations):
             self.model.fit(R, candidates)
             hit = validate_hit(self.model, training)

@@ -1,13 +1,34 @@
 import pickle
 from abc import ABC
 from typing import Dict, List, Union
-from models.lrmf.lrmf import LIKE, DISLIKE, LRMF
+from models.lrmf.lrmf import LIKE, DISLIKE, LRMF, Tree
 from models.shared.base_recommender import RecommenderBase
 import numpy as np
 import pickle
 from loguru import logger
 
+from models.shared.meta import Meta
 from shared.utility import get_combinations
+
+
+def visualise_tree(tree: Tree, meta: Meta):
+    reverse_entity_map = {idx: uri for uri, idx in meta.uri_idx.items()}
+
+    def _idx_to_name(idx: int):
+        uri = reverse_entity_map[idx]
+        return meta.entities[uri]['name']
+
+    indentation = ''.join(['|-' for _ in range(tree.depth)])
+
+    if tree.is_leaf():
+        questions = ', '.join([_idx_to_name(q) for q in tree.l2_questions])
+    else:
+        questions = _idx_to_name(tree.question)
+
+    print(f'{indentation}-> {questions}')
+    if not tree.is_leaf():
+        visualise_tree(tree.children[LIKE], meta)
+        visualise_tree(tree.children[DISLIKE], meta)
 
 
 def get_rating_matrix(training, n_users, n_entities, rating_map=None):
@@ -34,7 +55,12 @@ def choose_candidates(rating_matrix, n=100):
     Selects n candidates that can be asked towards in an interview.
     """
     # TODO: Choose candidate items with a mix between popularity and diversity
-    n_ratings = rating_matrix.sum(axis=0)
+    n_ratings = np.zeros(rating_matrix.shape[1])
+    for i, item_column in enumerate(rating_matrix.T):
+        for rating in item_column:
+            if rating == LIKE:
+                n_ratings[i] += 1
+
     n_ratings = sorted([(entity, rs) for entity, rs in enumerate(n_ratings)], key=lambda x: x[1], reverse=True)
     return [entity for entity, rs in n_ratings][:n]
 
@@ -94,6 +120,7 @@ class LRMFRecommender(RecommenderBase):
                 )
 
                 self._fit(training)
+                # visualise_tree(self.model.T, self.meta)
 
             self.model = self.best_model
             self.params = {'reg': self.model.regularisation}
@@ -114,15 +141,15 @@ class LRMFRecommender(RecommenderBase):
         R = get_rating_matrix(training, self.n_users, self.n_entities)
         candidates = choose_candidates(R, n=100)
 
-        n_iterations = 10
+        n_iterations = 5
         for i in range(n_iterations):
             self.model.fit(R, candidates)
             hit = validate_hit(self.model, training)
 
-            logger.debug(f'Training iteration {i}: {hit} Hit@10')
+            logger.info(f'Training iteration {i}: {hit} Hit@10')
 
             if hit > self.best_hit:
-                logger.debug(f'LRMF found new best model at {hit} Hit@10')
+                logger.info(f'LRMF found new best model at {hit} Hit@10')
                 self.best_hit = hit
                 self.best_model = pickle.loads(pickle.dumps(self.model))  # Save the model
 
