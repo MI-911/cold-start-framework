@@ -9,7 +9,7 @@ DISLIKE = 0
 
 
 class LRMF:
-    def __init__(self, n_users: List[int], n_entities: List[int], l1: int, l2: int, kk: int, regularisation: float):
+    def __init__(self, n_users: int, n_entities: int, l1: int, l2: int, kk: int, regularisation: float):
         """
         Instantiates an LRMF model for conducting interviews and making
         recommendations. The model conducts an interview of total length L = l1 + l2.
@@ -19,13 +19,16 @@ class LRMF:
         :param l1: The number of global questions to be used for group division.
         :param l2: The number of local questions to be asked in every group.
         :param kk: The number of latent factors for entity embeddings.
+                   NOTE: Due to a seemingly self-imposed restriction from the paper, the number
+                   of latent factors used to represent entities must be exactly l2, and cannot be kk.
+                   We have emailed the authors requesting an explanation and are awaiting a response.
         :param regularisation: Control parameter for l2-norm regularisation.
         """
         self.n_users = n_users
         self.n_entities = n_entities
         self.l1 = l1
         self.l2 = l2
-        self.kk = kk
+        self.kk = l2  # See the note
         self.regularisation = regularisation
 
         self.interview_length: int = l1 + l2
@@ -64,7 +67,3 @@ class Tree:
 
     def interview_new_user(self, answers: Dict[int, int]) -> Union[int, np.ndarray]:
         pass
-
-
-
-
