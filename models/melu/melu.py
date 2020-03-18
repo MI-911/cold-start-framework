@@ -50,7 +50,7 @@ class User(nn.Module):
 
 
 class MeLU(nn.Module):
-    def __init__(self, n_entities, n_decade, n_movies, n_categories, n_persons, n_companies, use_cuda=True,
+    def __init__(self, n_entities, n_decade, n_movies, n_categories, n_persons, n_companies,
                  latent_factor=32, hidden_units=64):
         super(MeLU, self).__init__()
         self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons, self.n_companies = \

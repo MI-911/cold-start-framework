@@ -226,7 +226,8 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
 
         return all_params
 
-    def _train(self, train_data, validation_data, batch_size, max_iteration=100):
+    def _train(self, train_data, validation_data, batch_size, max_iteration=100, validation_limit=100):
+        validation_limit = min(validation_limit, len(validation_data))
         n_batches = (len(train_data) // batch_size) + 1
         best_hitrate = -1
         best_loss = sys.float_info.max
@@ -248,22 +249,26 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
                 self._global_update(*batch)
 
             # logger.debug('Starting validation')
-            t = tt.ones(len(validation_data))
-            p = tt.zeros(len(validation_data)).float()
+            t = tt.ones(validation_limit)
+            p = tt.zeros(validation_limit).float()
+            shuffle(validation_data)
             hit = 0.
-            for i, (rank, val_data, (support_x, support_y)) in enumerate(validation_data):
+            for i, (rank, val_data, (support_x, support_y)) in enumerate(validation_data[:validation_limit]):
                 lst = np.arange(len(val_data))
                 if self.use_cuda:
-                    val_data, support_x, support_y = val_data.cuda(), support_x.cuda(), support_y.cuda()
-                preds = self._forward(support_x, support_y, val_data)
-                if self.use_cuda:
-                    val_data, support_x, support_y = val_data.cpu(), support_x.cpu(), support_y.cpu()
-                p[i] = preds[rank]
-                ordered = sorted(zip(preds, lst), reverse=True)
-                hit += 1. if rank in [r for _, r in ordered][:10] else 0.
+                    preds = self._forward(support_x.cuda(), support_y.cuda(), val_data.cuda())
+                else:
+                    preds = self._forward(support_x, support_y, val_data)
 
-            hitrate = hit / len(validation_data)
-            loss = F.mse_loss(p, t)
+                # Ensure that memory does not explode
+                with tt.no_grad():
+                    p[i] = preds[rank]
+                    ordered = sorted(zip(preds, lst), reverse=True)
+                    hit += 1. if rank in [r for _, r in ordered][:10] else 0.
+
+            with tt.no_grad():
+                hitrate = float(hit / len(validation_data))
+                loss = float(F.mse_loss(p, t))
 
             # Stop if no increase last two iterations.
             if hitrate <= best_hitrate:
@@ -454,7 +459,7 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
         self.hidden = params['hu']
 
         self.model = MeLU(self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons,
-             self.n_companies, self.use_cuda, self.latent, self.hidden)
+             self.n_companies, self.latent, self.hidden)
 
         if self.use_cuda:
             self.model.cuda()
