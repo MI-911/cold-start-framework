@@ -267,7 +267,7 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
                     hit += 1. if rank in [r for _, r in ordered][:10] else 0.
 
             with tt.no_grad():
-                hitrate = float(hit / len(validation_data))
+                hitrate = hit / float(validation_limit)
                 loss = float(F.mse_loss(p, t))
 
             # Stop if no increase last two iterations.
