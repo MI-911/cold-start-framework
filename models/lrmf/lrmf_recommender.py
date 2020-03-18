@@ -82,7 +82,7 @@ class LRMFRecommender(RecommenderBase):
             for params in get_combinations({
                 'reg': [0.01, 0.001, 0.0001]
             }):
-                logger.info(f'Fitting FMF with params {params}')
+                logger.info(f'Fitting LRMF with params {params}')
 
                 self.model = LRMF(
                     n_users=self.n_users,
@@ -96,7 +96,7 @@ class LRMFRecommender(RecommenderBase):
                 self._fit(training)
 
             self.model = self.best_model
-            self.params = {'kk': self.model.kk}
+            self.params = {'reg': self.model.regularisation}
 
         else:
             self.model = LRMF(

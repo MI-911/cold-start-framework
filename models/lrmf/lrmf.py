@@ -1,6 +1,7 @@
 from typing import List, Tuple, Union, Dict
 
 import numpy as np
+from loguru import logger
 from scipy.linalg import solve_sylvester, inv, LinAlgError
 from models.lrmf.maxvol import py_rect_maxvol
 from tqdm import tqdm
@@ -16,7 +17,7 @@ def except_item(lst, item):
 def group_representation(users: List[int],
                          l1_questions: List[int], l2_questions: List[int],
                          ratings: np.ndarray) -> np.ndarray:
-    ratings_submatrix = ratings[users, l1_questions + l2_questions]
+    ratings_submatrix = ratings[users][:, l1_questions + l2_questions]
     with_bias = np.hstack((ratings_submatrix, np.ones((len(users), 1))))
     return with_bias
 
@@ -35,19 +36,7 @@ def global_questions_vector(questions: List[int], max_length: int) -> List[int]:
 
 def local_questions_vector(candidates: List[int], entity_embeddings: np.ndarray, max_length: int) -> List[int]:
     questions, _ = py_rect_maxvol(entity_embeddings[candidates], maxK=max_length)
-    return questions
-
-
-def transformation(users: List[int],
-                   representation: np.ndarray, entity_embeddings: np.ndarray,
-                   ratings: np.ndarray, alpha=1.0) -> np.ndarray:
-    try:
-        _A = representation.T @ representation
-        _B = alpha * inv(entity_embeddings.T @ entity_embeddings)
-        _Q = representation.T @ ratings[users] @ entity_embeddings @ inv(entity_embeddings.T @ entity_embeddings)
-        return solve_sylvester(_A, _B, _Q)
-    except LinAlgError:
-        return np.zeros((representation.shape[1], entity_embeddings.shape[1]))
+    return questions.tolist()
 
 
 def group_loss(users: List[int], global_questions: List[int], local_questions: List[int],
@@ -63,18 +52,30 @@ def group_loss(users: List[int], global_questions: List[int], local_questions: L
     return loss + regularisation
 
 
+def transformation(users: List[int],
+                   representation: np.ndarray, entity_embeddings: np.ndarray,
+                   ratings: np.ndarray, alpha=1.0) -> np.ndarray:
+    try:
+        _A = representation.T @ representation
+        _B = alpha * inv(entity_embeddings.T @ entity_embeddings)
+        _Q = representation.T @ ratings[users] @ entity_embeddings @ inv(entity_embeddings.T @ entity_embeddings)
+        return solve_sylvester(_A, _B, _Q)
+    except LinAlgError as err:
+        return np.zeros((representation.shape[1], entity_embeddings.shape[1]))
+
+
 def optimise_entity_embeddings(ratings: np.ndarray, tree, k: int, kk: int, regularisation: float) -> np.ndarray:
     n_users, n_entities = ratings.shape
-    _S = np.zeros((n_users, k))
+    _S = np.zeros((n_users, kk))
 
     for u in tqdm(range(n_users), desc="[Optimizing entity embeddings...]"):
         _S[u] = tree.interview_existing_user(u)
 
     try:
-        _A = inv(_S.T @ _S) + np.eye(k) * regularisation
+        _A = inv(_S.T @ _S) + np.eye(kk) * regularisation
         _B = _S.T @ ratings
         return (_A @ _B).T
-    except LinAlgError:
+    except LinAlgError as err:
         return np.zeros((n_entities, kk))
 
 
@@ -101,13 +102,13 @@ class LRMF:
         self.kk = l2  # See the note
         self.regularisation = regularisation
 
-        self.interview_length: int = l1 + l2
+        self.interview_length: int = self.l1 + self.l2
         self.k: int = self.interview_length + 1
 
-        self.ratings: np.ndarray = np.zeros((n_users, n_entities))
-        self.entity_embeddings: np.ndarray = np.zeros((n_entities, kk))
+        self.ratings: np.ndarray = np.zeros((self.n_users, self.n_entities))
+        self.entity_embeddings: np.ndarray = np.random.rand(self.n_entities, self.kk)
 
-        self.T = Tree(l1_questions=[], depth=0, max_depth=self.interview_length, lrmf=self)
+        self.T = Tree(l1_questions=[], depth=0, max_depth=self.l1, lrmf=self)
 
     def fit(self, ratings: np.ndarray, candidates: List[int]):
         self.ratings = ratings
@@ -118,13 +119,17 @@ class LRMF:
         self.entity_embeddings = optimise_entity_embeddings(ratings, self.T, self.k, self.kk, self.regularisation)
 
     def validate(self, user: int, to_validate: List[int]) -> Dict[int, float]:
-        pass
+        user_vector = self.T.interview_existing_user(user)
+        similarities = user_vector @ self.entity_embeddings[to_validate].T
+        return {e: s for e, s in zip(to_validate, similarities)}
 
     def interview(self, answers: Dict[int, int]) -> int:
-        pass
+        return self.T.interview_new_user(answers, [])
 
     def rank(self, items: List[int], answers: Dict[int, int]):
-        pass
+        user_vector = self.T.interview_new_user(answers, [])
+        similarities = user_vector @ self.entity_embeddings[items].T
+        return {e: s for e, s in zip(items, similarities)}
 
 
 class Tree:
@@ -146,6 +151,15 @@ class Tree:
 
     def grow(self, users: List[int], candidates: List[int]):
         self.users = users
+        self.l2_questions = local_questions_vector(
+            candidates, self.lrmf.entity_embeddings, self.lrmf.l2)
+
+        if self.is_leaf():
+            self.transformation = transformation(
+                self.users, group_representation(self.users, self.l1_questions, self.l2_questions, self.lrmf.ratings),
+                self.lrmf.entity_embeddings, self.lrmf.ratings)
+
+            return
 
         min_loss, best_question = np.inf, None
         for candidate in tqdm(candidates, desc=f'[Selecting question at depth {self.depth} ]'):
@@ -154,7 +168,7 @@ class Tree:
             loss = 0
             for group in [likes, dislikes]:
                 rest_candidates = except_item(candidates, candidate)
-                global_questions = global_questions_vector(self.l1_questions, self.max_depth)
+                global_questions = global_questions_vector(self.l1_questions, self.lrmf.l1)
                 local_questions = local_questions_vector(rest_candidates, self.lrmf.entity_embeddings, self.lrmf.l2)
                 loss += group_loss(
                     group, global_questions, local_questions,self.lrmf.entity_embeddings, self.lrmf.ratings)
@@ -189,5 +203,32 @@ class Tree:
         answer = self.lrmf.ratings[user, self.question]
         return self.children[answer].interview_existing_user(user)
 
-    def interview_new_user(self, answers: Dict[int, int]) -> Union[int, np.ndarray]:
-        pass
+    def interview_new_user(self, answers: Dict[int, int], user_vector: List[int]) -> Union[int, np.ndarray]:
+        if self.is_leaf():
+            # Have we asked all our local questions?
+            if len(user_vector) < self.lrmf.interview_length:
+                for local_question in self.l2_questions:
+                    if local_question not in answers:
+                        return local_question
+
+                    answer = answers[local_question] if local_question in answers else DISLIKE
+
+                    return self.interview_new_user({
+                        question: answer
+                        for question, answer in answers.items()
+                        if not question == local_question
+                    }, user_vector + [answer])
+            else:
+                user_vector.append(1)  # Add bias
+                return user_vector @ self.transformation
+
+        if not answers:
+            return self.question
+
+        answer = answers[self.question] if self.question in answers else DISLIKE
+        return self.children[answer].interview_new_user({
+                question: answer
+                for question, answer
+                in answers.items() if not question == self.question
+            }, user_vector + [answer]
+        )
