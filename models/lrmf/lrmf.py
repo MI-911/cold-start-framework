@@ -9,8 +9,24 @@ DISLIKE = 0
 
 
 class LRMF:
-    def __init__(self):
-        pass
+    def __init__(self, n_users, n_entities, l1, l2, kk, regularisation):
+        """
+        Instantiates an LRMF model for conducting interviews and making
+        recommendations. The model conducts an interview of total length L = l1 + l2.
+
+        :param n_users: The number of users.
+        :param n_entities: The number of entities.
+        :param l1: The number of global questions to be used for group division.
+        :param l2: The number of local questions to be asked in every group.
+        :param kk: The number of latent factors for entity embeddings.
+        :param regularisation: Control parameter for l2-norm regularisation.
+        """
+        self.n_users = n_users
+        self.n_entities = n_entities
+        self.l1 = l1
+        self.l2 = l2
+        self.kk = kk
+        self.regularisation = regularisation
 
     def fit(self, ratings: np.ndarray, candidates: List[int]):
         pass

@@ -74,6 +74,10 @@ class LRMFRecommender(RecommenderBase):
         self.best_model = None
         self.best_hit = 0
 
+        # Pseudo-evenly split the number of global and local questions
+        l1 = interview_length // 2
+        l2 = interview_length - l1
+
         if not self.params:
             for params in get_combinations({
                 'k': [1, 2, 5, 10, 20],
