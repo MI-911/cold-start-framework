@@ -1,11 +1,33 @@
 from typing import List, Tuple, Union, Dict
 
 import numpy as np
-from numpy.linalg import solve
+from scipy.linalg import solve_sylvester
+from models.lrmf.maxvol import py_rect_maxvol
 from tqdm import tqdm
 
 LIKE = 1
 DISLIKE = 0
+
+
+def group_representation(users: List[int],
+                         l1_questions: List[int], l2_questions: List[int],
+                         ratings: np.ndarray) -> np.ndarray:
+    ratings_submatrix = ratings[users, l1_questions + l2_questions]
+    with_bias = np.hstack((ratings_submatrix, np.ones((len(users), 1))))
+    return with_bias
+
+
+def split_users(users: List[int], entity: int, ratings: np.ndarray) -> Tuple[List[int], List[int]]:
+    user_ratings = ratings[users, entity]
+    likes, = np.where(user_ratings == LIKE)
+    dislikes, = np.where(user_ratings == DISLIKE)
+    return likes, dislikes
+
+
+def group_loss(users: List[int], entity_embeddings: np.ndarray, ratings: np.ndarray) -> float:
+    _R = ratings[users]
+    _B = group_representation(users, ratings)
+    pass
 
 
 class LRMF:
@@ -51,16 +73,33 @@ class LRMF:
 
 
 class Tree:
-    def __init__(self, depth: int, max_depth: int, lrmf: LRMF):
+    def __init__(self, l1_questions: List[int], depth: int, max_depth: int, lrmf: LRMF):
         self.depth = depth
         self.max_depth = max_depth
+        self.l1_questions = l1_questions
         self.lrmf = lrmf
+
+        self.users: List[int] = []
+        self.question: Union[int, None] = None
 
     def is_leaf(self):
         return self.depth == self.max_depth
 
+    def global_questions(self) -> List[int]:
+        padding = [-1 for _ in range(self.max_depth - len(self.l1_questions))]
+        return self.l1_questions + padding
+
+    def local_questions(self, candidates) -> List[int]:
+        questions, _ = py_rect_maxvol(self.lrmf.entity_embeddings[candidates], maxK=self.lrmf.l2)
+        return questions
+
     def grow(self, users: List[int], candidates: List[int]):
-        pass
+        self.users = users
+
+        min_loss, best_question = np.inf, None
+        for candidate in candidates:
+            likes, dislikes = split_users(users, candidate, self.lrmf.ratings)
+
 
     def interview_existing_user(self, user: int) -> np.ndarray:
         pass
