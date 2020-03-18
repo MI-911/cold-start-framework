@@ -9,7 +9,7 @@ DISLIKE = 0
 
 
 class LRMF:
-    def __init__(self, n_users, n_entities, l1, l2, kk, regularisation):
+    def __init__(self, n_users: List[int], n_entities: List[int], l1: int, l2: int, kk: int, regularisation: float):
         """
         Instantiates an LRMF model for conducting interviews and making
         recommendations. The model conducts an interview of total length L = l1 + l2.
@@ -28,6 +28,12 @@ class LRMF:
         self.kk = kk
         self.regularisation = regularisation
 
+        self.interview_length: int = l1 + l2
+        self.k: int = self.interview_length + 1
+
+        self.ratings: np.ndarray = np.zeros((n_users, n_entities))
+        self.entity_embeddings: np.ndarray = np.zeros((n_entities, kk))
+
     def fit(self, ratings: np.ndarray, candidates: List[int]):
         pass
 
@@ -42,11 +48,13 @@ class LRMF:
 
 
 class Tree:
-    def __init__(self):
-        pass
+    def __init__(self, depth: int, max_depth: int, lrmf: LRMF):
+        self.depth = depth
+        self.max_depth = max_depth
+        self.lrmf = lrmf
 
     def is_leaf(self):
-        pass
+        return self.depth == self.max_depth
 
     def grow(self, users: List[int], candidates: List[int]):
         pass
