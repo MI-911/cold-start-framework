@@ -13,8 +13,8 @@ from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
+from models.fmf.fmf_recommender import FMFRecommender
 from models.naive.naive_recommender import NaiveRecommender
-from models.lrmf.lrmf_recommender import LRMFRecommender
 from models.naive.mf.mf_recommender import MatrixFactorisationRecommender
 from models.shared.base_recommender import RecommenderBase
 from models.shared.meta import Meta
@@ -26,9 +26,9 @@ models = {
     # 'naive': {
     #     'class': NaiveRecommender
     # },
-    'lrmf': {
-        'class': LRMFRecommender,
-        'requires_length': True
+    'fmf': {
+        'class': FMFRecommender,
+        'requires_interview_length': True
     },
     # 'mf': {
     #     'class': MatrixFactorisationRecommender
@@ -42,7 +42,7 @@ parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), hel
 parser.add_argument('--debug', action='store_true', help='enable debug mode')
 
 
-def _instantiate_model(model_name, experiment: Experiment, meta, interview_length=0):
+def _instantiate_model(model_name, experiment: Experiment, meta, interview_length=-1):
     kwargs = {
         'meta': meta
     }
@@ -52,7 +52,7 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
     if parameters:
         instance.load_parameters(parameters)
 
-    return instance, models[model_name]['requires_length']
+    return instance, models[model_name]['requires_interview_length']
 
 
 def _get_parameter_path(parameter_base, model_name, interview_length):
