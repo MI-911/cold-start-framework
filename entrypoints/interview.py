@@ -14,6 +14,7 @@ from tqdm import tqdm
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
 from models.fmf.fmf_recommender import FMFRecommender
+from models.lrmf.lrmf_recommender import LRMFRecommender
 from models.naive.naive_recommender import NaiveRecommender
 from models.naive.mf.mf_recommender import MatrixFactorisationRecommender
 from models.shared.base_recommender import RecommenderBase
@@ -30,6 +31,11 @@ models = {
     },
     'fmf': {
         'class': FMFRecommender,
+        'requires_interview_length': True,
+        'use_cuda': False
+    },
+    'lrmf': {
+        'class': LRMFRecommender,
         'requires_interview_length': True,
         'use_cuda': False
     },
@@ -85,7 +91,7 @@ def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase
         json.dump(parameters, open(parameter_path, 'w'))
 
 
-def _conduct_interview(model: RecommenderBase, answer_set: ColdStartUserSet, n_questions=5):
+def _conduct_interview(model: RecommenderBase, answer_set: ColdStartUserSet, n_questions):
     answer_state = dict()
 
     for q in range(n_questions):
@@ -136,6 +142,8 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         model_instance.warmup(training)
 
     for nq in range(1, max_n_questions + 1, 1):
+        logger.info(f'Conducting interviews of length {nq}...')
+
         hits = defaultdict(list)
         ndcgs = defaultdict(list)
         sers = defaultdict(list)
@@ -149,7 +157,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
         for idx, user in tqdm(testing.items(), desc='[Testing]'):
             for answer_set in user.sets:
-                answers = _conduct_interview(model_instance, answer_set)
+                answers = _conduct_interview(model_instance, answer_set, nq)
                 ranking = _produce_ranking(model_instance, answer_set, answers)
                 relevance = _get_relevance_list(ranking, answer_set.positive)
 
@@ -174,6 +182,12 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
         _write_parameters(model_name, experiment, model_instance, nq)
         qs[nq] = [hr, ndcg, ser, cov]
+
+        logger.info(f'Results for {model_name}:')
+        logger.info(f'  HIT@10:  {hr[10]}')
+        logger.info(f'  NDCG@10: {ndcg[10]}')
+        logger.info(f'  SER@10:  {ser[10]}')
+        logger.info(f'  COV@10:  {cov[10]}')
 
     return qs
 
