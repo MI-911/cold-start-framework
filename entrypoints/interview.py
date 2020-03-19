@@ -41,7 +41,6 @@ models = {
     },
     'melu': {
         'class': MeLUInterviewer,
-        'requires_interview_length': False
     }
 }
 
@@ -63,7 +62,8 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
     if parameters:
         instance.load_parameters(parameters)
 
-    requires_interview_length = models[model_name]['requires_interview_length']
+    requires_interview_length = models[model_name]['requires_interview_length'] \
+        if 'requires_interview_length' in models[model_name] else False
 
     return instance, requires_interview_length
 

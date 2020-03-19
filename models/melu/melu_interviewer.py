@@ -209,9 +209,9 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         return grad_norms
 
     def _get_all_parameters(self):
-        learning_rates = [(5e-4, 5e-5)]  # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
-        latent_factors = [64, 128]  # [8, 16, 32, 64]
-        hidden_units = [64, 128]  # [32, 64]
+        learning_rates = [(5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]  # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
+        latent_factors = [8, 16, 32, 64, 128]  # [8, 16, 32, 64]
+        hidden_units = [32, 64, 128]  # [32, 64]
         all_params = []
         param = {}
         for learning_rate in learning_rates:
