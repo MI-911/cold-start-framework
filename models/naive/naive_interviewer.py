@@ -2,13 +2,13 @@ import numpy as np
 import operator
 
 from experiments.data_loader import DataLoader
-from models.shared.base_recommender import RecommenderBase
-from models.shared.meta import Meta
+from models.base_interviewer import InterviewerBase
+from shared.meta import Meta
 
 
-class NaiveRecommender(RecommenderBase):
-    def __init__(self, meta: Meta):
-        super().__init__(meta)
+class NaiveInterviewer(InterviewerBase):
+    def __init__(self, meta: Meta, use_cuda=False):
+        super().__init__(meta, use_cuda)
 
         self.entity_variance = None
         self.entity_popularity = None
@@ -28,7 +28,7 @@ class NaiveRecommender(RecommenderBase):
     def _compute_weight(popularity, variance):
         return np.log2(popularity) * variance
 
-    def warmup(self, training):
+    def warmup(self, training, interview_length=5):
         entity_ratings = dict()
 
         # Aggregate ratings per entity
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     testing = data_loader.testing()
     meta = data_loader.meta()
 
-    naive = NaiveRecommender(meta)
+    naive = NaiveInterviewer(meta)
     naive.warmup(training)
     idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
     entities = meta.entities
