@@ -2,11 +2,11 @@ import numpy as np
 import operator
 
 from experiments.data_loader import DataLoader
-from models.base_recommender import RecommenderBase
+from models.base_interviewer import InterviewerBase
 from shared.meta import Meta
 
 
-class NaiveRecommender(RecommenderBase):
+class NaiveInterviewer(InterviewerBase):
     def __init__(self, meta: Meta, use_cuda=False):
         super().__init__(meta, use_cuda)
 
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     testing = data_loader.testing()
     meta = data_loader.meta()
 
-    naive = NaiveRecommender(meta)
+    naive = NaiveInterviewer(meta)
     naive.warmup(training)
     idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
     entities = meta.entities

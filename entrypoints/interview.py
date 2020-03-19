@@ -13,11 +13,11 @@ from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
-from models.base_recommender import RecommenderBase
-from models.fmf.fmf_recommender import FMFRecommender
-from models.lrmf.lrmf_recommender import LRMFRecommender
-from models.naive.naive_recommender import NaiveRecommender
-from models.naive.mf.mf_recommender import MatrixFactorisationRecommender
+from models.base_interviewer import InterviewerBase
+from models.fmf.fmf_interviewer import FMFInterviewer
+from models.lrmf.lrmf_interviewer import LRMFInterviewer
+from models.naive.naive_interviewer import NaiveInterviewer
+from models.naive.mf.mf_interviewer import MatrixFactorisationInterviewer
 from shared.meta import Meta
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths
@@ -25,7 +25,7 @@ from shared.validators import valid_dir
 
 models = {
     'lrmf': {
-        'class': LRMFRecommender,
+        'class': LRMFInterviewer,
         'requires_interview_length': True,
         'use_cuda': False
     }
@@ -66,7 +66,7 @@ def _get_parameters(model_name, experiment: Experiment, interview_length):
     return json.load(open(parameter_path, 'r'))
 
 
-def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase, interview_length):
+def _write_parameters(model_name, experiment: Experiment, model: InterviewerBase, interview_length):
     parameters = model.get_parameters()
     parameter_path = _get_parameter_path(experiment.path, model_name, interview_length)
 
@@ -76,7 +76,7 @@ def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase
         json.dump(parameters, open(parameter_path, 'w'))
 
 
-def _conduct_interview(model: RecommenderBase, answer_set: ColdStartUserSet, n_questions):
+def _conduct_interview(model: InterviewerBase, answer_set: ColdStartUserSet, n_questions):
     answer_state = dict()
 
     for q in range(n_questions):
@@ -94,7 +94,7 @@ def _conduct_interview(model: RecommenderBase, answer_set: ColdStartUserSet, n_q
     return answer_state
 
 
-def _produce_ranking(model: RecommenderBase, answer_set: ColdStartUserSet, answers: Dict):
+def _produce_ranking(model: InterviewerBase, answer_set: ColdStartUserSet, answers: Dict):
     to_rank = [answer_set.positive] + answer_set.negative
     item_scores = sorted(model.predict(to_rank, answers).items(), key=operator.itemgetter(1), reverse=True)
 

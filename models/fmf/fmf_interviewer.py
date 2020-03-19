@@ -1,11 +1,11 @@
 import pickle
 from typing import Dict, List, Union
 
+from models.base_interviewer import InterviewerBase
+from models.fmf.fmf import LIKE, DISLIKE, UNKNOWN, FMF, Tree
 import numpy as np
 from loguru import logger
 
-from models.base_recommender import RecommenderBase
-from models.lrmf.lrmf import LIKE, DISLIKE, LRMF, Tree
 from shared.meta import Meta
 from shared.utility import get_combinations
 
@@ -19,12 +19,9 @@ def visualise_tree(tree: Tree, meta: Meta):
 
     indentation = ''.join(['|-' for _ in range(tree.depth)])
 
-    if tree.is_leaf():
-        questions = ', '.join([_idx_to_name(q) for q in tree.l2_questions])
-    else:
-        questions = _idx_to_name(tree.question)
+    questions = _idx_to_name(tree.question) if not tree.is_leaf() else "(Make recommendation)"
 
-    print(f'{indentation}-> {questions}')
+    print(f'{indentation}|-> {questions}')
     if not tree.is_leaf():
         visualise_tree(tree.children[LIKE], meta)
         visualise_tree(tree.children[DISLIKE], meta)
@@ -37,7 +34,7 @@ def get_rating_matrix(training, n_users, n_entities, rating_map=None):
     if rating_map is None:
         rating_map = {
             1: LIKE,
-            0: DISLIKE,
+            0: UNKNOWN,
             -1: DISLIKE
         }
 
@@ -54,12 +51,7 @@ def choose_candidates(rating_matrix, n=100):
     Selects n candidates that can be asked towards in an interview.
     """
     # TODO: Choose candidate items with a mix between popularity and diversity
-    n_ratings = np.zeros(rating_matrix.shape[1])
-    for i, item_column in enumerate(rating_matrix.T):
-        for rating in item_column:
-            if rating == LIKE:
-                n_ratings[i] += 1
-
+    n_ratings = rating_matrix.sum(axis=0)
     n_ratings = sorted([(entity, rs) for entity, rs in enumerate(n_ratings)], key=lambda x: x[1], reverse=True)
     return [entity for entity, rs in n_ratings][:n]
 
@@ -80,11 +72,11 @@ def validate_hit(model, training):
     return np.mean(hits)
 
 
-class LRMFRecommender(RecommenderBase):
-    def __init__(self, meta: Meta, use_cuda=False):
-        super(LRMFRecommender, self).__init__(meta, use_cuda)
+class FMFInterviewer(InterviewerBase):
+    def __init__(self, meta, use_cuda=False):
+        super(FMFInterviewer, self).__init__(meta, use_cuda)
         self.meta = meta
-        self.model: LRMF = Union[LRMF, None]
+        self.model: FMF = Union[FMF, None]
 
         self.n_candidates = 100
 
@@ -99,39 +91,34 @@ class LRMFRecommender(RecommenderBase):
         self.best_model = None
         self.best_hit = 0
 
-        # Pseudo-evenly split the number of global and local questions
-        l1 = interview_length // 2
-        l2 = interview_length - l1
-
         if not self.params:
             for params in get_combinations({
+                'k': [1, 2, 5, 10, 20],
                 'reg': [0.01, 0.001, 0.0001]
             }):
-                logger.info(f'Fitting LRMF with params {params}')
+                logger.info(f'Fitting FMF with params {params}')
 
-                self.model = LRMF(
+                self.model = FMF(
                     n_users=self.n_users,
                     n_entities=self.n_entities,
-                    l1=l1,
-                    l2=l2,
-                    kk=-1,  # See notes
-                    regularisation=params['reg']
+                    max_depth=interview_length,
+                    n_latent_factors=params['k'],
+                    regularization=params['reg']
                 )
 
                 self._fit(training)
                 # visualise_tree(self.model.T, self.meta)
 
             self.model = self.best_model
-            self.params = {'reg': self.model.regularisation}
+            self.params = {'kk': self.model.kk}
 
         else:
-            self.model = LRMF(
+            self.model = FMF(
                 n_users=self.n_users,
                 n_entities=self.n_entities,
-                l1=l1,
-                l2=l2,
-                kk=-1,  # See notes
-                regularisation=self.params['reg']
+                max_depth=interview_length,
+                n_latent_factors=self.params['k'],
+                regularization=self.params['reg']
             )
 
             self._fit(training)
@@ -145,10 +132,10 @@ class LRMFRecommender(RecommenderBase):
             self.model.fit(R, candidates)
             hit = validate_hit(self.model, training)
 
-            logger.info(f'Training iteration {i}: {hit} Hit@10')
+            logger.debug(f'Training iteration {i}: {hit} Hit@10')
 
             if hit > self.best_hit:
-                logger.info(f'LRMF found new best model at {hit} Hit@10')
+                logger.debug(f'FMF found new best model at {hit} Hit@10')
                 self.best_hit = hit
                 self.best_model = pickle.loads(pickle.dumps(self.model))  # Save the model
 
