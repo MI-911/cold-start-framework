@@ -2,8 +2,8 @@ import numpy as np
 import operator
 
 from experiments.data_loader import DataLoader
-from models.shared.base_recommender import RecommenderBase
-from models.shared.meta import Meta
+from models.base_recommender import RecommenderBase
+from shared.meta import Meta
 
 
 class NaiveRecommender(RecommenderBase):

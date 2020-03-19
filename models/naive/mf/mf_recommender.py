@@ -1,13 +1,13 @@
 from typing import Dict, List
 
-from models.shared.base_recommender import RecommenderBase
+from models.base_recommender import RecommenderBase
 from models.naive.mf.mf import MatrixFactorisation
 import numpy as np
 import random
 from loguru import logger
 
-from models.shared.meta import Meta
-from models.shared.user import WarmStartUser
+from shared.meta import Meta
+from shared.user import WarmStartUser
 from shared.utility import get_combinations
 
 

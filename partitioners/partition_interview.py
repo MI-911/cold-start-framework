@@ -6,8 +6,9 @@ import pandas as pd
 import tqdm
 from loguru import logger
 
-from models.shared.meta import Meta
-from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
+from shared.graph_triple import GraphTriple
+from shared.meta import Meta
+from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 
 def _sample_positive(from_ratings):
@@ -138,7 +139,13 @@ def _get_testing_data(ratings, cold_start_users, user_idx, movie_indices):
 def _get_entities(entities_path):
     entities = pd.read_csv(entities_path)
 
-    return {row['uri']: {'name': row['name'], 'labels': row['labels'].split('|')} for idx, row in entities.iterrows()}
+    return {row['uri']: {'name': row['name'], 'labels': row['labels'].split('|')} for _, row in entities.iterrows()}
+
+
+def _load_triples(triples_path):
+    triples = pd.read_csv(triples_path)
+
+    return [GraphTriple(row['head_uri'], row['relation'], row['tail_uri']) for _, row in triples.iterrows()]
 
 
 def partition(input_directory, output_directory, random_seed=42, warm_start_ratio=0.75,
@@ -147,6 +154,7 @@ def partition(input_directory, output_directory, random_seed=42, warm_start_rati
 
     ratings_path = os.path.join(input_directory, 'ratings.csv')
     entities_path = os.path.join(input_directory, 'entities.csv')
+    triples_path = os.path.join(input_directory, 'triples.csv')
 
     # Load ratings data
     ratings, warm_users, cold_users, users = _get_ratings(ratings_path, include_unknown, warm_start_ratio)
@@ -180,4 +188,4 @@ def partition(input_directory, output_directory, random_seed=42, warm_start_rati
     with open(os.path.join(output_directory, 'meta.pkl'), 'wb') as fp:
         pickle.dump(Meta(entities=_get_entities(entities_path), uri_idx=entity_idx, users=list(user_idx.values()),
                          idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()},
-                         recommendable_entities=list(movie_indices)), fp)
+                         recommendable_entities=list(movie_indices), triples=_load_triples(triples_path)), fp)

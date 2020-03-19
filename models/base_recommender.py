@@ -1,7 +1,7 @@
 from typing import Dict, List
 
-from models.shared.meta import Meta
-from models.shared.user import WarmStartUser
+from shared.meta import Meta
+from shared.user import WarmStartUser
 
 
 class RecommenderBase:

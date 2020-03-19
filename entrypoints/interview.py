@@ -13,12 +13,12 @@ from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
+from models.base_recommender import RecommenderBase
 from models.fmf.fmf_recommender import FMFRecommender
 from models.naive.naive_recommender import NaiveRecommender
 from models.naive.mf.mf_recommender import MatrixFactorisationRecommender
-from models.shared.base_recommender import RecommenderBase
-from models.shared.meta import Meta
-from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
+from shared.meta import Meta
+from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths
 from shared.validators import valid_dir
 

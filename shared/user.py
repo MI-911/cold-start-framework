@@ -8,7 +8,7 @@ class User:
 
 class WarmStartUser(User):
     """
-    For the warmup() method of recommenders.
+    For the warm-up method of recommenders.
     """
     def __init__(self, ratings, validation):
         """
@@ -35,7 +35,7 @@ class ColdStartUserSet:
 
 class ColdStartUser(User):
     """
-    For the interview() and predict() methods of Recommenders.
+    For the interview and predict methods of recommenders.
     """
     def __init__(self, sets: ColdStartUserSet, validation):
         """

@@ -1,12 +1,11 @@
 import pickle
-from abc import ABC
 from typing import Dict, List, Union
-from models.fmf.fmf import LIKE, DISLIKE, UNKNOWN, FMF
-from models.shared.base_recommender import RecommenderBase
+
 import numpy as np
-import pickle
 from loguru import logger
 
+from models.base_recommender import RecommenderBase
+from models.fmf.fmf import LIKE, DISLIKE, UNKNOWN, FMF
 from shared.utility import get_combinations
 
 
