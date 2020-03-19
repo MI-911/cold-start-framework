@@ -155,6 +155,7 @@ def partition(input_directory, output_directory, random_seed=42, warm_start_rati
     ratings_path = os.path.join(input_directory, 'ratings.csv')
     entities_path = os.path.join(input_directory, 'entities.csv')
     triples_path = os.path.join(input_directory, 'triples.csv')
+    entities = _get_entities(entities_path)
 
     # Load ratings data
     ratings, warm_users, cold_users, users = _get_ratings(ratings_path, include_unknown, warm_start_ratio)

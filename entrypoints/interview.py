@@ -13,7 +13,8 @@ from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
-from models.melu.melu_recommender import MeLURecommender
+from models.base_interviewer import InterviewerBase
+from models.melu.melu_interviewer import MeLUInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
 from models.naive.naive_interviewer import NaiveInterviewer
@@ -29,17 +30,18 @@ models = {
         'requires_interview_length': True,
         'use_cuda': False
     },
-    # 'naive': {
-    #     'class': NaiveRecommender
-    # },
-    # 'lrmf': {
-    #     'class': LRMFRecommender
-    # },
+    'naive': {
+        'class': NaiveInterviewer
+    },
+    'fmf': {
+        'class': FMFInterviewer
+    },
     'mf': {
-        'class': MatrixFactorisationRecommender
+        'class': MatrixFactorisationInterviewer
     },
     'melu': {
-        'class': MeLURecommender
+        'class': MeLUInterviewer,
+        'requires_interview_length': False
     }
 }
 
@@ -53,7 +55,7 @@ parser.add_argument('--debug', action='store_true', help='enable debug mode')
 def _instantiate_model(model_name, experiment: Experiment, meta, interview_length=-1):
     kwargs = {
         'meta': meta,
-        'use_cuda': models[model_name]['use_cuda']
+        'use_cuda': models[model_name]['use_cuda'] if 'use_cuda' in models[model_name] else False
     }
 
     instance = models[model_name]['class'](**kwargs)

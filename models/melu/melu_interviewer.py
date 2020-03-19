@@ -15,14 +15,14 @@ import pandas as pd
 import numpy as np
 from tqdm import tqdm
 
+from models.base_interviewer import InterviewerBase
 from models.melu.melu import MeLU
-from models.shared.base_recommender import RecommenderBase
-from models.shared.user import WarmStartUser
+from shared.user import WarmStartUser
 
 
-class MeLURecommender(RecommenderBase, tt.nn.Module):
-    def __init__(self, meta):
-        RecommenderBase.__init__(self, meta)
+class MeLUInterviewer(InterviewerBase, tt.nn.Module):
+    def __init__(self, meta, use_cuda=False):
+        InterviewerBase.__init__(self, meta, use_cuda=use_cuda)
         tt.nn.Module.__init__(self)
 
         self.decade_index, self.movie_index, self.category_index, self.person_index, \
@@ -41,7 +41,6 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
         self.weight_name = None
         self.weight_len = None
         self.fast_weights = None
-        self.use_cuda = True
         self.local_lr = None
         self.global_lr = None
         self.latent = None
@@ -71,8 +70,6 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
         categories = set()
         persons = set()
         companies = set()
-
-        tmp = set([l for _, e in self.meta.entities.items() for l in e['labels']])
 
         for entity, info in self.meta.entities.items():
             for label in info['labels']:
@@ -114,8 +111,7 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
         return t
 
     def _create_metadata(self):
-        df = pd.read_csv(self.meta.triples_path)
-        triples = [(h, r, t) for h, r, t in df[['head_uri', 'relation', 'tail_uri']].values]
+        triples = self.meta.triples
         e_idx_map = self.meta.uri_idx
 
         entities = {v: {'d': set(), 'm': set(), 'cat': set(), 'p': set(), 'com': set()}
@@ -134,7 +130,9 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
             if t in self.company_index:
                 e[h]['com'].add(self.company_index[t])
 
-        for h, _, t in triples:
+        for triple in triples:
+            h = triple.head
+            t = triple.tail
             if h not in e_idx_map or t not in e_idx_map:
                 continue
 
@@ -350,7 +348,7 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
                     self.fast_weights[self.weight_name[i]] = weight_for_local_update[i]
         return tmp / num_local_update
 
-    def warmup(self, training: Dict[int, WarmStartUser]):
+    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5):
         user_ratings = {}
         items = []
         for user, datasets in training.items():
@@ -394,7 +392,7 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
 
         val = []
         logger.debug(f'Creating validation set')
-        for user, warm in validation:
+        for user, warm in validation[:10]:
             if user not in user_ratings:
                 continue
             pos_sample = warm.validation['positive']
@@ -413,23 +411,27 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
         batch_size = 32
 
         logger.debug('Starting training')
-        best_param = None
-        best_hitrate = -1
-        best_model = None
-        for param in self._get_all_parameters():
-            logger.debug(f'Trying with params: {param}')
-            self.load_parameters(param)
-            hr, model = self._train(train_data, val, batch_size)
-            if hr > best_hitrate:
-                logger.debug(f'New best param with HR:{hr}')
-                best_hitrate = hr
-                best_model = model
-                best_param = param.copy()
+        if self.optimal_params is None:
+            best_param = None
+            best_hitrate = -1
+            best_model = None
+            for param in self._get_all_parameters():
+                logger.debug(f'Trying with params: {param}')
+                self.load_parameters(param)
+                hr, model = self._train(train_data, val, batch_size)
+                if hr > best_hitrate:
+                    logger.debug(f'New best param with HR:{hr}')
+                    best_hitrate = hr
+                    best_model = model
+                    best_param = param.copy()
 
-        self.load_parameters(best_param)
-        self.model.load_state_dict(best_model)
-        self.store_parameters()
-        logger.debug(f'Found best param with HR:{best_hitrate}')
+            self.load_parameters(best_param)
+            self.model.load_state_dict(best_model)
+            self.store_parameters()
+            logger.debug(f'Found best param with HR:{best_hitrate}')
+        else:
+            self.load_parameters(self.optimal_params)
+            _, _ = self._train(train_data, val, batch_size)
 
         grad_norms = self._calculate_grad_norms(train_data, items)
 
