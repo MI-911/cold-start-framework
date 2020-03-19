@@ -25,10 +25,16 @@ from shared.utility import join_paths
 from shared.validators import valid_dir
 
 models = {
+    'naive': {
+        'class': NaiveInterviewer
+    },
+    'fmf': {
+        'class': FMFInterviewer,
+        'requires_interview_length': True
+    },
     'lrmf': {
         'class': LRMFInterviewer,
-        'requires_interview_length': True,
-        'use_cuda': False
+        'requires_interview_length': True
     },
     'naive': {
         'class': NaiveInterviewer
@@ -38,9 +44,6 @@ models = {
     },
     'mf': {
         'class': MatrixFactorisationInterviewer
-    },
-    'melu': {
-        'class': MeLUInterviewer,
     }
 }
 
@@ -54,7 +57,7 @@ parser.add_argument('--debug', action='store_true', help='enable debug mode')
 def _instantiate_model(model_name, experiment: Experiment, meta, interview_length=-1):
     kwargs = {
         'meta': meta,
-        'use_cuda': models[model_name]['use_cuda'] if 'use_cuda' in models[model_name] else False
+        'use_cuda': models[model_name].get('use_cuda', False)
     }
 
     instance = models[model_name]['class'](**kwargs)
@@ -62,8 +65,7 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
     if parameters:
         instance.load_parameters(parameters)
 
-    requires_interview_length = models[model_name]['requires_interview_length'] \
-        if 'requires_interview_length' in models[model_name] else False
+    requires_interview_length = models[model_name].get('requires_interview_length', False)
 
     return instance, requires_interview_length
 

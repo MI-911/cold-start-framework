@@ -69,7 +69,10 @@ def _get_ratings(ratings_path, include_unknown, warm_start_ratio):
 def _get_training_data(ratings, warm_start_users, user_idx):
     training_data = dict()
 
-    for user in tqdm.tqdm(warm_start_users):
+    progress = tqdm.tqdm(warm_start_users)
+    for user in progress:
+        progress.set_description(f'Processing warm-start user {user}')
+
         u_ratings = ratings[ratings.userId == user]
 
         val_sample = _sample_positive(u_ratings)
@@ -94,7 +97,10 @@ def _get_training_data(ratings, warm_start_users, user_idx):
 def _get_testing_data(ratings, cold_start_users, user_idx, movie_indices):
     testing_data = dict()
 
-    for user in tqdm.tqdm(cold_start_users):
+    progress = tqdm.tqdm(cold_start_users)
+    for user in progress:
+        progress.set_description(f'Processing cold-start user {user}')
+
         u_ratings = ratings[ratings.userId == user]
 
         # Before exhaustive LOO, get validation sample
