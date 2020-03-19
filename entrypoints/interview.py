@@ -136,7 +136,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
                testing: Dict[int, ColdStartUser], max_n_questions=5, upper_cutoff=50):
     model_instance, requires_interview_length = _instantiate_model(model_name, experiment, meta)
 
-    qs = defaultdict(list)
+    qs = defaultdict(dict)
 
     if not requires_interview_length:
         model_instance.warmup(training)
@@ -180,8 +180,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
             ser[k] = np.mean(sers[k])
             cov[k] = coverage(covs[k], meta.recommendable_entities)
 
-        _write_parameters(model_name, experiment, model_instance, nq)
-        qs[nq] = [hr, ndcg, ser, cov]
+        qs[nq] = {'hr': hr, 'ndcg': ndcg, 'ser': ser, 'cov': cov}
 
         logger.info(f'Results for {model_name}:')
         logger.info(f'  HIT@10:  {hr[10]}')
@@ -189,7 +188,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         logger.info(f'  SER@10:  {ser[10]}')
         logger.info(f'  COV@10:  {cov[10]}')
 
-    return qs
+        yield model_instance, qs, nq
 
 
 def _write_results(model_name, qs, split: Split):
@@ -209,8 +208,10 @@ def _run_split(model_selection: Set[str], split: Split):
         start_time = time.time()
         logger.info(f'Running {model} on {split}')
 
-        qs = _run_model(model, split.experiment, meta, training, testing, max_n_questions=2)
-        _write_results(model, qs, split)
+        for model_instance, qs, nq in _run_model(model, split.experiment, meta, training, testing, max_n_questions=5):
+            logger.info(f'Writing results and parameters for {model} on split {split.name}, interview length {nq}')
+            _write_parameters(model, split.experiment, model_instance, nq)
+            _write_results(model, qs, split)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 
