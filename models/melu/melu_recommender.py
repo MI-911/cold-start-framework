@@ -463,6 +463,8 @@ class MeLURecommender(RecommenderBase, tt.nn.Module):
 
         if self.use_cuda:
             self.model.cuda()
+            if tt.cuda.device_count() > 1:
+                self.model = tt.nn.DataParallel(self.model)
 
         self.store_parameters()
 
