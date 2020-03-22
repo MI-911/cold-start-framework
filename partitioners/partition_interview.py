@@ -161,13 +161,14 @@ def partition(input_directory, output_directory, random_seed=42, warm_start_rati
     ratings_path = os.path.join(input_directory, 'ratings.csv')
     entities_path = os.path.join(input_directory, 'entities.csv')
     triples_path = os.path.join(input_directory, 'triples.csv')
+    entities = _get_entities(entities_path)
 
     # Load ratings data
     ratings, warm_users, cold_users, users = _get_ratings(ratings_path, include_unknown, warm_start_ratio)
 
     # Map users and entities to indices
     user_idx = {k: v for v, k in enumerate(users)}
-    entity_idx = {k: v for v, k in enumerate(ratings['uri'].unique())}
+    entity_idx = {k: v for v, k in enumerate(set(entities.keys()))}
 
     ratings['entityIdx'] = ratings.uri.transform(entity_idx.get)
 
@@ -192,6 +193,6 @@ def partition(input_directory, output_directory, random_seed=42, warm_start_rati
         pickle.dump(testing_data, fp)
 
     with open(os.path.join(output_directory, 'meta.pkl'), 'wb') as fp:
-        pickle.dump(Meta(entities=_get_entities(entities_path), uri_idx=entity_idx, users=list(user_idx.values()),
+        pickle.dump(Meta(entities=entities, uri_idx=entity_idx, users=list(user_idx.values()),
                          idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()},
                          recommendable_entities=list(movie_indices), triples=_load_triples(triples_path)), fp)

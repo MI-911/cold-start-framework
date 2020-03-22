@@ -8,3 +8,5 @@
 *.pkl
 /results
 /sources/
+
+*.json

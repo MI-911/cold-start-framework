@@ -14,6 +14,7 @@ from tqdm import tqdm
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
 from models.base_interviewer import InterviewerBase
+from models.melu.melu_interviewer import MeLUInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
 from models.naive.naive_interviewer import NaiveInterviewer
@@ -33,10 +34,20 @@ models = {
     },
     'lrmf': {
         'class': LRMFInterviewer,
-        'requires_interview_length': True
+        'requires_interview_length': True,
+        'use_cuda': False
+    },
+    'naive': {
+        'class': NaiveInterviewer
+    },
+    'fmf': {
+        'class': FMFInterviewer
     },
     'mf': {
         'class': MatrixFactorisationInterviewer
+    },
+    'melu': {
+        'class': MeLUInterviewer,
     }
 }
 
