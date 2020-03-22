@@ -28,18 +28,6 @@ from shared.utility import join_paths
 from shared.validators import valid_dir
 
 models = {
-    'naive': {
-        'class': NaiveInterviewer
-    },
-    'fmf': {
-        'class': FMFInterviewer,
-        'requires_interview_length': True
-    },
-    'lrmf': {
-        'class': LRMFInterviewer,
-        'requires_interview_length': True,
-        'use_cuda': False
-    },
     'naive-pr-collab': {
         'class': NaiveInterviewer,
         'recommender': CollaborativePageRankRecommender
@@ -47,19 +35,6 @@ models = {
     'naive-pr-kg': {
         'class': NaiveInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
-    },
-    'naive-pr-joint': {
-        'class': NaiveInterviewer,
-        'recommender': JointPageRankRecommender
-    },
-    'fmf': {
-        'class': FMFInterviewer
-    },
-    'mf': {
-        'class': MatrixFactorisationInterviewer
-    },
-    'melu': {
-        'class': MeLUInterviewer,
     }
 }
 
