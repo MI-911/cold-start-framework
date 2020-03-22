@@ -32,7 +32,7 @@ class NaiveInterviewer(InterviewerBase):
         return np.log2(popularity) * variance
 
     def warmup(self, training, interview_length=5):
-        self.recommender.fit()
+        self.recommender.fit(training)
 
         entity_ratings = dict()
 
