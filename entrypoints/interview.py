@@ -19,6 +19,9 @@ from models.fmf.fmf_interviewer import FMFInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
 from models.naive.naive_interviewer import NaiveInterviewer
 from models.naive.mf.mf_interviewer import MatrixFactorisationInterviewer
+from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
+from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
+from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
 from shared.meta import Meta
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths
@@ -37,8 +40,17 @@ models = {
         'requires_interview_length': True,
         'use_cuda': False
     },
-    'naive': {
-        'class': NaiveInterviewer
+    'naive-pr-collab': {
+        'class': NaiveInterviewer,
+        'recommender': CollaborativePageRankRecommender
+    },
+    'naive-pr-kg': {
+        'class': NaiveInterviewer,
+        'recommender': KnowledgeGraphPageRankRecommender
+    },
+    'naive-pr-joint': {
+        'class': NaiveInterviewer,
+        'recommender': JointPageRankRecommender
     },
     'fmf': {
         'class': FMFInterviewer
@@ -63,6 +75,10 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
         'meta': meta,
         'use_cuda': models[model_name].get('use_cuda', False)
     }
+
+    recommender = models[model_name].get('recommender', None)
+    if recommender:
+        kwargs['recommender'] = recommender
 
     instance = models[model_name]['class'](**kwargs)
     parameters = _get_parameters(model_name, experiment, interview_length)

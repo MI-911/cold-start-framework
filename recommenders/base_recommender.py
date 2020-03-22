@@ -9,13 +9,13 @@ class RecommenderBase:
     def __init__(self, meta: Meta):
         self.meta = meta
 
-    def fit(self, training: List[WarmStartUser]):
+    def fit(self, training: Dict[int, WarmStartUser]):
         """
         Fits the model to the training data.
         """
         raise NotImplementedError
 
-    def predict(self, items: List[int], answers: Dict) -> Dict[int, float]:
+    def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         """
         Predicts a score for a list of items given a user's answers on items.
         """
