@@ -10,18 +10,18 @@ class DqnAgent:
                  batch_size: int, max_mem_size: float = 100000, eps_end: float = 0.01, eps_dec: float = 0.996):
         """
         Constructs an agent for a DQN learning process
-        @param gamma: The discount rates for future predicted rewards.
+        :param gamma: The discount rates for future predicted rewards.
                       If 1, future rewards are just as important as current ones.
-        @param epsilon: The initial probability that the agent will explore a random question.
+        :param epsilon: The initial probability that the agent will explore a random question.
                         Epsilon decreases over time by eps_dec at every batch iteration.
-        @param alpha: The learning rate.
-        @param n_entities: The number of entities.
-        @param candidates: The question candidates.
-        @param batch_size: The number of transitions in a batch during learning.
-        @param max_mem_size: The maximum number of stored transitions. If the size of stored
+        :param alpha: The learning rate.
+        :param n_entities: The number of entities.
+        :param candidates: The question candidates.
+        :param batch_size: The number of transitions in a batch during learning.
+        :param max_mem_size: The maximum number of stored transitions. If the size of stored
                              transitions exceeds this value, they are replaced by new ones.
-        @param eps_end: The minimum epsilon value.
-        @param eps_dec: The decrease factor for epsilon. At every iteration, epsilon is decreased to epsilon * eps_dec.
+        :param eps_end: The minimum epsilon value.
+        :param eps_dec: The decrease factor for epsilon. At every iteration, epsilon is decreased to epsilon * eps_dec.
         """
         self.gamma = gamma
         self.epsilon = epsilon
@@ -38,7 +38,7 @@ class DqnAgent:
 
         # Allocate DQN model
         self.Q_eval = DeepQNetwork(
-            state_size=self.state_size, fc1_dims=256, fc2_dims=128, actions_size=self.action_size, alpha=0.0003)
+            state_size=self.state_size, fc1_dims=256, fc2_dims=128, actions_size=self.action_size, alpha=alpha)
 
         # Allocate memory containers
         self.state_memory = np.zeros((self.max_mem_size, self.state_size), dtype=np.float32)
@@ -50,7 +50,7 @@ class DqnAgent:
         self.mem_counter = 0
 
     def store_memory(self, state: np.ndarray, action: int, new_state: np.ndarray, reward: float, terminal: bool):
-        # Override old memories when we react max_mem_size
+        # Override old memories when we reach max_mem_size
         i = self.mem_counter % self.max_mem_size
 
         # Construct action vector
@@ -67,13 +67,13 @@ class DqnAgent:
         # Increment the counter
         self.mem_counter += 1
 
-    def choose_action(self, state: np.ndarray) -> Union[int, tt.Tensor]:
+    def choose_action(self, state: np.ndarray) -> int:
         # Make the DQN predict action rewards given this state
         predicted_rewards = self.Q_eval(state.reshape((1, state.shape[0])))
 
         if np.random.rand() > self.epsilon:
             # Exploit
-            return tt.argmax(predicted_rewards)
+            return int(tt.argmax(predicted_rewards))
         else:
             # Explore
             return np.random.choice(self.candidates)
