@@ -2,6 +2,7 @@ from collections import defaultdict
 from typing import List, Dict, Union
 import numpy as np
 from loguru import logger
+from tqdm import tqdm
 
 from models.dqn.dqn import DeepQNetwork
 from models.dqn.dqn_agent import DqnAgent
@@ -74,7 +75,7 @@ class DqnRecommender(RecommenderBase):
     def fit_dqn(self, training: Dict[int, WarmStartUser], interview_length: int) -> None:
         n_iterations = 10
 
-        rewards = []
+        scores = []
         epsilons = []
 
         for i in range(n_iterations):
@@ -82,15 +83,26 @@ class DqnRecommender(RecommenderBase):
             users = list(training.keys())
             np.random.shuffle(users)
 
-            for user in users:
+            for user in tqdm(users, desc=f'Training on users (avg. score: {np.mean(scores[len(scores) - 10])})'):
                 epsilons.append(self.agent.epsilon)
 
-                done = False
+                score = 0
                 state = self.environment.reset()
 
-                while not done:
+                for q in range(interview_length):
                     question = self.agent.choose_action(state)
                     new_state, reward = self.environment.ask(user, question)
+
+                    # Accumulate the rewards
+                    score += reward
+                    scores.append(score)
+
+                    # Store the memory for training
+                    self.agent.store_memory(state, question, new_state, reward, q == interview_length)
+                    state = new_state
+
+                # Train on the memories
+                self.agent.learn()
 
     def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
         pass
@@ -103,4 +115,5 @@ class DqnRecommender(RecommenderBase):
 
     def load_parameters(self, params):
         pass
+
 

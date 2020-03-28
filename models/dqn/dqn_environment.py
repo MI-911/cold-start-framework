@@ -76,6 +76,6 @@ class Environment:
         self.state[entity + 1] = answer
 
         # Calculate reward
-        reward = 0  # TODO: Get the rankings from the model and calculate the reward with the given metric.
+        reward = np.random.rand()  # TODO: Calculate reward from a ranking list
         return self.state, reward
 
