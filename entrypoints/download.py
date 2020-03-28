@@ -19,6 +19,12 @@ def download_entities(path):
     urlretrieve(f'{BASE_URL}/entities', os.path.join(path, 'entities.csv'))
 
 
+def download_triples(path):
+    logger.info('Downloading triples')
+
+    urlretrieve(f'{BASE_URL}/triples', os.path.join(path, 'triples.csv'))
+
+
 def download_ratings(path):
     logger.info('Downloading ratings')
 
@@ -36,3 +42,4 @@ if __name__ == '__main__':
 
     download_ratings(output_path)
     download_entities(output_path)
+    download_triples(output_path)

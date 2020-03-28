@@ -1,23 +1,26 @@
-import numpy as np
 import operator
 
+import numpy as np
+
 from experiments.data_loader import DataLoader
-from models.shared.base_recommender import RecommenderBase
-from models.shared.meta import Meta
+from models.base_interviewer import InterviewerBase
+from shared.meta import Meta
 
 
-class NaiveRecommender(RecommenderBase):
-    def __init__(self, meta: Meta, use_cuda=False):
+class NaiveInterviewer(InterviewerBase):
+    def __init__(self, meta: Meta, recommender, use_cuda=False):
         super().__init__(meta, use_cuda)
+
+        if not recommender:
+            raise RuntimeError('No underlying recommender provided to the naive interviewer.')
 
         self.entity_variance = None
         self.entity_popularity = None
         self.entity_weight = None
+        self.recommender = recommender(meta)
 
     def predict(self, items, answers):
-        from random import randint
-        return {item: randint(0, 1000) for item in items}
-        # raise NotImplementedError()
+        return self.recommender.predict(items, answers)
 
     def interview(self, answers, max_n_questions=5):
         # Exclude answers to entities already asked about
@@ -29,6 +32,8 @@ class NaiveRecommender(RecommenderBase):
         return np.log2(popularity) * variance
 
     def warmup(self, training, interview_length=5):
+        self.recommender.fit(training)
+
         entity_ratings = dict()
 
         # Aggregate ratings per entity
@@ -52,15 +57,16 @@ class NaiveRecommender(RecommenderBase):
 
 
 if __name__ == '__main__':
-    data_loader = DataLoader('../data/basic/data')
+    data_loader = DataLoader('../../data/basic/split_0')
     training = data_loader.training()
     testing = data_loader.testing()
     meta = data_loader.meta()
 
-    naive = NaiveRecommender(meta)
+    naive = NaiveInterviewer(meta)
     naive.warmup(training)
     idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
     entities = meta.entities
+    movies = [idx for idx, movie in meta.idx_item.items() if movie]
 
     state = {}
     while True:
@@ -68,3 +74,9 @@ if __name__ == '__main__':
 
         answer = input(f'What do you think about {entities[idx_uri[question]]["name"]}?')
         state[question] = int(answer)
+
+        predictions = naive.predict(movies, state)
+        top_movies = [pair[0] for pair in sorted(predictions.items(), key=operator.itemgetter(1), reverse=True)][:5]
+
+        for idx, movie in enumerate(top_movies):
+            print(f'{idx + 1}. {idx_uri[movie]}')

@@ -13,30 +13,53 @@ from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
-from models.fmf.fmf_recommender import FMFRecommender
-from models.naive.naive_recommender import NaiveRecommender
-from models.naive.mf.mf_recommender import MatrixFactorisationRecommender
-from models.shared.base_recommender import RecommenderBase
-from models.shared.meta import Meta
-from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
+from models.base_interviewer import InterviewerBase
+from models.melu.melu_interviewer import MeLUInterviewer
+from models.fmf.fmf_interviewer import FMFInterviewer
+from models.lrmf.lrmf_interviewer import LRMFInterviewer
+from models.naive.naive_interviewer import NaiveInterviewer
+from models.naive.mf.mf_interviewer import MatrixFactorisationInterviewer
+from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
+from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
+from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
+from shared.meta import Meta
+from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths
 from shared.validators import valid_dir
 
 models = {
     'naive': {
-        'class': NaiveRecommender,
-        'requires_interview_length': False,
-        'use_cuda': False
+        'class': NaiveInterviewer
     },
     'fmf': {
-        'class': FMFRecommender,
+        'class': FMFInterviewer,
+        'requires_interview_length': True
+    },
+    'lrmf': {
+        'class': LRMFInterviewer,
         'requires_interview_length': True,
         'use_cuda': False
     },
+    'naive-pr-collab': {
+        'class': NaiveInterviewer,
+        'recommender': CollaborativePageRankRecommender
+    },
+    'naive-pr-kg': {
+        'class': NaiveInterviewer,
+        'recommender': KnowledgeGraphPageRankRecommender
+    },
+    'naive-pr-joint': {
+        'class': NaiveInterviewer,
+        'recommender': JointPageRankRecommender
+    },
+    'fmf': {
+        'class': FMFInterviewer
+    },
     'mf': {
-        'class': MatrixFactorisationRecommender,
-        'requires_interview_length': False,
-        'use_cuda': False
+        'class': MatrixFactorisationInterviewer
+    },
+    'melu': {
+        'class': MeLUInterviewer,
     }
 }
 
@@ -50,15 +73,19 @@ parser.add_argument('--debug', action='store_true', help='enable debug mode')
 def _instantiate_model(model_name, experiment: Experiment, meta, interview_length=-1):
     kwargs = {
         'meta': meta,
-        'use_cuda': models[model_name]['use_cuda']
+        'use_cuda': models[model_name].get('use_cuda', False)
     }
+
+    recommender = models[model_name].get('recommender', None)
+    if recommender:
+        kwargs['recommender'] = recommender
 
     instance = models[model_name]['class'](**kwargs)
     parameters = _get_parameters(model_name, experiment, interview_length)
     if parameters:
         instance.load_parameters(parameters)
 
-    requires_interview_length = models[model_name]['requires_interview_length']
+    requires_interview_length = models[model_name].get('requires_interview_length', False)
 
     return instance, requires_interview_length
 
@@ -75,7 +102,7 @@ def _get_parameters(model_name, experiment: Experiment, interview_length):
     return json.load(open(parameter_path, 'r'))
 
 
-def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase, interview_length):
+def _write_parameters(model_name, experiment: Experiment, model: InterviewerBase, interview_length):
     parameters = model.get_parameters()
     parameter_path = _get_parameter_path(experiment.path, model_name, interview_length)
 
@@ -85,7 +112,7 @@ def _write_parameters(model_name, experiment: Experiment, model: RecommenderBase
         json.dump(parameters, open(parameter_path, 'w'))
 
 
-def _conduct_interview(model: RecommenderBase, answer_set: ColdStartUserSet, n_questions=5):
+def _conduct_interview(model: InterviewerBase, answer_set: ColdStartUserSet, n_questions):
     answer_state = dict()
 
     for q in range(n_questions):
@@ -103,7 +130,7 @@ def _conduct_interview(model: RecommenderBase, answer_set: ColdStartUserSet, n_q
     return answer_state
 
 
-def _produce_ranking(model: RecommenderBase, answer_set: ColdStartUserSet, answers: Dict):
+def _produce_ranking(model: InterviewerBase, answer_set: ColdStartUserSet, answers: Dict):
     to_rank = [answer_set.positive] + answer_set.negative
     item_scores = sorted(model.predict(to_rank, answers).items(), key=operator.itemgetter(1), reverse=True)
 
@@ -130,12 +157,14 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
                testing: Dict[int, ColdStartUser], max_n_questions=5, upper_cutoff=50):
     model_instance, requires_interview_length = _instantiate_model(model_name, experiment, meta)
 
-    qs = defaultdict(list)
+    qs = defaultdict(dict)
 
     if not requires_interview_length:
         model_instance.warmup(training)
 
     for nq in range(1, max_n_questions + 1, 1):
+        logger.info(f'Conducting interviews of length {nq}...')
+
         hits = defaultdict(list)
         ndcgs = defaultdict(list)
         sers = defaultdict(list)
@@ -149,7 +178,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
         for idx, user in tqdm(testing.items(), desc='[Testing]'):
             for answer_set in user.sets:
-                answers = _conduct_interview(model_instance, answer_set)
+                answers = _conduct_interview(model_instance, answer_set, nq)
                 ranking = _produce_ranking(model_instance, answer_set, answers)
                 relevance = _get_relevance_list(ranking, answer_set.positive)
 
@@ -172,10 +201,15 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
             ser[k] = np.mean(sers[k])
             cov[k] = coverage(covs[k], meta.recommendable_entities)
 
-        _write_parameters(model_name, experiment, model_instance, nq)
-        qs[nq] = [hr, ndcg, ser, cov]
+        qs[nq] = {'hr': hr, 'ndcg': ndcg, 'ser': ser, 'cov': cov}
 
-    return qs
+        logger.info(f'Results for {model_name}:')
+        logger.info(f'  HIT@10:  {hr[10]}')
+        logger.info(f'  NDCG@10: {ndcg[10]}')
+        logger.info(f'  SER@10:  {ser[10]}')
+        logger.info(f'  COV@10:  {cov[10]}')
+
+        yield model_instance, qs, nq
 
 
 def _write_results(model_name, qs, split: Split):
@@ -195,8 +229,10 @@ def _run_split(model_selection: Set[str], split: Split):
         start_time = time.time()
         logger.info(f'Running {model} on {split}')
 
-        qs = _run_model(model, split.experiment, meta, training, testing, max_n_questions=2)
-        _write_results(model, qs, split)
+        for model_instance, qs, nq in _run_model(model, split.experiment, meta, training, testing, max_n_questions=5):
+            logger.info(f'Writing results and parameters for {model} on split {split.name}, interview length {nq}')
+            _write_parameters(model, split.experiment, model_instance, nq)
+            _write_results(model, qs, split)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 

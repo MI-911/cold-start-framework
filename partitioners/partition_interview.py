@@ -6,8 +6,9 @@ import pandas as pd
 import tqdm
 from loguru import logger
 
-from models.shared.meta import Meta
-from models.shared.user import WarmStartUser, ColdStartUser, ColdStartUserSet
+from shared.graph_triple import GraphTriple
+from shared.meta import Meta
+from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 
 def _sample_positive(from_ratings):
@@ -68,7 +69,10 @@ def _get_ratings(ratings_path, include_unknown, warm_start_ratio):
 def _get_training_data(ratings, warm_start_users, user_idx):
     training_data = dict()
 
-    for user in tqdm.tqdm(warm_start_users):
+    progress = tqdm.tqdm(warm_start_users)
+    for user in progress:
+        progress.set_description(f'Processing warm-start user {user}')
+
         u_ratings = ratings[ratings.userId == user]
 
         val_sample = _sample_positive(u_ratings)
@@ -93,7 +97,10 @@ def _get_training_data(ratings, warm_start_users, user_idx):
 def _get_testing_data(ratings, cold_start_users, user_idx, movie_indices):
     testing_data = dict()
 
-    for user in tqdm.tqdm(cold_start_users):
+    progress = tqdm.tqdm(cold_start_users)
+    for user in progress:
+        progress.set_description(f'Processing cold-start user {user}')
+
         u_ratings = ratings[ratings.userId == user]
 
         # Before exhaustive LOO, get validation sample
@@ -138,7 +145,13 @@ def _get_testing_data(ratings, cold_start_users, user_idx, movie_indices):
 def _get_entities(entities_path):
     entities = pd.read_csv(entities_path)
 
-    return {row['uri']: {'name': row['name'], 'labels': row['labels'].split('|')} for idx, row in entities.iterrows()}
+    return {row['uri']: {'name': row['name'], 'labels': row['labels'].split('|')} for _, row in entities.iterrows()}
+
+
+def _load_triples(triples_path):
+    triples = pd.read_csv(triples_path)
+
+    return [GraphTriple(row['head_uri'], row['relation'], row['tail_uri']) for _, row in triples.iterrows()]
 
 
 def partition(input_directory, output_directory, random_seed=42, warm_start_ratio=0.75,
@@ -147,13 +160,15 @@ def partition(input_directory, output_directory, random_seed=42, warm_start_rati
 
     ratings_path = os.path.join(input_directory, 'ratings.csv')
     entities_path = os.path.join(input_directory, 'entities.csv')
+    triples_path = os.path.join(input_directory, 'triples.csv')
+    entities = _get_entities(entities_path)
 
     # Load ratings data
     ratings, warm_users, cold_users, users = _get_ratings(ratings_path, include_unknown, warm_start_ratio)
 
     # Map users and entities to indices
     user_idx = {k: v for v, k in enumerate(users)}
-    entity_idx = {k: v for v, k in enumerate(ratings['uri'].unique())}
+    entity_idx = {k: v for v, k in enumerate(set(entities.keys()))}
 
     ratings['entityIdx'] = ratings.uri.transform(entity_idx.get)
 
@@ -178,6 +193,6 @@ def partition(input_directory, output_directory, random_seed=42, warm_start_rati
         pickle.dump(testing_data, fp)
 
     with open(os.path.join(output_directory, 'meta.pkl'), 'wb') as fp:
-        pickle.dump(Meta(entities=_get_entities(entities_path), uri_idx=entity_idx, users=list(user_idx.values()),
+        pickle.dump(Meta(entities=entities, uri_idx=entity_idx, users=list(user_idx.values()),
                          idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()},
-                         recommendable_entities=list(movie_indices)), fp)
+                         recommendable_entities=list(movie_indices), triples=_load_triples(triples_path)), fp)
