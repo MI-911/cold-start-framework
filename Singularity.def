@@ -1,0 +1,16 @@
+Bootstrap: docker
+From: pytorch/pytorch:latest
+%files
+    . /app/
+%post
+    chmod -R 775 /app
+    cd /app
+    apt update
+    apt install -y software-properties-common nano less
+    add-apt-repository ppa:deadsnakes/ppa -y
+    apt update
+    apt install -y python3.8 python3-pip
+    python3.8 -m pip install pip
+    python3.8 -m pip install -r requirements
+%environment
+    export PYTHONPATH=/app

@@ -1,10 +1,10 @@
 from typing import Dict, List
 
-from models.shared.meta import Meta
-from models.shared.user import WarmStartUser
+from shared.meta import Meta
+from shared.user import WarmStartUser
 
 
-class RecommenderBase:
+class InterviewerBase:
     def __init__(self, meta: Meta, use_cuda=False):
         self.meta = meta
         self.use_cuda = use_cuda

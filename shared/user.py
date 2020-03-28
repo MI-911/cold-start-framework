@@ -1,3 +1,6 @@
+from typing import Dict, Tuple, List
+
+
 class User:
     """
     Base class for users. All users, whether cold or warm, have a validation set.
@@ -8,9 +11,9 @@ class User:
 
 class WarmStartUser(User):
     """
-    For the warmup() method of recommenders.
+    For the warm-up method of recommenders.
     """
-    def __init__(self, ratings, validation):
+    def __init__(self, ratings: Dict[int, int], validation: Tuple[int, List[int]]):
         """
         Initialises a warm-start user.
         :param ratings: A dictionary of the format: { entity_id: sentiment }
@@ -35,7 +38,7 @@ class ColdStartUserSet:
 
 class ColdStartUser(User):
     """
-    For the interview() and predict() methods of Recommenders.
+    For the interview and predict methods of recommenders.
     """
     def __init__(self, sets: ColdStartUserSet, validation):
         """

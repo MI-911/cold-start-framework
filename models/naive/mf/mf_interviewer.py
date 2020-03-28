@@ -1,13 +1,13 @@
 from typing import Dict, List
 
-from models.shared.base_recommender import RecommenderBase
+from models.base_interviewer import InterviewerBase
 from models.naive.mf.mf import MatrixFactorisation
 import numpy as np
 import random
 from loguru import logger
 
-from models.shared.meta import Meta
-from models.shared.user import WarmStartUser
+from shared.meta import Meta
+from shared.user import WarmStartUser
 from shared.utility import get_combinations
 
 
@@ -22,7 +22,7 @@ def flatten_dataset(training: Dict[int, WarmStartUser]):
     return t, v
 
 
-class MatrixFactorisationRecommender(RecommenderBase):
+class MatrixFactorisationInterviewer(InterviewerBase):
 
     # MF doesn't conduct an interview
     def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
@@ -35,7 +35,7 @@ class MatrixFactorisationRecommender(RecommenderBase):
         self.optimal_params = params
 
     def __init__(self, meta: Meta, use_cuda=False):
-        super(MatrixFactorisationRecommender, self).__init__(meta, use_cuda)
+        super(MatrixFactorisationInterviewer, self).__init__(meta, use_cuda)
         self.meta = meta
         self.optimal_params = None
 

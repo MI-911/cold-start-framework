@@ -2,8 +2,8 @@ import os
 import pickle
 from typing import Dict
 
-from models.shared.meta import Meta
-from models.shared.user import WarmStartUser, ColdStartUser
+from shared.meta import Meta
+from shared.user import WarmStartUser, ColdStartUser
 
 
 class DataLoader:
