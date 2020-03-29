@@ -1,7 +1,47 @@
 import os
-from typing import List
+from enum import Enum
+from typing import List, Callable
 
 from experiments.data_loader import DataLoader
+
+
+def sentiment_to_int(sentiment):
+    return {
+        Sentiment.NEGATIVE: -1,
+        Sentiment.UNKNOWN: 0,
+        Sentiment.POSITIVE: 1,
+    }.get(sentiment, None)
+
+
+class EntityType(Enum):
+    RECOMMENDABLE = 1
+    DESCRIPTIVE = 2
+    ANY = 3
+
+
+class Sentiment(Enum):
+    NEGATIVE = 1
+    UNKNOWN = 2
+    POSITIVE = 3
+    ANY = 4
+
+# Pre and post operations on the data frame
+class CountFilter:
+    def __init__(self, filter_func: Callable[[int], bool], entity_type: EntityType,
+                 sentiment: Sentiment = Sentiment.ANY):
+        self.entity_type = entity_type
+        self.sentiment = sentiment
+        self.filter_func = filter_func
+
+
+class ExperimentOptions:
+    def __init__(self, name: str, split_seeds: List[int], count_filters: List[CountFilter] = None,
+                 warm_start_ratio: float = 0.75, include_unknown: bool = False):
+        self.name = name
+        self.split_seeds = split_seeds
+        self.count_filters = count_filters
+        self.warm_start_ratio = warm_start_ratio
+        self.include_unknown = include_unknown
 
 
 class Dataset:
