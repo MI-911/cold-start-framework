@@ -15,14 +15,8 @@ from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
 from models.base_interviewer import InterviewerBase
 from models.dqn.dqn_interviewer import DqnRecommender
-from models.melu.melu_interviewer import MeLUInterviewer
-from models.fmf.fmf_interviewer import FMFInterviewer
-from models.lrmf.lrmf_interviewer import LRMFInterviewer
-from models.naive.naive_interviewer import NaiveInterviewer
-from models.naive.mf.mf_interviewer import MatrixFactorisationInterviewer
-from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
+from recommenders.mf.mf_interviewer import MatrixFactorizationRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
-from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
 from shared.meta import Meta
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths
@@ -59,9 +53,15 @@ models = {
     # 'melu': {
     #     'class': MeLUInterviewer,
     # },
-    'dqn-ppr': {
+    # 'dqn-ppr': {
+    #     'class': DqnRecommender,
+    #     'recommender': JointPageRankRecommender,
+    #     'requires_interview_length': False,
+    #     'use_cuda': True,
+    # },
+    'dqn-mf': {
         'class': DqnRecommender,
-        'recommender': JointPageRankRecommender,
+        'recommender': MatrixFactorizationRecommender,
         'requires_interview_length': False,
         'use_cuda': True,
     }

@@ -1,7 +1,8 @@
 from typing import Dict, List
 
 from models.base_interviewer import InterviewerBase
-from models.naive.mf.mf import MatrixFactorisation
+from recommenders.base_recommender import RecommenderBase
+from recommenders.mf.mf import MatrixFactorisation
 import numpy as np
 import random
 from loguru import logger
@@ -22,20 +23,9 @@ def flatten_dataset(training: Dict[int, WarmStartUser]):
     return t, v
 
 
-class MatrixFactorisationInterviewer(InterviewerBase):
-
-    # MF doesn't conduct an interview
-    def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
-        return [0]
-
-    def get_parameters(self):
-        return self.optimal_params
-
-    def load_parameters(self, params):
-        self.optimal_params = params
-
+class MatrixFactorizationRecommender(RecommenderBase):
     def __init__(self, meta: Meta, use_cuda=False):
-        super(MatrixFactorisationInterviewer, self).__init__(meta, use_cuda)
+        super(MatrixFactorizationRecommender, self).__init__(meta)
         self.meta = meta
         self.optimal_params = None
 
@@ -52,13 +42,13 @@ class MatrixFactorisationInterviewer(InterviewerBase):
         for i in range(0, len(triples), n):
             yield triples[i:i + n]
 
-    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
+    def fit(self, training: Dict[int, WarmStartUser]) -> None:
         hit_rates = []
         training, validation = flatten_dataset(training)
 
         if self.optimal_params is None:
             parameters = {
-                'k': [1, 2, 5, 10, 15, 25, 50]
+                'k': [5]
             }
             for params in get_combinations(parameters):
                 logger.debug(f'Fitting MF with params: {params}')
@@ -109,4 +99,12 @@ class MatrixFactorisationInterviewer(InterviewerBase):
 
     def predict(self, items, answers):
         # User is the average user embedding
-        return self.model.predict_avg(items)
+        u_embedding_items = [e for e, r in answers.items() if r == 1]
+        return self.model.predict_avg_items(u_embedding_items, items)
+
+    def get_parameters(self):
+        return self.optimal_params
+
+    def load_parameters(self, params):
+        self.optimal_params = params
+
