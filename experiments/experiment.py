@@ -25,7 +25,21 @@ class Sentiment(Enum):
     POSITIVE = 3
     ANY = 4
 
-# Pre and post operations on the data frame
+
+class RankingOptions:
+    def __init__(self, num_positive: int, num_negative: int = 0, num_unknown: int = 0, num_unseen: int = 0,
+                 default_cutoff: int = 10):
+        # Note discrepancy between 'unknown' and 'unseen', as 'unknown' is an explicit rating
+        self.num_positive = num_positive
+        self.num_negative = num_negative
+        self.num_unknown = num_unknown
+        self.num_unseen = num_unseen
+        self.default_cutoff = default_cutoff
+
+    def get_num_total(self):
+        return self.num_positive + self.num_negative + self.num_unknown + self.num_unseen
+
+
 class CountFilter:
     def __init__(self, filter_func: Callable[[int], bool], entity_type: EntityType,
                  sentiment: Sentiment = Sentiment.ANY):
@@ -35,13 +49,17 @@ class CountFilter:
 
 
 class ExperimentOptions:
-    def __init__(self, name: str, split_seeds: List[int], count_filters: List[CountFilter] = None,
-                 warm_start_ratio: float = 0.75, include_unknown: bool = False):
+    # TODO: Consider adding pre/post-operations on the ratings DF and warm/cold-start users
+    def __init__(self, name: str, split_seeds: List[int], ranking_options: RankingOptions,
+                 count_filters: List[CountFilter] = None, warm_start_ratio: float = 0.75,
+                 include_unknown: bool = False, evaluation_samples: int = 10):
         self.name = name
         self.split_seeds = split_seeds
         self.count_filters = count_filters
         self.warm_start_ratio = warm_start_ratio
         self.include_unknown = include_unknown
+        self.ranking_options = ranking_options
+        self.evaluation_samples = evaluation_samples
 
 
 class Dataset:

@@ -1,50 +1,41 @@
-from typing import Dict, Tuple, List
+from typing import Dict, List
+
+from shared.ranking import Ranking
 
 
-class User:
-    """
-    Base class for users. All users, whether cold or warm, have a validation set.
-    """
-    def __init__(self, validation):
-        self.validation = validation
-
-
-class WarmStartUser(User):
+class WarmStartUser:
     """
     For the warm-up method of recommenders.
     """
-    def __init__(self, ratings: Dict[int, int], validation: Tuple[int, List[int]]):
+    def __init__(self, ratings: Dict[int, int], validation: Ranking):
         """
         Initialises a warm-start user.
         :param ratings: A dictionary of the format: { entity_id: sentiment }
-        :param validation: A pair of the format: (positive, negatives)
+        :param validation: The ranking used for validation.
         """
-        super().__init__(validation)
         self.training = ratings
+        self.validation = validation
 
 
 class ColdStartUserSet:
-    def __init__(self, answers, positive, negative):
+    def __init__(self, answers, ranking: Ranking):
         """
         Initialises a cold-start user set.
         :param answers: A dictionary of the format: { entity_id: sentiment }
-        :param positive: An entity_id
-        :param negative: A list of the format [ entity_id ]
+        :param ranking: The ranking used for evaluation.
         """
         self.answers = answers
-        self.positive = positive
-        self.negative = negative
+        self.ranking = ranking
 
 
-class ColdStartUser(User):
+class ColdStartUser:
     """
     For the interview and predict methods of recommenders.
     """
-    def __init__(self, sets: ColdStartUserSet, validation):
+    def __init__(self, sets: List[ColdStartUserSet]):
         """
         Initialises a cold-start user.
         :param sets: A list of the format [ ColdStartUserSet ]
-        :param validation: A pair of the format (positive, negatives)
         """
-        super().__init__(validation)
         self.sets = sets
+

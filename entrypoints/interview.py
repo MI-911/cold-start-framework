@@ -23,6 +23,7 @@ from recommenders.pagerank.collaborative_pagerank_recommender import Collaborati
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
 from shared.meta import Meta
+from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths
 from shared.validators import valid_dir
@@ -127,9 +128,8 @@ def _conduct_interview(model: InterviewerBase, answer_set: ColdStartUserSet, n_q
     return answer_state
 
 
-def _produce_ranking(model: InterviewerBase, answer_set: ColdStartUserSet, answers: Dict):
-    to_rank = [answer_set.positive] + answer_set.negative
-    item_scores = sorted(model.predict(to_rank, answers).items(), key=operator.itemgetter(1), reverse=True)
+def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
+    item_scores = sorted(model.predict(ranking.to_rank, answers).items(), key=operator.itemgetter(1), reverse=True)
 
     return [item[0] for item in item_scores]
 
@@ -161,8 +161,8 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
     if not requires_interview_length:
         model_instance.warmup(training)
 
-    for nq in range(1, max_n_questions + 1, 1):
-        logger.info(f'Conducting interviews of length {nq}...')
+    for num_questions in range(1, max_n_questions + 1, 1):
+        logger.info(f'Conducting interviews of length {num_questions}...')
 
         hits = defaultdict(list)
         ndcgs = defaultdict(list)
@@ -170,16 +170,16 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         covs = defaultdict(set)
 
         if requires_interview_length:
-            model_instance, _ = _instantiate_model(model_name, experiment, meta, nq)
-            model_instance.warmup(training, nq)
+            model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
+            model_instance.warmup(training, num_questions)
 
         popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
         for idx, user in tqdm(testing.items(), desc='[Testing]'):
             for answer_set in user.sets:
-                answers = _conduct_interview(model_instance, answer_set, nq)
-                ranking = _produce_ranking(model_instance, answer_set, answers)
-                relevance = _get_relevance_list(ranking, answer_set.positive)
+                answers = _conduct_interview(model_instance, answer_set, num_questions)
+                ranking = _produce_ranking(model_instance, answer_set.ranking, answers)
+                relevance = _get_relevance_list(ranking, answer_set.ranking.positives)
 
                 for k in range(1, upper_cutoff + 1):
                     cutoff = relevance[:k]
@@ -200,7 +200,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
             ser[k] = np.mean(sers[k])
             cov[k] = coverage(covs[k], meta.recommendable_entities)
 
-        qs[nq] = {'hr': hr, 'ndcg': ndcg, 'ser': ser, 'cov': cov}
+        qs[num_questions] = {'hr': hr, 'ndcg': ndcg, 'ser': ser, 'cov': cov}
 
         logger.info(f'Results for {model_name}:')
         logger.info(f'  HIT@10:  {hr[10]}')
@@ -208,7 +208,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         logger.info(f'  SER@10:  {ser[10]}')
         logger.info(f'  COV@10:  {cov[10]}')
 
-        yield model_instance, qs, nq
+        yield model_instance, qs, num_questions
 
 
 def _write_results(model_name, qs, split: Split):
