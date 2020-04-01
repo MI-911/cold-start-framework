@@ -14,6 +14,7 @@ from tqdm import tqdm
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage
 from models.base_interviewer import InterviewerBase
+from models.dqn.dqn_interviewer import DqnRecommender
 from models.melu.melu_interviewer import MeLUInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
@@ -28,35 +29,41 @@ from shared.utility import join_paths
 from shared.validators import valid_dir
 
 models = {
-    'fmf': {
-        'class': FMFInterviewer,
-        'requires_interview_length': True
-    },
-    'lrmf': {
-        'class': LRMFInterviewer,
-        'requires_interview_length': True,
-        'use_cuda': False
-    },
-    'naive-pr-collab': {
-        'class': NaiveInterviewer,
-        'recommender': CollaborativePageRankRecommender
-    },
-    'naive-pr-kg': {
-        'class': NaiveInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender
-    },
-    'naive-pr-joint': {
-        'class': NaiveInterviewer,
-        'recommender': JointPageRankRecommender
-    },
-    'fmf': {
-        'class': FMFInterviewer
-    },
-    'mf': {
-        'class': MatrixFactorisationInterviewer
-    },
-    'melu': {
-        'class': MeLUInterviewer,
+    # 'naive': {
+    #     'class': NaiveInterviewer
+    # },
+    # 'fmf': {
+    #     'class': FMFInterviewer,
+    #     'requires_interview_length': True
+    # },
+    # 'lrmf': {
+    #     'class': LRMFInterviewer,
+    #     'requires_interview_length': True,
+    #     'use_cuda': False
+    # },
+    # 'naive-pr-collab': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': CollaborativePageRankRecommender
+    # },
+    # 'naive-pr-kg': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': KnowledgeGraphPageRankRecommender
+    # },
+    # 'naive-pr-joint': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': JointPageRankRecommender,
+    # },
+    # 'mf': {
+    #     'class': MatrixFactorisationInterviewer
+    # },
+    # 'melu': {
+    #     'class': MeLUInterviewer,
+    # },
+    'dqn-ppr': {
+        'class': DqnRecommender,
+        'recommender': JointPageRankRecommender,
+        'requires_interview_length': False,
+        'use_cuda': True,
     }
 }
 

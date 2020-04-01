@@ -5,7 +5,7 @@ import torch.optim as optim
 
 
 class DeepQNetwork(nn.Module):
-    def __init__(self, alpha, state_size: int, fc1_dims: int, fc2_dims: int, actions_size: int):
+    def __init__(self, alpha, state_size: int, fc1_dims: int, fc2_dims: int, actions_size: int, use_cuda: bool = False):
         super(DeepQNetwork, self).__init__()
 
         # Construct layers
@@ -18,7 +18,7 @@ class DeepQNetwork(nn.Module):
         self.loss = nn.MSELoss()
 
         # Send the model to GPU if possible
-        self.device = tt.device('cuda' if tt.cuda.is_available() else 'cpu')
+        self.device = tt.device('cuda' if tt.cuda.is_available() and use_cuda else 'cpu')
         self.to(self.device)
 
     def forward(self, state):

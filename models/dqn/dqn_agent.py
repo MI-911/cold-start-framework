@@ -7,7 +7,8 @@ from models.dqn.dqn import DeepQNetwork
 
 class DqnAgent:
     def __init__(self, gamma: float, epsilon: float, alpha: float, candidates: List[int], n_entities: int,
-                 batch_size: int, max_mem_size: float = 100000, eps_end: float = 0.01, eps_dec: float = 0.996):
+                 batch_size: int, max_mem_size: float = 100000, eps_end: float = 0.01, eps_dec: float = 0.996,
+                 use_cuda: bool = False):
         """
         Constructs an agent for a DQN learning process
         :param gamma: The discount rates for future predicted rewards.
@@ -38,7 +39,8 @@ class DqnAgent:
 
         # Allocate DQN model
         self.Q_eval = DeepQNetwork(
-            state_size=self.state_size, fc1_dims=256, fc2_dims=128, actions_size=self.action_size, alpha=alpha)
+            state_size=self.state_size, fc1_dims=256, fc2_dims=128, actions_size=self.action_size,
+            alpha=alpha, use_cuda=use_cuda)
 
         # Allocate memory containers
         self.state_memory = np.zeros((self.max_mem_size, self.state_size), dtype=np.float32)
@@ -94,27 +96,28 @@ class DqnAgent:
         terminal_batch = self.terminal_memory[batch_indices]
 
         # Convert action memories to indices so we use them to index directly later
-        action_values = np.array(self.candidates, dtype=np.uint8)
+        action_values = np.arange(self.n_entities, dtype=np.uint8)
         action_indices = np.dot(action_batch, action_values)
 
         # Predict rewards for the current state and the next one
         current_predicted_rewards = self.Q_eval(state_batch)
-        target_rewards = current_predicted_rewards.clone()
+        target_rewards = current_predicted_rewards.clone().detach().numpy()
         next_predicted_rewards = self.Q_eval(new_state_batch)
 
         # Index trickery so we can index the in-batch tensors
         batch_index = np.arange(self.batch_size, dtype=np.int32)
 
         # Construct the optimal predicted rewards (the "ground truth" labels for every memory)
-        target_update = reward_batch + self.gamma * tt.max(next_predicted_rewards, dim=1)[0] * terminal_batch
+        target_update = reward_batch + self.gamma * tt.max(next_predicted_rewards, dim=1)[0].detach().numpy() * terminal_batch
         for i in range(len(batch_index)):
             target_rewards[batch_index[i], action_indices[i]] = target_update[i]
 
         # Adjust the model
-        loss = self.Q_eval.loss(current_predicted_rewards, target_rewards)
+        loss = self.Q_eval.loss(current_predicted_rewards, tt.tensor(target_rewards))
         loss.backward()
         self.Q_eval.optimizer.step()
         self.Q_eval.zero_grad()
 
         # Decrease the chance that we will explore random questions in the future
         self.epsilon = self.epsilon * self.eps_dec if self.epsilon > self.eps_end else self.eps_end
+        return loss
