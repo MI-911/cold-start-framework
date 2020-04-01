@@ -37,6 +37,7 @@ class DqnRecommender(InterviewerBase):
     ratings of a new user, and nothing more. Latent models like MF will have to
     learn a new embedding for every such user.
     """
+
     def __init__(self, meta: Meta, recommender, use_cuda: bool):
         super(DqnRecommender, self).__init__(meta)
 
@@ -83,21 +84,33 @@ class DqnRecommender(InterviewerBase):
         n_iterations = 10
 
         epsilons = []
+        scores = []
+        losses = []
+
+        def recent_mean(lst):
+            if l := len(lst) == 0:
+                return 'NaN'
+            recent = lst[l - 10:] if l >= 10 else lst
+            return np.mean(recent)
 
         for i in range(n_iterations):
             logger.info(f'DQN starting iteration {i}...')
+
             users = list(training.keys())
             np.random.shuffle(users)
 
-            self.loss = 0
-            for user in tqdm(users, desc=f'Training on users (loss: {self.loss})'):
-                epsilons.append(self.agent.epsilon)
+            t = tqdm(users)
+            for user in t:
+
+                t.set_description(f'Training on users (Scores: {recent_mean(scores)}, Loss: {recent_mean(losses)}, '
+                                  f'Epsilon: {recent_mean(epsilons)})')
 
                 state = self.environment.reset()
                 self.environment.select_user(user)
 
                 # Train on the memories
-                self.loss = self.agent.learn()
+                _loss = self.agent.learn()
+                _reward = 0
 
                 for q in range(interview_length):
                     question = self.agent.choose_action(state)
@@ -107,15 +120,29 @@ class DqnRecommender(InterviewerBase):
                     self.agent.store_memory(state, question, new_state, reward, q == interview_length)
                     state = new_state
 
+                    _reward += reward
+
+                # Record scores, losses, rewards
+                epsilons.append(self.agent.epsilon)
+                scores.append(_reward)
+                if _loss is not None:
+                    losses.append(_loss.detach().numpy())
+
     def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
-        pass
+        state = np.zeros((self.n_entities * 2,), dtype=np.float32)
+        for entity, rating in answers.items():
+            entity_state_idx = entity * 2
+            state[entity_state_idx] = 1
+            state[entity_state_idx + 1] = rating
+
+        question = self.agent.choose_action(state)
+        return [question]
 
     def predict(self, items: List[int], answers: Dict) -> Dict[int, float]:
-        pass
+        return self.environment.recommender.predict(items, answers)
 
     def get_parameters(self):
-        pass
+        return {}
 
     def load_parameters(self, params):
         pass
-

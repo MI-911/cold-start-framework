@@ -109,8 +109,9 @@ class Environment:
         answer = self.ratings[user, entity]
 
         # Adjust state
-        self.state[entity] = 1
-        self.state[entity + 1] = answer
+        entity_state_idx = entity * 2
+        self.state[entity_state_idx] = 1
+        self.state[entity_state_idx + 1] = answer
 
         self.answers[entity] = answer
 
