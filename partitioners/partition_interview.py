@@ -1,11 +1,13 @@
 import os
 import pickle
 import random
+from typing import List
 
 import pandas as pd
 import tqdm
 from loguru import logger
 
+from experiments.experiment import ExperimentOptions, CountFilter, Sentiment, sentiment_to_int, EntityType
 from shared.graph_triple import GraphTriple
 from shared.meta import Meta
 from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
@@ -37,7 +39,7 @@ def _get_validation_dict(ratings, user_id, left_out):
     }
 
 
-def _get_ratings(ratings_path, include_unknown, warm_start_ratio):
+def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters: List[CountFilter]):
     ratings = pd.read_csv(ratings_path)
     if not include_unknown:
         ratings = ratings[ratings.sentiment != 0]
@@ -47,11 +49,30 @@ def _get_ratings(ratings_path, include_unknown, warm_start_ratio):
     entity_ratings = ratings[['uri', 'userId']].groupby('uri').count()
     entity_ratings.columns = ['num_ratings']
 
-    # Filter users with less than two positive movie samples
-    tmp = ratings[ratings.sentiment == 1 & ratings.isItem][['uri', 'userId']].groupby('userId').count()
-    tmp.columns = ['pos_ratings']
+    # Filter users with count filters
+    if count_filters:
+        # Consider the most generic filters first (i.e. any sentiment)
+        count_filters = sorted(count_filters,
+                               key=lambda f: int(f.sentiment != Sentiment.ANY) + int(f.entity_type != EntityType.ANY))
 
-    ratings = ratings[ratings.userId.isin(tmp[tmp.pos_ratings >= 2].index)]
+        for count_filter in count_filters:
+            df_tmp = ratings
+
+            # Filter entity type
+            if count_filter.entity_type != EntityType.ANY:
+                df_tmp = df_tmp[df_tmp.isItem == (count_filter.entity_type == EntityType.RECOMMENDABLE)]
+            logger.info(len(df_tmp))
+
+            # Filter sentiment
+            if count_filter.sentiment != Sentiment.ANY:
+                df_tmp = df_tmp[df_tmp.sentiment == sentiment_to_int(count_filter.sentiment)]
+            logger.info(len(df_tmp))
+
+            # Group ratings by user
+            df_tmp = df_tmp[['uri', 'userId']].groupby('userId').count()
+            df_tmp.columns = ['num_ratings']
+
+            ratings = ratings[ratings.userId.isin(df_tmp[count_filter.filter_func(df_tmp.num_ratings)].index)]
 
     # Partition into warm and cold start users
     users = ratings['userId'].unique()
@@ -154,22 +175,34 @@ def _load_triples(triples_path):
     return [GraphTriple(row['head_uri'], row['relation'], row['tail_uri']) for _, row in triples.iterrows()]
 
 
-def partition(input_directory, output_directory, random_seed=42, warm_start_ratio=0.75,
-              include_unknown=False):
-    random.seed(random_seed)
-
+def partition(experiment: ExperimentOptions, input_directory, output_directory):
     ratings_path = os.path.join(input_directory, 'ratings.csv')
     entities_path = os.path.join(input_directory, 'entities.csv')
     triples_path = os.path.join(input_directory, 'triples.csv')
+
     entities = _get_entities(entities_path)
 
+    for idx, seed in enumerate(experiment.split_seeds):
+        split_name = f'split_{idx}'
+        split_output_directory = os.path.join(os.path.join(output_directory, experiment.name), split_name)
+
+        logger.info(f'Partitioning {experiment.name}/{split_name}')
+
+        partition_seed(experiment, seed, entities, split_output_directory, ratings_path, triples_path)
+
+
+def partition_seed(experiment: ExperimentOptions, seed: int, entities, output_directory: str,
+                   ratings_path: str, triples_path: str):
+    random.seed(seed)
+
     # Load ratings data
-    ratings, warm_users, cold_users, users = _get_ratings(ratings_path, include_unknown, warm_start_ratio)
+    ratings, warm_users, cold_users, users = _get_ratings(ratings_path, experiment.include_unknown,
+                                                          experiment.warm_start_ratio,
+                                                          count_filters=experiment.count_filters)
 
     # Map users and entities to indices
     user_idx = {k: v for v, k in enumerate(users)}
     entity_idx = {k: v for v, k in enumerate(set(entities.keys()))}
-
     ratings['entityIdx'] = ratings.uri.transform(entity_idx.get)
 
     # Find movie indices

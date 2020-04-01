@@ -28,9 +28,6 @@ from shared.utility import join_paths
 from shared.validators import valid_dir
 
 models = {
-    'naive': {
-        'class': NaiveInterviewer
-    },
     'fmf': {
         'class': FMFInterviewer,
         'requires_interview_length': True
@@ -156,6 +153,8 @@ def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser])
 def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[int, WarmStartUser],
                testing: Dict[int, ColdStartUser], max_n_questions=5, upper_cutoff=50):
     model_instance, requires_interview_length = _instantiate_model(model_name, experiment, meta)
+
+    logger.info(f'Running model {model_name}')
 
     qs = defaultdict(dict)
 

@@ -2,13 +2,12 @@ import operator
 
 import numpy as np
 
-from experiments.data_loader import DataLoader
 from models.base_interviewer import InterviewerBase
 from shared.meta import Meta
 
 
 class NaiveInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender, use_cuda=False):
+    def __init__(self, meta: Meta, recommender=None, use_cuda=False):
         super().__init__(meta, use_cuda)
 
         if not recommender:
@@ -54,29 +53,3 @@ class NaiveInterviewer(InterviewerBase):
 
     def load_parameters(self, parameters):
         pass
-
-
-if __name__ == '__main__':
-    data_loader = DataLoader('../../data/basic/split_0')
-    training = data_loader.training()
-    testing = data_loader.testing()
-    meta = data_loader.meta()
-
-    naive = NaiveInterviewer(meta)
-    naive.warmup(training)
-    idx_uri = {int(v): k for k, v in meta.uri_idx.items()}
-    entities = meta.entities
-    movies = [idx for idx, movie in meta.idx_item.items() if movie]
-
-    state = {}
-    while True:
-        question = int(naive.interview(state)[0])
-
-        answer = input(f'What do you think about {entities[idx_uri[question]]["name"]}?')
-        state[question] = int(answer)
-
-        predictions = naive.predict(movies, state)
-        top_movies = [pair[0] for pair in sorted(predictions.items(), key=operator.itemgetter(1), reverse=True)][:5]
-
-        for idx, movie in enumerate(top_movies):
-            print(f'{idx + 1}. {idx_uri[movie]}')
