@@ -5,3 +5,4 @@ loguru
 scipy
 networkx
 torch
+sklearn

@@ -19,6 +19,7 @@ from models.fmf.fmf_interviewer import FMFInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
 from models.naive.naive_interviewer import NaiveInterviewer
 from models.naive.mf.mf_interviewer import MatrixFactorisationInterviewer
+from recommenders.knn.knn_recommender import KNNRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
@@ -48,6 +49,10 @@ models = {
     'naive-pr-joint': {
         'class': NaiveInterviewer,
         'recommender': JointPageRankRecommender
+    },
+    'naive-knn': {
+      'class': NaiveInterviewer,
+      'recommender': KNNRecommender
     },
     'fmf': {
         'class': FMFInterviewer
