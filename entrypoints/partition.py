@@ -13,16 +13,16 @@ parser.add_argument('--input', nargs=1, type=valid_dir, help='path to sources/in
 parser.add_argument('--output', nargs=1, type=valid_dir, help='path to output data')
 
 experiments = [
-    ExperimentOptions(name='default', split_seeds=[42], count_filters=[
-        CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE),
-        CountFilter(lambda count: count >= 1, entity_type=EntityType.DESCRIPTIVE, sentiment=Sentiment.ANY)
-    ], ranking_options=RankingOptions(num_positive=1, num_unseen=100)),
     ExperimentOptions(name='separation', split_seeds=[42], count_filters=[
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE),
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.NEGATIVE),
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.UNKNOWN),
         CountFilter(lambda count: count >= 1, entity_type=EntityType.DESCRIPTIVE, sentiment=Sentiment.ANY)
-    ], ranking_options=RankingOptions(num_positive=1, num_unknown=1, num_negative=1), include_unknown=True)
+    ], ranking_options=RankingOptions(num_positive=1, num_unknown=1, num_negative=1), include_unknown=True),
+    ExperimentOptions(name='default', split_seeds=[42], count_filters=[
+        CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE),
+        CountFilter(lambda count: count >= 1, entity_type=EntityType.DESCRIPTIVE, sentiment=Sentiment.ANY)
+    ], ranking_options=RankingOptions(num_positive=1, num_unseen=100), include_unknown=False)
 ]
 
 if __name__ == '__main__':

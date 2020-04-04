@@ -17,7 +17,7 @@ from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 
 def _sample_sentiment(ratings, sentiment: Sentiment, n_items=1):
-    items = list(ratings[ratings.sentiment == sentiment_to_int(sentiment) & ratings.isItem].entityIdx.unique())
+    items = list(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
     random.shuffle(items)
 
     return items[:n_items]
@@ -49,6 +49,13 @@ def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters:
     ratings = pd.read_csv(ratings_path)
     if not include_unknown:
         ratings = ratings[ratings.sentiment != 0]
+
+    # Find duplicate (user, item) pairs
+    duplicates = ratings.groupby(['uri', 'userId']).size()
+    if len(duplicates[duplicates > 1]):
+        logger.error('Found duplicate (user, uri) pairs')
+
+        exit(1)
 
     # Compute ratings per entity
     # In the future, this could be used for popularity sampling of negative samples
