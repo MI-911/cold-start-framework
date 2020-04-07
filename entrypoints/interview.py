@@ -12,7 +12,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
-from experiments.metrics import ndcg_at_k, ser_at_k, coverage
+from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k
 from models.base_interviewer import InterviewerBase
 from models.melu.melu_interviewer import MeLUInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
@@ -129,13 +129,9 @@ def _conduct_interview(model: InterviewerBase, answer_set: ColdStartUserSet, n_q
 
 
 def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
-    item_scores = sorted(model.predict(ranking.to_rank, answers).items(), key=operator.itemgetter(1), reverse=True)
+    item_scores = sorted(model.predict(ranking.to_list(), answers).items(), key=operator.itemgetter(1), reverse=True)
 
     return [item[0] for item in item_scores]
-
-
-def _get_relevance_list(ranking, positive_item):
-    return [int(item == positive_item) for item in ranking]
 
 
 def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser]):
@@ -166,6 +162,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
         hits = defaultdict(list)
         ndcgs = defaultdict(list)
+        taus = defaultdict(list)
         sers = defaultdict(list)
         covs = defaultdict(set)
 
@@ -177,36 +174,42 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
         for idx, user in tqdm(testing.items(), desc='[Testing]'):
             for answer_set in user.sets:
+                # Query the interviewer for the next entity to ask about
+                # Then produce a ranked list given the current interview state
                 answers = _conduct_interview(model_instance, answer_set, num_questions)
-                ranking = _produce_ranking(model_instance, answer_set.ranking, answers)
-                relevance = _get_relevance_list(ranking, answer_set.ranking.positives)
+                ranked_list = _produce_ranking(model_instance, answer_set.ranking, answers)[upper_cutoff]
+
+                # From the ranked list, get ordered binary relevance and utility
+                relevance = answer_set.ranking.get_relevance(ranked_list)
+                utility = answer_set.ranking.get_utility(ranked_list, meta.sentiment_utility)
 
                 for k in range(1, upper_cutoff + 1):
-                    cutoff = relevance[:k]
+                    relevance_cutoff = relevance[:k]
 
-                    hits[k].append(1 in cutoff)
-                    ndcgs[k].append(ndcg_at_k(cutoff, k))
-                    sers[k].append(ser_at_k(zip(ranking[:k], cutoff), popular_items, k, normalize=False))
-                    covs[k] = covs[k].union(set(ranking[:k]))
+                    hits[k].append(1 in relevance_cutoff)
+                    ndcgs[k].append(ndcg_at_k(utility, k))
+                    taus[k].append(tau_at_k(utility, k))
+                    sers[k].append(ser_at_k(zip(ranked_list[:k], relevance_cutoff), popular_items, k, normalize=False))
+                    covs[k] = covs[k].union(set(ranked_list[:k]))
 
         hr = dict()
         ndcg = dict()
+        tau = dict()
         ser = dict()
         cov = dict()
 
         for k in range(1, upper_cutoff + 1):
             hr[k] = np.mean(hits[k])
             ndcg[k] = np.mean(ndcgs[k])
+            tau[k] = np.mean(taus[k])
             ser[k] = np.mean(sers[k])
             cov[k] = coverage(covs[k], meta.recommendable_entities)
 
-        qs[num_questions] = {'hr': hr, 'ndcg': ndcg, 'ser': ser, 'cov': cov}
+        qs[num_questions] = {'hr': hr, 'ndcg': ndcg, 'tau': tau, 'ser': ser, 'cov': cov}
 
         logger.info(f'Results for {model_name}:')
-        logger.info(f'  HIT@10:  {hr[10]}')
-        logger.info(f'  NDCG@10: {ndcg[10]}')
-        logger.info(f'  SER@10:  {ser[10]}')
-        logger.info(f'  COV@10:  {cov[10]}')
+        for name, value in qs[num_questions].items():
+            logger.info(f'- {name.upper()}@{meta.default_cutoff}: {value[meta.default_cutoff]}')
 
         yield model_instance, qs, num_questions
 

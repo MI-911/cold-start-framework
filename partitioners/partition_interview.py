@@ -31,8 +31,6 @@ def _sample_unseen(ratings: DataFrame, user_id: int, n_items=100):
 
     random.shuffle(unseen_items)
 
-    logger.warning(len(unseen_items))
-
     return set(unseen_items[:n_items])
 
 
@@ -140,6 +138,7 @@ def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, 
 def _get_ranking(ratings: DataFrame, user_id: int, ranking_options: RankingOptions) -> (DataFrame, Ranking):
     u_ratings = ratings[ratings.userId == user_id]
 
+    # Create ranking instance holding all samples to rank
     ranking = Ranking()
     for sentiment, n_samples in ranking_options.sentiment_count.items():
         if sentiment == Sentiment.UNSEEN:
@@ -150,9 +149,7 @@ def _get_ranking(ratings: DataFrame, user_id: int, ranking_options: RankingOptio
 
         ranking.sentiment_samples[sentiment] = samples
 
-    # Assert that we have sampled all required items
-    logger.info(ranking.to_list())
-    logger.info(ranking_options.get_num_total())
+    # Assert that we have sampled all required items (implicit check for cross-sentiment duplicates)
     assert len(set(ranking.to_list())) == ranking_options.get_num_total()
 
     # Return user's ratings without items to rank

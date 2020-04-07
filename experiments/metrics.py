@@ -1,5 +1,5 @@
 import numpy as np
-
+from scipy import stats
 
 def average_precision(ranked_relevancy_list):
     """
@@ -26,6 +26,12 @@ def dcg(rank, n=10):
         r[rank] = 1
 
     return r[0] + np.sum(r[1:] / np.log2(np.arange(2, r.size + 1)))
+
+
+def tau_at_k(utility, k):
+    tau, p = stats.kendalltau(utility[:k], sorted(utility, reverse=True)[:k])
+
+    return tau
 
 
 def ndcg_at_k(r, k, method=0):
