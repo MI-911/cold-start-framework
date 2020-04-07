@@ -24,6 +24,7 @@ from recommenders.pagerank.collaborative_pagerank_recommender import Collaborati
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
+from recommenders.toppop.toppop_recommender import TopPopRecommender
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
@@ -34,6 +35,10 @@ models = {
     'random': {
       'class': DumbInterviewer,
       'recommender': RandomRecommender
+    },
+    'toppop': {
+      'class': DumbInterviewer,
+      'recommender': TopPopRecommender
     },
     'fmf': {
         'class': FMFInterviewer,
