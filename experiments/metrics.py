@@ -1,6 +1,6 @@
 import numpy as np
-from loguru import logger
 from scipy import stats
+
 
 def average_precision(ranked_relevancy_list):
     """
@@ -30,10 +30,7 @@ def dcg(rank, n=10):
 
 
 def tau_at_k(utility, k):
-    ideal_order = sorted(utility, reverse=True)[:k]
     tau, p = stats.kendalltau(utility[:k], sorted(utility, reverse=True)[:k])
-
-    logger.info(ideal_order)
 
     return tau
 

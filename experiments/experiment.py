@@ -40,6 +40,9 @@ class CountFilter:
         self.sentiment = sentiment
         self.filter_func = filter_func
 
+    def __repr__(self):
+        return f'{self.entity_type=}, {self.sentiment=}'
+
 
 class ExperimentOptions:
     # TODO: Consider adding pre/post-operations on the ratings DF and warm/cold-start users
