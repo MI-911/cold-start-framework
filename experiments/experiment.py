@@ -1,8 +1,8 @@
 import os
-from enum import Enum
 from typing import List, Callable
 
 from experiments.data_loader import DataLoader
+from experiments.enums import Sentiment, EntityType
 
 
 def sentiment_to_int(sentiment):
@@ -13,20 +13,6 @@ def sentiment_to_int(sentiment):
     }.get(sentiment, None)
 
 
-class EntityType(Enum):
-    RECOMMENDABLE = 1
-    DESCRIPTIVE = 2
-    ANY = 3
-
-
-class Sentiment(Enum):
-    NEGATIVE = 1
-    UNKNOWN = 2
-    POSITIVE = 3
-    UNSEEN = 4
-    ANY = 5
-
-
 class RankingOptions:
     def __init__(self, num_positive: int, num_negative: int = 0, num_unknown: int = 0, num_unseen: int = 0,
                  default_cutoff: int = 10):
@@ -35,7 +21,7 @@ class RankingOptions:
                                 Sentiment.UNKNOWN: num_unknown, Sentiment.UNSEEN: num_unseen}
 
         # Utility values for ranking, higher is better
-        self.utility_values = {Sentiment.POSITIVE: 1}
+        self.sentiment_utility = {Sentiment.POSITIVE: 1}
 
         # Default cutoffs are used in the recommenders' internal optimization
         self.default_cutoff = default_cutoff

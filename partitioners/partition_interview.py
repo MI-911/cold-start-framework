@@ -16,17 +16,14 @@ from shared.ranking import Ranking
 from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 
-def _sample_sentiment(ratings: DataFrame, user_id: int, sentiment: Sentiment, n_items=1):
-    if sentiment == Sentiment.UNSEEN:
-        return _sample_unseen_items(ratings, user_id, n_items)
-
+def _sample_seen(ratings: DataFrame, sentiment: Sentiment, n_items=1):
     items = list(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
     random.shuffle(items)
 
-    return items[:n_items]
+    return set(items[:n_items])
 
 
-def _sample_unseen_items(ratings: DataFrame, user_id: int, n_items=100):
+def _sample_unseen(ratings: DataFrame, user_id: int, n_items=100):
     item_ratings = ratings[ratings.isItem]
 
     seen_items = set(item_ratings[item_ratings.userId == user_id].entityIdx.unique())
@@ -34,18 +31,13 @@ def _sample_unseen_items(ratings: DataFrame, user_id: int, n_items=100):
 
     random.shuffle(unseen_items)
 
-    return unseen_items[:n_items]
+    logger.warning(len(unseen_items))
+
+    return set(unseen_items[:n_items])
 
 
 def _get_ratings_dict(from_ratings):
     return {row.entityIdx: row.sentiment for _, row in from_ratings.iterrows()}
-
-
-def _get_validation_dict(ratings, user_id, left_out):
-    return {
-        'positive': left_out,
-        'negative': _sample_unseen_items(ratings, user_id)
-    }
 
 
 def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters: List[CountFilter]):
@@ -112,8 +104,8 @@ def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users,
 
         training_dict = _get_ratings_dict(u_ratings)
 
-        # Assert negative samples not in training
-        assert not set(ranking.to_rank).intersection(training_dict.keys())
+        # Assert ranking samples not in training
+        assert not set(ranking.to_list()).intersection(training_dict.keys())
 
         training_data[user_idx[user]] = WarmStartUser(training_dict, ranking)
 
@@ -148,14 +140,20 @@ def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, 
 def _get_ranking(ratings: DataFrame, user_id: int, ranking_options: RankingOptions) -> (DataFrame, Ranking):
     u_ratings = ratings[ratings.userId == user_id]
 
-    # TODO: Lookup dictionary with (sentiment, count) KVPs
     ranking = Ranking()
-
     for sentiment, n_samples in ranking_options.sentiment_count.items():
-        ranking.sentiment_samples[sentiment] = _sample_sentiment(u_ratings, user_id, sentiment, n_samples)
+        if sentiment == Sentiment.UNSEEN:
+            # For unseen items, we require the entire ratings DF to find unrated items
+            samples = _sample_unseen(ratings, user_id, n_samples)
+        else:
+            samples = _sample_seen(u_ratings, sentiment, n_samples)
+
+        ranking.sentiment_samples[sentiment] = samples
 
     # Assert that we have sampled all required items
-    assert len(ranking.to_list()) == ranking_options.get_num_total()
+    logger.info(ranking.to_list())
+    logger.info(ranking_options.get_num_total())
+    assert len(set(ranking.to_list())) == ranking_options.get_num_total()
 
     # Return user's ratings without items to rank
     return u_ratings[~u_ratings.entityIdx.isin(ranking.to_list())], ranking
@@ -227,4 +225,5 @@ def partition_seed(experiment: ExperimentOptions, seed: int, entities, output_di
         pickle.dump(Meta(entities=entities, uri_idx=entity_idx, users=list(user_idx.values()),
                          idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()},
                          recommendable_entities=list(movie_indices), triples=_load_triples(triples_path),
-                         default_cutoff=experiment.ranking_options.default_cutoff), fp)
+                         default_cutoff=experiment.ranking_options.default_cutoff,
+                         sentiment_utility=experiment.ranking_options.sentiment_utility), fp)
