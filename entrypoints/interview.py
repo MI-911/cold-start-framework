@@ -14,6 +14,7 @@ from tqdm import tqdm
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k
 from models.base_interviewer import InterviewerBase
+from models.dumb.dumb_interviewer import DumbInterviewer
 from models.melu.melu_interviewer import MeLUInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
@@ -22,6 +23,7 @@ from models.naive.mf.mf_interviewer import MatrixFactorisationInterviewer
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
+from recommenders.random.random_recommender import RandomRecommender
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
@@ -29,6 +31,10 @@ from shared.utility import join_paths
 from shared.validators import valid_dir
 
 models = {
+    'random': {
+      'class': DumbInterviewer,
+      'recommender': RandomRecommender
+    },
     'fmf': {
         'class': FMFInterviewer,
         'requires_interview_length': True
@@ -177,7 +183,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
                 # Query the interviewer for the next entity to ask about
                 # Then produce a ranked list given the current interview state
                 answers = _conduct_interview(model_instance, answer_set, num_questions)
-                ranked_list = _produce_ranking(model_instance, answer_set.ranking, answers)[upper_cutoff]
+                ranked_list = _produce_ranking(model_instance, answer_set.ranking, answers)
 
                 # From the ranked list, get ordered binary relevance and utility
                 relevance = answer_set.ranking.get_relevance(ranked_list)

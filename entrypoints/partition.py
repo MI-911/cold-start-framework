@@ -18,14 +18,15 @@ separation = ExperimentOptions(name='separation', split_seeds=[42], count_filter
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.NEGATIVE),
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.UNKNOWN),
         CountFilter(lambda count: count >= 1, entity_type=EntityType.DESCRIPTIVE, sentiment=Sentiment.ANY)
-    ], ranking_options=RankingOptions(num_positive=1, num_unknown=1, num_negative=1, default_cutoff=3))
+    ], ranking_options=RankingOptions(num_positive=1, num_unknown=1, num_negative=1, default_cutoff=3,
+                                      sentiment_utility={Sentiment.POSITIVE: 1, Sentiment.UNKNOWN: 0.5}))
 
 default = ExperimentOptions(name='default', split_seeds=[42], count_filters=[
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE),
         CountFilter(lambda count: count >= 1, entity_type=EntityType.DESCRIPTIVE, sentiment=Sentiment.ANY)
     ], ranking_options=RankingOptions(num_positive=1, num_unseen=100), include_unknown=False)
 
-experiments = [default]
+experiments = [separation]
 
 if __name__ == '__main__':
     logger.info(f'Working directory: {os.getcwd()}')

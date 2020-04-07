@@ -1,5 +1,5 @@
 import os
-from typing import List, Callable
+from typing import List, Callable, Dict
 
 from experiments.data_loader import DataLoader
 from experiments.enums import Sentiment, EntityType
@@ -15,13 +15,13 @@ def sentiment_to_int(sentiment):
 
 class RankingOptions:
     def __init__(self, num_positive: int, num_negative: int = 0, num_unknown: int = 0, num_unseen: int = 0,
-                 default_cutoff: int = 10):
+                 sentiment_utility: Dict[Sentiment, float] = None, default_cutoff: int = 10):
         # Note discrepancy between 'unknown' and 'unseen', as 'unknown' is an explicit rating
         self.sentiment_count = {Sentiment.POSITIVE: num_positive, Sentiment.NEGATIVE: num_negative,
                                 Sentiment.UNKNOWN: num_unknown, Sentiment.UNSEEN: num_unseen}
 
         # Utility values for ranking, higher is better
-        self.sentiment_utility = {Sentiment.POSITIVE: 1}
+        self.sentiment_utility = sentiment_utility if sentiment_utility else {Sentiment.POSITIVE: 1}
 
         # Default cutoffs are used in the recommenders' internal optimization
         self.default_cutoff = default_cutoff

@@ -1,4 +1,4 @@
-from random import random
+from random import randint
 from typing import List, Dict
 
 from recommenders.base_recommender import RecommenderBase
@@ -14,4 +14,4 @@ class RandomRecommender(RecommenderBase):
         pass
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
-        return {item: random.randint(0, 1000) for item in items}
+        return {item: randint(0, 1000) for item in items}
