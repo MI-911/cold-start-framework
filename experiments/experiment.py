@@ -23,21 +23,28 @@ class Sentiment(Enum):
     NEGATIVE = 1
     UNKNOWN = 2
     POSITIVE = 3
-    ANY = 4
+    UNSEEN = 4
+    ANY = 5
 
 
 class RankingOptions:
     def __init__(self, num_positive: int, num_negative: int = 0, num_unknown: int = 0, num_unseen: int = 0,
                  default_cutoff: int = 10):
         # Note discrepancy between 'unknown' and 'unseen', as 'unknown' is an explicit rating
-        self.num_positive = num_positive
-        self.num_negative = num_negative
-        self.num_unknown = num_unknown
-        self.num_unseen = num_unseen
+        self.sentiment_count = {Sentiment.POSITIVE: num_positive, Sentiment.NEGATIVE: num_negative,
+                                Sentiment.UNKNOWN: num_unknown, Sentiment.UNSEEN: num_unseen}
+
+        # Utility values for ranking, higher is better
+        self.utility_values = {Sentiment.POSITIVE: 1}
+
+        # Default cutoffs are used in the recommenders' internal optimization
         self.default_cutoff = default_cutoff
 
+        # Assert that the default cutoff does not exceed the total amount of samples
+        assert self.default_cutoff <= self.get_num_total()
+
     def get_num_total(self):
-        return self.num_positive + self.num_negative + self.num_unknown + self.num_unseen
+        return sum(self.sentiment_count.values())
 
 
 class CountFilter:

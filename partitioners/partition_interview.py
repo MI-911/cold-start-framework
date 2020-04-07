@@ -16,14 +16,17 @@ from shared.ranking import Ranking
 from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 
-def _sample_sentiment(ratings, sentiment: Sentiment, n_items=1):
+def _sample_sentiment(ratings: DataFrame, user_id: int, sentiment: Sentiment, n_items=1):
+    if sentiment == Sentiment.UNSEEN:
+        return _sample_unseen_items(ratings, user_id, n_items)
+
     items = list(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
     random.shuffle(items)
 
     return items[:n_items]
 
 
-def _sample_unseen_items(ratings, user_id, n_items=100):
+def _sample_unseen_items(ratings: DataFrame, user_id: int, n_items=100):
     item_ratings = ratings[ratings.isItem]
 
     seen_items = set(item_ratings[item_ratings.userId == user_id].entityIdx.unique())
@@ -145,19 +148,17 @@ def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, 
 def _get_ranking(ratings: DataFrame, user_id: int, ranking_options: RankingOptions) -> (DataFrame, Ranking):
     u_ratings = ratings[ratings.userId == user_id]
 
-    unseen = _sample_unseen_items(ratings, user_id, n_items=ranking_options.num_unseen)
-    positive = _sample_sentiment(u_ratings, Sentiment.POSITIVE, n_items=ranking_options.num_positive)
-    negative = _sample_sentiment(u_ratings, Sentiment.NEGATIVE, n_items=ranking_options.num_negative)
-    unknown = _sample_sentiment(u_ratings, Sentiment.UNKNOWN, n_items=ranking_options.num_unknown)
+    # TODO: Lookup dictionary with (sentiment, count) KVPs
+    ranking = Ranking()
 
-    # Create ranking instance, containing all items to rank and a separate reference to the positives
-    ranking = Ranking(unseen + positive + negative + unknown, positive)
+    for sentiment, n_samples in ranking_options.sentiment_count.items():
+        ranking.sentiment_samples[sentiment] = _sample_sentiment(u_ratings, user_id, sentiment, n_samples)
 
-    # Assert that we were able to sample all requested items
-    assert len(ranking.to_rank) == ranking_options.get_num_total()
+    # Assert that we have sampled all required items
+    assert len(ranking.to_list()) == ranking_options.get_num_total()
 
     # Return user's ratings without items to rank
-    return u_ratings[~u_ratings.entityIdx.isin(ranking.to_rank)], ranking
+    return u_ratings[~u_ratings.entityIdx.isin(ranking.to_list())], ranking
 
 
 def _get_entities(entities_path):
