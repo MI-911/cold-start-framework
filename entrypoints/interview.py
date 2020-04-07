@@ -184,13 +184,14 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
                 utility = answer_set.ranking.get_utility(ranked_list, meta.sentiment_utility)
 
                 for k in range(1, upper_cutoff + 1):
+                    ranked_cutoff = ranked_list[:k]
                     relevance_cutoff = relevance[:k]
 
                     hits[k].append(1 in relevance_cutoff)
                     ndcgs[k].append(ndcg_at_k(utility, k))
                     taus[k].append(tau_at_k(utility, k))
-                    sers[k].append(ser_at_k(zip(ranked_list[:k], relevance_cutoff), popular_items, k, normalize=False))
-                    covs[k] = covs[k].union(set(ranked_list[:k]))
+                    sers[k].append(ser_at_k(zip(ranked_cutoff, relevance_cutoff), popular_items, k, normalize=False))
+                    covs[k] = covs[k].union(set(ranked_cutoff))
 
         hr = dict()
         ndcg = dict()
