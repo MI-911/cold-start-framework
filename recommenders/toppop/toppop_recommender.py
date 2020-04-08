@@ -14,7 +14,11 @@ class TopPopRecommender(RecommenderBase):
     def fit(self, training: Dict[int, WarmStartUser]):
         for idx, user in training.items():
             for entity, rating in user.training.items():
-                self.entity_ratings[entity] = self.entity_ratings.get(entity, rating)
+                # Skip don't knows
+                if rating == 0:
+                    continue
+
+                self.entity_ratings[entity] = self.entity_ratings.get(entity, 0) + 1
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         return {item: self.entity_ratings.get(item, 0) for item in items}

@@ -223,4 +223,5 @@ def partition_seed(experiment: ExperimentOptions, seed: int, entities, output_di
                          idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()},
                          recommendable_entities=list(movie_indices), triples=_load_triples(triples_path),
                          default_cutoff=experiment.ranking_options.default_cutoff,
-                         sentiment_utility=experiment.ranking_options.sentiment_utility), fp)
+                         sentiment_utility=experiment.ranking_options.sentiment_utility,
+                         validator=experiment.validator), fp)

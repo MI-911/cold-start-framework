@@ -1,7 +1,8 @@
+from random import shuffle
 from typing import List, Dict
 import itertools
 
-from experiments.enums import Sentiment
+from shared.enums import Sentiment
 
 
 class Ranking:
@@ -9,7 +10,12 @@ class Ranking:
         self.sentiment_samples = dict()
 
     def to_list(self) -> List[int]:
-        return list(itertools.chain.from_iterable(self.sentiment_samples.values()))
+        as_list = list(itertools.chain.from_iterable(self.sentiment_samples.values()))
+
+        # Shuffle to avoid any bias arising from
+        shuffle(as_list)
+
+        return as_list
 
     def _get_utility(self, entity_idx, sentiment_utility: Dict[Sentiment, float]) -> float:
         for sentiment, utility in sentiment_utility.items():

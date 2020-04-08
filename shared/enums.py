@@ -13,3 +13,11 @@ class Sentiment(Enum):
     POSITIVE = 3
     UNSEEN = 4
     ANY = 5
+
+
+class Metric(Enum):
+    HR = 1
+    NDCG = 2
+    SER = 3
+    COV = 4
+    TAU = 5

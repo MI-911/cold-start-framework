@@ -2,7 +2,8 @@ import os
 from typing import List, Callable, Dict
 
 from experiments.data_loader import DataLoader
-from experiments.enums import Sentiment, EntityType
+from shared.enums import Sentiment, EntityType, Metric
+from shared.validator import Validator
 
 
 def sentiment_to_int(sentiment):
@@ -45,10 +46,10 @@ class CountFilter:
 
 
 class ExperimentOptions:
-    # TODO: Consider adding pre/post-operations on the ratings DF and warm/cold-start users
     def __init__(self, name: str, split_seeds: List[int], ranking_options: RankingOptions,
                  count_filters: List[CountFilter] = None, warm_start_ratio: float = 0.75,
-                 include_unknown: bool = False, evaluation_samples: int = 10):
+                 include_unknown: bool = False, evaluation_samples: int = 10,
+                 validator: Validator = None):
         self.name = name
         self.split_seeds = split_seeds
         self.count_filters = count_filters
@@ -56,6 +57,7 @@ class ExperimentOptions:
         self.include_unknown = include_unknown
         self.ranking_options = ranking_options
         self.evaluation_samples = evaluation_samples
+        self.validator = validator if validator else Validator(metric=Metric.NDCG, cutoff=10)
 
 
 class Dataset:
