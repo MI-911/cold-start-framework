@@ -26,7 +26,7 @@ def choose_candidates(ratings: Dict[int, WarmStartUser], n=100):
     return [e for e, r in sorted_entity_ratings][:n]
 
 
-class DqnRecommender(InterviewerBase):
+class DqnInterviewer(InterviewerBase):
     """
     A recommendation interviewer that uses reinforcement learning to learn
     how to interview users. Utilises an underlying recommendation model
@@ -39,7 +39,7 @@ class DqnRecommender(InterviewerBase):
     """
 
     def __init__(self, meta: Meta, recommender, use_cuda: bool):
-        super(DqnRecommender, self).__init__(meta)
+        super(DqnInterviewer, self).__init__(meta)
 
         self.use_cuda = use_cuda
 
