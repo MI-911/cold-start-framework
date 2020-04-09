@@ -31,40 +31,41 @@ from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths, valid_dir
 
 models = {
-    'random': {
-      'class': DumbInterviewer,
-      'recommender': RandomRecommender
-    },
-    'toppop': {
-      'class': DumbInterviewer,
-      'recommender': TopPopRecommender
-    },
-    'lrmf': {
-        'class': LRMFInterviewer,
-        'requires_interview_length': True,
-        'use_cuda': False
-    },
-    'naive-ppr-collab': {
+    # 'random': {
+    #   'class': DumbInterviewer,
+    #   'recommender': RandomRecommender
+    # },
+    # 'toppop': {
+    #   'class': DumbInterviewer,
+    #   'recommender': TopPopRecommender
+    # },
+    # 'lrmf': {
+    #     'class': LRMFInterviewer,
+    #     'requires_interview_length': True,
+    #     'use_cuda': False
+    # },
+    # 'naive-ppr-collab': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': CollaborativePageRankRecommender
+    # },
+    # 'naive-ppr-kg': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': KnowledgeGraphPageRankRecommender
+    # },
+    # 'naive-ppr-joint': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': JointPageRankRecommender
+    # },
+    'naive-mf': {
         'class': NaiveInterviewer,
-        'recommender': CollaborativePageRankRecommender
+        'recommender': MatrixFactorizationRecommender
     },
-    'naive-ppr-kg': {
-        'class': NaiveInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender
-    },
-    'naive-ppr-joint': {
-        'class': NaiveInterviewer,
-        'recommender': JointPageRankRecommender
-    },
-    'fmf': {
-        'class': FMFInterviewer
-    },
-    'mf': {
-        'class': MatrixFactorizationRecommender
-    },
-    'melu': {
-        'class': MeLUInterviewer,
-    }
+    # 'fmf': {
+    #     'class': FMFInterviewer
+    # },
+    # 'melu': {
+    #     'class': MeLUInterviewer,
+    # }
 }
 
 parser = argparse.ArgumentParser()

@@ -40,6 +40,6 @@ class MatrixFactorisation:
         # Constructs a user embedding from the average
         # embedding of @items and returns similarities
         # to @movies.
-        u = np.mean(self.M[items], axis=0)
+        u = np.mean(self.M if not items else self.M[items], axis=0)
         predictions = (u * self.M[movies]).sum(axis=1)
         return {m: s for m, s in zip(movies, predictions)}

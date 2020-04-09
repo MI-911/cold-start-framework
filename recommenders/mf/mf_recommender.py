@@ -12,15 +12,23 @@ from shared.user import WarmStartUser
 from shared.utility import get_combinations
 
 
-def flatten_dataset(training: Dict[int, WarmStartUser]):
-    t, v = [], []
-    for u, data in training.items():
-        for e, r in data.training.items():
-            t.append((u, e, r))
+def flatten_rating_triples(training: Dict[int, WarmStartUser]):
+    training_triples = []
+    for u_idx, user in training.items():
+        for (entity, rating) in user.training.items():
+            training_triples.append((u_idx, entity, rating))
 
-        v.append((u, (data.validation['positive'], data.validation['negative'])))
+    return training_triples
 
-    return t, v
+
+def convert_rating(rating):
+    if rating == 1:
+        return 1
+    elif rating == -1:
+        return 0
+    elif rating == 0:
+        # We can make a choice here - either return 0 or 0.5
+        return 0.5
 
 
 class MatrixFactorizationRecommender(RecommenderBase):
@@ -28,74 +36,56 @@ class MatrixFactorizationRecommender(RecommenderBase):
         super(MatrixFactorizationRecommender, self).__init__(meta)
         self.meta = meta
         self.optimal_params = None
-
-    def convert_rating(self, rating):
-        if rating == 1:
-            return 1
-        elif rating == -1:
-            return 0
-        elif rating == 0:
-            # We can make a choice here - either return 0 or 0.5
-            return 0.5
-
-    def batches(self, triples, n=64):
-        for i in range(0, len(triples), n):
-            yield triples[i:i + n]
+        self.model = None
 
     def fit(self, training: Dict[int, WarmStartUser]) -> None:
-        hit_rates = []
-        training, validation = flatten_dataset(training)
+        n_users = len(self.meta.users)
+        n_entities = len(self.meta.entities)
 
         if self.optimal_params is None:
-            parameters = {
-                'k': [5]
-            }
+            scores = []
+            parameters = {'k': [1, 2, 5, 10]}
+
+            # Find optimal parameters
             for params in get_combinations(parameters):
-                logger.debug(f'Fitting MF with params: {params}')
-                self.model = MatrixFactorisation(len(self.meta.users),
-                                                 len(self.meta.entities),
-                                                 params['k'])
+                logger.info(f'Grid searching MF with params: {params}')
+                self.model = MatrixFactorisation(n_users, n_entities, params['k'])
+                self._train(training, max_iterations=100)
+                score = self._validate(training)
+                scores.append((params, score))
 
-                hit_rates.append((self._fit(training, validation, max_iterations=100), params))
+            # Use optimal parameters to train a new model
+            optimal_params, _ = list(sorted(scores, key=lambda x: x[1], reverse=True))[0]
+            self.optimal_params = optimal_params
 
-            hit_rates = sorted(hit_rates, key=lambda x: x[0], reverse=True)
-            _, best_params = hit_rates[0]
+            logger.info(f'Found best params for MF: {self.optimal_params}')
+            self.model = MatrixFactorisation(n_users, n_entities, self.optimal_params['k'])
+            self._train(training, max_iterations=100)
 
-            self.optimal_params = best_params
-
-            self.model = MatrixFactorisation(len(self.meta.users),
-                                             len(self.meta.entities),
-                                             self.optimal_params['k'])
-            logger.info(f'Found best parameters for MF: {self.optimal_params}')
-            self._fit(training, validation)
         else:
-            self.model = MatrixFactorisation(len(self.meta.users),
-                                             len(self.meta.entities),
-                                             self.optimal_params['k'])
-            self._fit(training, validation)
+            # Reuse optimal parameters
+            logger.info(f'Reusing best params for MF: {self.optimal_params}')
+            self.model = MatrixFactorisation(n_users, n_entities, self.optimal_params['k'])
+            self._train(training, max_iterations=100)
 
-    def _fit(self, training, validation, max_iterations=100, verbose=True, save_to='./'):
-        validation_history = []
+    def _train(self, users: Dict[int, WarmStartUser], max_iterations=100):
+        # Train the model on training samples
+        training_triples = flatten_rating_triples(users)
+        for iteration in range(max_iterations):
+            random.shuffle(training_triples)
+            self.model.train_als(training_triples)
 
-        for epoch in range(max_iterations):
-            random.shuffle(training)
-            self.model.train_als(training)
+            score = self._validate(users)
+            logger.info(f'Iteration {iteration}: {score} ')
 
-            if epoch % 10 == 0:
-                ranks = []
-                for user, (pos, negs) in validation:
-                    predictions = self.model.predict(user, negs + [pos])
-                    predictions = sorted(predictions.items(), key=lambda x: x[1], reverse=True)
-                    predictions = {i: rank for rank, (i, s) in enumerate(predictions)}
-                    ranks.append(predictions[pos])
+    def _validate(self, users: Dict[int, WarmStartUser]):
+        # Validate on users using the meta.validator
+        predictions = []
+        for u_idx, user in users.items():
+            prediction = self.model.predict(u_idx, user.validation.to_list())
+            predictions.append((user.validation, prediction))
 
-                _hit = np.mean([1 if r < 10 else 0 for r in ranks])
-                validation_history.append(_hit)
-
-                if verbose:
-                    logger.info(f'Hit@10 at epoch {epoch}: {np.mean([1 if r < 10 else 0 for r in ranks])}')
-
-        return np.mean(validation_history[-10:])
+        return self.meta.validator.score(predictions, self.meta)
 
     def predict(self, items, answers):
         # Predict a user as the avg embedding of the items they liked
