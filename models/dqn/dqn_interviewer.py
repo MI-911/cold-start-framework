@@ -11,6 +11,7 @@ from models.dqn.dqn_environment import Environment, Rewards
 from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
 from shared.user import WarmStartUser
+from shared.utility import get_combinations
 
 
 def choose_candidates(ratings: Dict[int, WarmStartUser], n=100):
@@ -42,6 +43,7 @@ class DqnInterviewer(InterviewerBase):
         super(DqnInterviewer, self).__init__(meta)
 
         self.use_cuda = use_cuda
+        self.params = {}
 
         # Allocate environment
         if not recommender:
@@ -56,32 +58,30 @@ class DqnInterviewer(InterviewerBase):
         self.n_users = len(self.meta.users)
         self.n_entities = len(self.meta.entities)
 
-    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
-        # Construct environment
-        self.environment = Environment(
-            recommender=self.recommender, reward_metric=Rewards.NDCG, meta=self.meta)
-
-        # Construct model
-        self.agent = DqnAgent(
-            candidates=choose_candidates(training),
-            n_entities=self.n_entities,
-            batch_size=64,
-            alpha=0.0003,
-            gamma=1.0,
-            epsilon=1.0,
-            eps_end=0.1,
-            eps_dec=0.996,
-
-        )
-
-        # Train the recommender model
+    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5):
+        logger.info(f'DQN warming up environment...')
+        self.environment = Environment(recommender=self.recommender, reward_metric=Rewards.NDCG, meta=self.meta)
         self.environment.warmup(training)
 
-        # Train the DQN
-        self.fit_dqn(training, interview_length)
+        if not self.params:
+            param_scores = []
+            for params in get_combinations({'fc1_dims': [128, 256, 512]}):
+                self.agent = DqnAgent(candidates=choose_candidates(training), n_entities=self.n_entities,
+                                      batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
+                                      eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'])
 
-    def fit_dqn(self, training: Dict[int, WarmStartUser], interview_length: int) -> None:
-        n_iterations = 10
+                score = self.fit_dqn(training, interview_length)
+                param_scores.append((params, score))
+
+            best_params, _ = list(sorted(param_scores, key=lambda x: x[1], reverse=True))[0]
+            logger.info(f'Found best params for DQN: {best_params}')
+            self.agent = DqnAgent(candidates=choose_candidates(training), n_entities=self.n_entities,
+                                  batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
+                                  eps_end=0.1, eps_dec=0.996, fc1_dims=best_params['fc1_dims'])
+            self.fit_dqn(training, interview_length)
+
+    def fit_dqn(self, training: Dict[int, WarmStartUser], interview_length: int) -> float:
+        n_iterations = 1
 
         epsilons = []
         scores = []
@@ -89,7 +89,7 @@ class DqnInterviewer(InterviewerBase):
 
         def recent_mean(lst):
             if l := len(lst) == 0:
-                return 'NaN'
+                return 0
             recent = lst[l - 10:] if l >= 10 else lst
             return np.mean(recent)
 
@@ -128,6 +128,8 @@ class DqnInterviewer(InterviewerBase):
                 if _loss is not None:
                     losses.append(_loss.detach().numpy())
 
+        return recent_mean(scores)
+
     def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
         state = np.zeros((self.n_entities * 2,), dtype=np.float32)
         for entity, rating in answers.items():
@@ -142,7 +144,7 @@ class DqnInterviewer(InterviewerBase):
         return self.environment.recommender.predict(items, answers)
 
     def get_parameters(self):
-        return {}
+        return self.params
 
     def load_parameters(self, params):
-        pass
+        self.params = params

@@ -1,6 +1,8 @@
 import pickle
 from typing import Dict, List, Union
 
+from tqdm import tqdm
+
 from models.base_interviewer import InterviewerBase
 from models.fmf.fmf import LIKE, DISLIKE, UNKNOWN, FMF, Tree
 import numpy as np
@@ -104,11 +106,10 @@ class FMFInterviewer(InterviewerBase):
         R = get_rating_matrix(users, self.n_users, self.n_entities)
         candidates = choose_candidates(R, n=100)
 
-        for iteration in range(n_iterations):
+        for iteration in tqdm(range(n_iterations), desc=f'[Training FMF]'):
             self.model.fit(R, candidates)
             score = self._validate(users)
 
-            logger.info(f'Iteration {iteration}: {score}')
             if score > self.best_score:
                 self.best_score = score
                 self.best_model = pickle.loads(pickle.dumps(self.model))
