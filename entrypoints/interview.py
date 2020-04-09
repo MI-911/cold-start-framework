@@ -12,7 +12,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
-from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k
+from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
 from models.base_interviewer import InterviewerBase
 from models.dumb.dumb_interviewer import DumbInterviewer
 from models.melu.melu_interviewer import MeLUInterviewer
@@ -28,8 +28,7 @@ from recommenders.toppop.toppop_recommender import TopPopRecommender
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
-from shared.utility import join_paths
-from shared.validators import valid_dir
+from shared.utility import join_paths, valid_dir
 
 models = {
     'random': {
@@ -49,15 +48,15 @@ models = {
         'requires_interview_length': True,
         'use_cuda': False
     },
-    'naive-pr-collab': {
+    'naive-ppr-collab': {
         'class': NaiveInterviewer,
         'recommender': CollaborativePageRankRecommender
     },
-    'naive-pr-kg': {
+    'naive-ppr-kg': {
         'class': NaiveInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
     },
-    'naive-pr-joint': {
+    'naive-ppr-joint': {
         'class': NaiveInterviewer,
         'recommender': JointPageRankRecommender
     },
@@ -198,7 +197,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
                     ranked_cutoff = ranked_list[:k]
                     relevance_cutoff = relevance[:k]
 
-                    hits[k].append(1 in relevance_cutoff)
+                    hits[k].append(hr_at_k(relevance, k))
                     ndcgs[k].append(ndcg_at_k(utility, k))
                     taus[k].append(tau_at_k(utility, k))
                     sers[k].append(ser_at_k(zip(ranked_cutoff, relevance_cutoff), popular_items, k, normalize=False))
