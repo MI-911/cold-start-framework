@@ -1,3 +1,4 @@
+import argparse
 import itertools as it
 import os
 
@@ -17,3 +18,10 @@ def join_paths(*paths):
             result = os.path.join(result, path)
 
     return result
+
+
+def valid_dir(path):
+    if not os.path.isdir(path):
+        raise argparse.ArgumentTypeError('The specified path is not a directory')
+    else:
+        return path

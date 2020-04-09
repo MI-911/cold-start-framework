@@ -98,7 +98,7 @@ class MatrixFactorizationRecommender(RecommenderBase):
         return np.mean(validation_history[-10:])
 
     def predict(self, items, answers):
-        # User is the average user embedding
+        # Predict a user as the avg embedding of the items they liked
         u_embedding_items = [e for e, r in answers.items() if r == 1]
         return self.model.predict_avg_items(u_embedding_items, items)
 
