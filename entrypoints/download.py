@@ -4,7 +4,7 @@ import os
 
 from loguru import logger
 
-from shared.validators import valid_dir
+from shared.utility import valid_dir
 from urllib.request import urlretrieve
 
 BASE_URL = 'https://mindreader.tech/api'

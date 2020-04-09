@@ -1,4 +1,6 @@
 import numpy as np
+from loguru import logger
+from scipy import stats
 
 
 def average_precision(ranked_relevancy_list):
@@ -28,7 +30,13 @@ def dcg(rank, n=10):
     return r[0] + np.sum(r[1:] / np.log2(np.arange(2, r.size + 1)))
 
 
-def ndcg_at_k(r, k, method=0):
+def tau_at_k(utility, k):
+    tau, p = stats.kendalltau(utility[:k], sorted(utility, reverse=True)[:k])
+
+    return tau
+
+
+def ndcg_at_k(r, k, method=1):
     dcg_max = dcg_at_k(sorted(r, reverse=True), k, method)
     if not dcg_max:
         return 0.
@@ -64,3 +72,11 @@ def ser_at_k(ranked_labeled_items, top_pop_items, k, normalize=False):
 
 def coverage(recommended_entities, recommendable_entities):
     return len(recommended_entities) / len(recommendable_entities)
+
+
+def hr_at_k(relevance, cutoff):
+    return 1 in relevance[:cutoff]
+
+
+if __name__ == '__main__':
+    logger.info(ndcg_at_k([0, 0.5, 1.0], 3))
