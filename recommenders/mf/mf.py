@@ -36,8 +36,10 @@ class MatrixFactorisation:
         predictions = (self.U[user] * self.M[movies]).sum(axis=1)
         return {m: s for m, s in zip(movies, predictions)}
 
-    def predict_avg(self, movies):
-        # Construct average user
-        u = np.mean(self.U, axis=0)
-        predictions = u * self.M[movies].sum(axis=1)
+    def predict_avg_items(self, items, movies):
+        # Constructs a user embedding from the average
+        # embedding of @items and returns similarities
+        # to @movies.
+        u = np.mean(self.M if not items else self.M[items], axis=0)
+        predictions = (u * self.M[movies]).sum(axis=1)
         return {m: s for m, s in zip(movies, predictions)}

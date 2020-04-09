@@ -14,13 +14,14 @@ from tqdm import tqdm
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
 from models.base_interviewer import InterviewerBase
+from models.dqn.dqn_interviewer import DqnInterviewer
 from models.dumb.dumb_interviewer import DumbInterviewer
 from models.melu.melu_interviewer import MeLUInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
 from models.naive.naive_interviewer import NaiveInterviewer
-from models.naive.mf.mf_interviewer import MatrixFactorisationInterviewer
 from recommenders.knn.knn_recommender import KNNRecommender
+from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
@@ -33,16 +34,12 @@ from shared.utility import join_paths, valid_dir
 
 models = {
     'random': {
-      'class': DumbInterviewer,
-      'recommender': RandomRecommender
+        'class': DumbInterviewer,
+        'recommender': RandomRecommender
     },
-    'toppop': {
-      'class': DumbInterviewer,
-      'recommender': TopPopRecommender
-    },
-    'fmf': {
-        'class': FMFInterviewer,
-        'requires_interview_length': True
+    'top-pop': {
+        'class': DumbInterviewer,
+        'recommender': TopPopRecommender
     },
     'lrmf': {
         'class': LRMFInterviewer,
@@ -65,11 +62,16 @@ models = {
       'class': NaiveInterviewer,
       'recommender': KNNRecommender
     },
+    'naive-mf': {
+        'class': NaiveInterviewer,
+        'recommender': MatrixFactorizationRecommender
+    },
+    'dqn-mf': {
+        'class': DqnInterviewer,
+        'recommender': MatrixFactorizationRecommender
+    },
     'fmf': {
         'class': FMFInterviewer
-    },
-    'mf': {
-        'class': MatrixFactorisationInterviewer
     },
     'melu': {
         'class': MeLUInterviewer,
@@ -80,6 +82,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
 parser.add_argument('--include', nargs='*', type=str, choices=models.keys(), help='models to include')
 parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), help='models to exclude')
+parser.add_argument('--experiments', nargs='*', type=str, help='experiments to run')
 parser.add_argument('--debug', action='store_true', help='enable debug mode')
 
 
@@ -129,11 +132,14 @@ def _conduct_interview(model: InterviewerBase, answer_set: ColdStartUserSet, n_q
     answer_state = dict()
 
     for q in range(n_questions):
-        next_questions = model.interview(answer_state)[:n_questions - len(answer_state)]
+        try:
+            next_questions = model.interview(answer_state)[:n_questions - len(answer_state)]
 
-        for question in next_questions:
-            # Specify answer as unknown if the user has no answer to it
-            answer_state[question] = answer_set.answers.get(question, 0)
+            for question in next_questions:
+                # Specify answer as unknown if the user has no answer to it
+                answer_state[question] = answer_set.answers.get(question, 0)
+        except Exception as e:
+            logger.error(f'Exception during interview: {e}')
 
         if len(answer_state) >= n_questions:
             break
@@ -144,9 +150,14 @@ def _conduct_interview(model: InterviewerBase, answer_set: ColdStartUserSet, n_q
 
 
 def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
-    item_scores = sorted(model.predict(ranking.to_list(), answers).items(), key=operator.itemgetter(1), reverse=True)
+    try:
+        item_scores = sorted(model.predict(ranking.to_list(), answers).items(), key=operator.itemgetter(1), reverse=True)
 
-    return [item[0] for item in item_scores]
+        return [item[0] for item in item_scores]
+    except Exception as e:
+        logger.error(f'Exception during ranking: {e}')
+
+        return list()
 
 
 def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser]):
@@ -268,14 +279,19 @@ def _parse_args():
     if not args.input:
         args.input = ['../data']
 
-    return model_selection, args.input[0]
+    return model_selection, args.input[0], set(args.experiments) if args.experiments else set()
 
 
 def run():
-    model_selection, input_path = _parse_args()
+    model_selection, input_path, experiments = _parse_args()
 
     dataset = Dataset(input_path)
     for experiment in dataset.experiments():
+        if experiments and experiment.name not in experiments:
+            logger.info(f'Skipping experiment {experiment}')
+
+            continue
+
         for split in experiment.splits():
             _run_split(model_selection, split)
 

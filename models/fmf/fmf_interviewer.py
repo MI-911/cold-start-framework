@@ -1,12 +1,15 @@
 import pickle
 from typing import Dict, List, Union
 
+from tqdm import tqdm
+
 from models.base_interviewer import InterviewerBase
 from models.fmf.fmf import LIKE, DISLIKE, UNKNOWN, FMF, Tree
 import numpy as np
 from loguru import logger
 
 from shared.meta import Meta
+from shared.user import WarmStartUser
 from shared.utility import get_combinations
 
 
@@ -56,23 +59,6 @@ def choose_candidates(rating_matrix, n=100):
     return [entity for entity, rs in n_ratings][:n]
 
 
-def validate_hit(cutoff, model, training):
-    hits = []
-
-    for user, data in training.items():
-        pos = data.validation['positive']
-        neg = data.validation['negative']
-        to_val = neg + [pos]
-        np.random.shuffle(to_val)
-
-        scores = model.validate(user, to_val)
-        sorted_scores = sorted([(item, score) for item, score in scores.items()], key=lambda x: x[1], reverse=True)
-        top_items = [item for item, score in sorted_scores][:cutoff]
-        hits.append(1 if pos in top_items else 0)
-
-    return np.mean(hits)
-
-
 class FMFInterviewer(InterviewerBase):
     def __init__(self, meta, use_cuda=False):
         super(FMFInterviewer, self).__init__(meta, use_cuda)
@@ -86,61 +72,58 @@ class FMFInterviewer(InterviewerBase):
 
         self.params = None
         self.best_model = None
-        self.best_hit = 0
+        self.best_score = 0
 
-    def warmup(self, training: Dict, interview_length=5) -> None:
+    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5):
         self.best_model = None
-        self.best_hit = 0
+        self.best_score = 0
 
         if not self.params:
+            param_scores = []
             for params in get_combinations({
                 'k': [1, 2, 5, 10, 20],
                 'reg': [0.01, 0.001, 0.0001]
             }):
                 logger.info(f'Fitting FMF with params {params}')
+                self.model = FMF(n_users=self.n_users, n_entities=self.n_entities, max_depth=interview_length,
+                                 n_latent_factors=params['k'], regularization=params['reg'])
 
-                self.model = FMF(
-                    n_users=self.n_users,
-                    n_entities=self.n_entities,
-                    max_depth=interview_length,
-                    n_latent_factors=params['k'],
-                    regularization=params['reg']
-                )
+                best_score = self._fit(training, n_iterations=10)
+                param_scores.append((params, best_score))
 
-                self._fit(training)
-                # visualise_tree(self.model.T, self.meta)
-
-            self.model = self.best_model
-            self.params = {'kk': self.model.kk}
-
+            best_params, _ = list(sorted(param_scores, key=lambda x: x[1], reverse=True))[0]
+            logger.info(f'Found best params for FMF: {best_params}')
+            self.model = FMF(n_users=self.n_users, n_entities=self.n_entities, max_depth=interview_length,
+                             n_latent_factors=best_params['k'], regularization=best_params['reg'])
+            self._fit(training)
         else:
-            self.model = FMF(
-                n_users=self.n_users,
-                n_entities=self.n_entities,
-                max_depth=interview_length,
-                n_latent_factors=self.params['k'],
-                regularization=self.params['reg']
-            )
-
+            self.model = FMF(n_users=self.n_users, n_entities=self.n_entities, max_depth=interview_length,
+                             n_latent_factors=self.params['k'], regularization=self.params['reg'])
             self._fit(training)
 
-    def _fit(self, training):
-        R = get_rating_matrix(training, self.n_users, self.n_entities)
+    def _fit(self, users: Dict[int, WarmStartUser], n_iterations=5) -> float:
+        self.best_score = 0
+        R = get_rating_matrix(users, self.n_users, self.n_entities)
         candidates = choose_candidates(R, n=100)
 
-        n_iterations = 5
-        for i in range(n_iterations):
+        for iteration in tqdm(range(n_iterations), desc=f'[Training FMF]'):
             self.model.fit(R, candidates)
-            hit = validate_hit(self.meta.default_cutoff, self.model, training)
+            score = self._validate(users)
 
-            logger.debug(f'Training iteration {i}: {hit} Hit@10')
-
-            if hit > self.best_hit:
-                logger.debug(f'FMF found new best model at {hit} Hit@10')
-                self.best_hit = hit
-                self.best_model = pickle.loads(pickle.dumps(self.model))  # Save the model
+            if score > self.best_score:
+                self.best_score = score
+                self.best_model = pickle.loads(pickle.dumps(self.model))
 
         self.model = self.best_model
+        return self.best_score
+
+    def _validate(self, users: Dict[int, WarmStartUser]):
+        predictions = []
+        for u_idx, user in users.items():
+            prediction = self.model.validate(u_idx, user.validation.to_list())
+            predictions.append((user.validation, prediction))
+
+        return self.meta.validator.score(predictions, self.meta)
 
     def interview(self, answers: Dict[int, int], max_n_questions=5) -> List[int]:
         return [self.model.interview(answers)]

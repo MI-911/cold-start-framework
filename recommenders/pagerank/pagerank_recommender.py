@@ -19,6 +19,10 @@ def construct_collaborative_graph(graph: Graph, training: Dict[int, WarmStartUse
         graph.add_node(user_id, entity=False)
 
         for entity_idx, sentiment in user.training.items():
+            # Skip don't knows
+            if sentiment == 0:
+                continue
+
             graph.add_node(entity_idx, entity=True)
             graph.add_edge(user_id, entity_idx, sentiment=sentiment)
 
@@ -89,9 +93,10 @@ class PageRankRecommender(RecommenderBase):
 
         if not self.optimal_params:
             parameters = {
-                'alpha': [0.15, 0.35, 0.55, 0.75],
+                'alpha': [0.25, 0.50, 0.85],
                 'importance': [
-                    {1: 0.9, 0: 0.1, -1: 0.0}
+                    {1: 0.9, 0: 0.1, -1: 0.0},
+                    {1: 0.5, 0: 0.5, -1: 0.0},
                 ]
             }
 
