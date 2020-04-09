@@ -14,6 +14,7 @@ from tqdm import tqdm
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
 from models.base_interviewer import InterviewerBase
+from models.dqn.dqn_interviewer import DqnInterviewer
 from models.dumb.dumb_interviewer import DumbInterviewer
 from models.melu.melu_interviewer import MeLUInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
@@ -56,10 +57,14 @@ models = {
     #     'class': NaiveInterviewer,
     #     'recommender': JointPageRankRecommender
     # },
-    'naive-mf': {
-        'class': NaiveInterviewer,
+    # 'naive-mf': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': MatrixFactorizationRecommender
+    # },
+    'dqn-mf': {
+        'class': DqnInterviewer,
         'recommender': MatrixFactorizationRecommender
-    },
+    }
     # 'fmf': {
     #     'class': FMFInterviewer
     # },
