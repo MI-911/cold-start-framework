@@ -6,17 +6,11 @@ from typing import List, Dict
 
 from loguru import logger
 from scipy.sparse import csr_matrix
-from sklearn.neighbors._dist_metrics import DistanceMetric
 
 from recommenders.base_recommender import RecommenderBase
 from shared.user import WarmStartUser
 import numpy as np
-import pandas as pd
-from sklearn.datasets import load_breast_cancer
-from sklearn.metrics import confusion_matrix
-from sklearn.neighbors import KNeighborsClassifier, NearestNeighbors
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import pairwise
+from sklearn.neighbors import NearestNeighbors
 
 class KNNRecommender(RecommenderBase):
     def __init__(self, meta):
@@ -73,7 +67,7 @@ class KNNRecommender(RecommenderBase):
             self.model.fit(self.data)
             hr = self._multi_fit(training)
             if hr > best_hr:
-                logger.debug(f'Found better parameters: {params}, HR@10: {hr}')
+                logger.debug(f'Found better parameters: {params}, score: {hr}')
                 best_hr = hr
                 best_params = deepcopy(params)
 
@@ -93,22 +87,20 @@ class KNNRecommender(RecommenderBase):
 
             wait(futures)
 
-        return sum([f.result() for f in futures]) / float(len(training))
+        predictions = [t for future in futures for t in future.result()]
+        score = self.meta.validator.score(predictions, self.meta)
+
+        return score
 
     def _fit(self, training: Dict[int, WarmStartUser]):
-        hits = 0.
+        predictions = []
         for user, warm in training.items():
-            pos, neg = warm.validation.values()
-            items = neg + [pos]
-            item_scores = []
-            for item in items:
-                item_scores.append((item, self._predict(self.data[user], item)))
+            preds = {}
+            for item in warm.validation.to_list():
+                preds[item] = self._predict(self.data[user], item)
 
-            item_scores = sorted(item_scores, key=lambda s: s[1], reverse=True)[:10]
-            if pos in [i for i, _ in item_scores]:
-                hits += 1.
-
-        return hits
+            predictions.append((warm.validation, preds))
+        return predictions
 
     def _score_function(self, users, similarities, ratings):
         if self.user_bias:
