@@ -19,7 +19,7 @@ from models.melu.melu_interviewer import MeLUInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
 from models.naive.naive_interviewer import NaiveInterviewer
-from recommenders.mf.mf_interviewer import MatrixFactorizationRecommender
+from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
