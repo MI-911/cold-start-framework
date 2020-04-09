@@ -21,7 +21,7 @@ from shared.user import WarmStartUser
 
 
 class MeLUInterviewer(InterviewerBase, tt.nn.Module):
-    def __init__(self, meta, use_cuda=False):
+    def __init__(self, meta, use_cuda=False, use_sparse=False):
         InterviewerBase.__init__(self, meta, use_cuda=use_cuda)
         tt.nn.Module.__init__(self)
 
@@ -33,6 +33,8 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         self.n_entities, self.n_decade, self.n_movies, self.n_categories, self.n_persons, self.n_companies = \
             len(self.meta.entities), len(self.decade_index), len(self.movie_index), len(self.category_index), \
             len(self.person_index), len(self.company_index)
+
+        self.use_sparse = use_sparse
 
         # Initialise variables
         self.candidate_items = None
@@ -227,7 +229,7 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
     def _train(self, train_data, validation_data, batch_size, max_iteration=100, validation_limit=100):
         validation_limit = min(validation_limit, len(validation_data))
         n_batches = (len(train_data) // batch_size) + 1
-        best_hitrate = -1
+        best_score = -1
         best_loss = sys.float_info.max
         best_model = None
         no_increase = 0
@@ -243,6 +245,8 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
             # go through all batches
             for batch_n in range(n_batches):
                 batch = train_data[batch_size * batch_n:batch_size * (batch_n + 1)]
+                if self.use_sparse:
+                    batch = [[t.to_dense() for t in data] for data in batch]
                 batch = [list(b) for b in zip(*batch)]
                 self._global_update(*batch)
 
@@ -250,38 +254,42 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
             t = tt.ones(validation_limit)
             p = tt.zeros(validation_limit).float()
             shuffle(validation_data)
-            hit = 0.
-            for i, (rank, val_data, (support_x, support_y)) in enumerate(validation_data[:validation_limit]):
-                lst = np.arange(len(val_data))
+
+            predictions = []
+            for i, validation in enumerate(validation_data[:validation_limit]):
+                val_data, (support_x, support_y) = validation.get_data()
+
+                if self.use_sparse:
+                    val_data, support_x, support_y = val_data.to_dense(), support_x.to_dense(), support_y.to_dense()
+
                 if self.use_cuda:
                     preds = self._forward(support_x.cuda(), support_y.cuda(), val_data.cuda())
                 else:
                     preds = self._forward(support_x, support_y, val_data)
 
+                preds = {i: p for i, p in zip(validation.to_list(), preds)}
+
                 # Ensure that memory does not explode
-                with tt.no_grad():
-                    p[i] = preds[rank]
-                    ordered = sorted(zip(preds, lst), reverse=True)
-                    hit += 1. if rank in [r for _, r in ordered][:self.meta.default_cutoff] else 0.
+                predictions.append((validation, preds))
 
             with tt.no_grad():
-                hitrate = hit / float(validation_limit)
+                score = self.meta.validator.score(predictions, self.meta)
                 loss = float(F.mse_loss(p, t))
 
             # Stop if no increase last two iterations.
-            if hitrate <= best_hitrate:
-                if hitrate == best_hitrate and loss < best_loss:
+            if score <= best_score:
+                if score == best_score and loss < best_loss:
                     best_model = deepcopy(self.model.state_dict())
                 if no_increase > 5:
                     break
                 no_increase += 1
             else:
-                best_hitrate = hitrate
+                best_score = score
                 best_loss = loss
                 best_model = deepcopy(self.model.state_dict())
                 no_increase = 0
 
-        return best_hitrate, best_model
+        return best_score, best_model
 
     def _forward(self, support_set_x, support_set_y, query_set_x, num_local_update=1):
         for idx in range(num_local_update):
@@ -375,6 +383,10 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
             support_x, support_y = self._create_combined_onehots(*zip(*support))
             query_x, query_y = self._create_combined_onehots(*zip(*query), support)
 
+            if self.use_sparse:
+                support_x, support_y = support_x.to_sparse(), support_y.to_sparse()
+                query_x, query_y = query_x.to_sparse(), query_y.to_sparse()
+
             support_xs.append(support_x)
             support_ys.append(support_y)
 
@@ -386,49 +398,48 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
             query_ys.append(query_y)
 
         train_data = list(zip(support_xs, support_ys, query_xs, query_ys))
-        validation = list(training.items())
         del support_xs, support_ys, query_xs, query_ys, support_x, support_y, query_x, query_y, tmp, user, support, \
-            query, training
+            query
 
         val = []
         logger.debug(f'Creating validation set')
-        for user, warm in validation[:10]:
+        for user, warm in training.items():
+            validation = warm.validation
             if user not in user_ratings:
                 continue
-            pos_sample = warm.validation['positive']
-            neg_samples = warm.validation['negative']
-            support, query, support_train = user_ratings[user]
-            samples = np.array([pos_sample] + neg_samples)
-            shuffle(samples)
-            rank = np.argwhere(samples == pos_sample)[0]
-
+            _, _, support_train = user_ratings[user]
+            samples = np.array(warm.validation.to_list())
             u_val, _ = self._create_combined_onehots(samples)
 
-            val.append((rank, u_val, support_train))
+            if self.use_sparse:
+                u_val = u_val.to_sparse()
 
-        del user_ratings, validation
+            validation.set_data((u_val, support_train))
+            val.append(validation)
+
+        del user_ratings, training
 
         batch_size = 32
 
         logger.debug('Starting training')
         if self.optimal_params is None:
             best_param = None
-            best_hitrate = -1
+            best_score = -1
             best_model = None
             for param in self._get_all_parameters():
                 logger.debug(f'Trying with params: {param}')
                 self.load_parameters(param)
-                hr, model = self._train(train_data, val, batch_size)
-                if hr > best_hitrate:
-                    logger.debug(f'New best param with HR:{hr}')
-                    best_hitrate = hr
+                score, model = self._train(train_data, val, batch_size)
+                if score > best_score:
+                    logger.debug(f'New best param with score: {score}')
+                    best_score = score
                     best_model = model
                     best_param = param.copy()
 
             self.load_parameters(best_param)
             self.model.load_state_dict(best_model)
             self.store_parameters()
-            logger.debug(f'Found best param with HR:{best_hitrate}')
+            logger.debug(f'Found best param with score:{best_score}')
         else:
             self.load_parameters(self.optimal_params)
             _, _ = self._train(train_data, val, batch_size)
