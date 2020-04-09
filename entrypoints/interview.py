@@ -75,6 +75,7 @@ models = {
     },
     'melu': {
         'class': MeLUInterviewer,
+        'use_cuda': True
     }
 }
 
