@@ -1,5 +1,7 @@
 from typing import Dict, List
 
+from tqdm import tqdm
+
 from models.base_interviewer import InterviewerBase
 from recommenders.base_recommender import RecommenderBase
 from recommenders.mf.mf import MatrixFactorisation
@@ -44,7 +46,7 @@ class MatrixFactorizationRecommender(RecommenderBase):
 
         if self.optimal_params is None:
             scores = []
-            parameters = {'k': [1, 2, 5, 10]}
+            parameters = {'k': [1]}
 
             # Find optimal parameters
             for params in get_combinations(parameters):
@@ -71,12 +73,11 @@ class MatrixFactorizationRecommender(RecommenderBase):
     def _train(self, users: Dict[int, WarmStartUser], max_iterations=100):
         # Train the model on training samples
         training_triples = flatten_rating_triples(users)
-        for iteration in range(max_iterations):
+        for iteration in tqdm(range(max_iterations), desc=f'[Training MF]'):
             random.shuffle(training_triples)
             self.model.train_als(training_triples)
 
             score = self._validate(users)
-            logger.info(f'Iteration {iteration}: {score} ')
 
     def _validate(self, users: Dict[int, WarmStartUser]):
         # Validate on users using the meta.validator
