@@ -1,11 +1,14 @@
+import operator
 from functools import reduce
 from typing import List, Dict
 
+from loguru import logger
 from networkx import Graph, pagerank_scipy
 
 from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
 from shared.user import WarmStartUser
+from shared.utility import get_combinations
 
 RATING_CATEGORIES = {1, 0, -1}
 
@@ -41,10 +44,7 @@ class PageRankRecommender(RecommenderBase):
         super().__init__(meta)
         self.graph = None
         self.entity_indices = set()
-        self.optimal_params = {
-            'alpha': 0.85,
-            'importance': {1: 0.9, 0: 0.1, -1: 0.0}
-        }
+        self.optimal_params = None
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
@@ -86,6 +86,36 @@ class PageRankRecommender(RecommenderBase):
                 self.entity_indices.add(entity)
 
         self.graph = self.construct_graph(training)
+
+        if not self.optimal_params:
+            parameters = {
+                'alpha': [0.15, 0.35, 0.55, 0.75],
+                'importance': [
+                    {1: 0.9, 0: 0.1, -1: 0.0}
+                ]
+            }
+
+            combinations = get_combinations(parameters)
+
+            results = list()
+
+            for combination in combinations:
+                logger.debug(f'Trying {combination}')
+
+                predictions = list()
+                for _, user in training.items():
+                    node_weights = self.get_node_weights(user.training, combination['importance'])
+                    prediction = self._scores(combination['alpha'], node_weights, user.validation.to_list())
+
+                    predictions.append((user.validation, prediction))
+
+                score = self.meta.validator.score(predictions, self.meta)
+                results.append((combination, score))
+
+                logger.info(f'Score: {score}')
+
+            self.optimal_params = sorted(results, key=operator.itemgetter(1), reverse=True)[0][0]
+            logger.info(f'Found optimal: {self.optimal_params}')
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         return self._scores(self.optimal_params['alpha'],

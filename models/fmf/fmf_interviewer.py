@@ -56,8 +56,9 @@ def choose_candidates(rating_matrix, n=100):
     return [entity for entity, rs in n_ratings][:n]
 
 
-def validate_hit(model, training):
+def validate_hit(cutoff, model, training):
     hits = []
+
     for user, data in training.items():
         pos = data.validation['positive']
         neg = data.validation['negative']
@@ -66,7 +67,7 @@ def validate_hit(model, training):
 
         scores = model.validate(user, to_val)
         sorted_scores = sorted([(item, score) for item, score in scores.items()], key=lambda x: x[1], reverse=True)
-        top_items = [item for item, score in sorted_scores][:10]
+        top_items = [item for item, score in sorted_scores][:cutoff]
         hits.append(1 if pos in top_items else 0)
 
     return np.mean(hits)
@@ -130,7 +131,7 @@ class FMFInterviewer(InterviewerBase):
         n_iterations = 5
         for i in range(n_iterations):
             self.model.fit(R, candidates)
-            hit = validate_hit(self.model, training)
+            hit = validate_hit(self.meta.default_cutoff, self.model, training)
 
             logger.debug(f'Training iteration {i}: {hit} Hit@10')
 

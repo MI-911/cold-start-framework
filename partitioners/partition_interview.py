@@ -6,18 +6,24 @@ from typing import List
 import pandas as pd
 import tqdm
 from loguru import logger
+from pandas import DataFrame
 
-from experiments.experiment import ExperimentOptions, CountFilter, Sentiment, sentiment_to_int, EntityType
+from experiments.experiment import ExperimentOptions, CountFilter, Sentiment, sentiment_to_int, EntityType, \
+    RankingOptions
 from shared.graph_triple import GraphTriple
 from shared.meta import Meta
+from shared.ranking import Ranking
 from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 
-def _sample_positive(from_ratings):
-    return random.choice(from_ratings[from_ratings.sentiment == 1 & from_ratings.isItem].entityIdx.unique())
+def _sample_seen(ratings: DataFrame, sentiment: Sentiment, n_items=1):
+    items = list(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
+    random.shuffle(items)
+
+    return set(items[:n_items])
 
 
-def _sample_unseen_items(ratings, user_id, n_items=100):
+def _sample_unseen(ratings: DataFrame, user_id: int, n_items=100):
     item_ratings = ratings[ratings.isItem]
 
     seen_items = set(item_ratings[item_ratings.userId == user_id].entityIdx.unique())
@@ -25,24 +31,24 @@ def _sample_unseen_items(ratings, user_id, n_items=100):
 
     random.shuffle(unseen_items)
 
-    return unseen_items[:n_items]
+    return set(unseen_items[:n_items])
 
 
 def _get_ratings_dict(from_ratings):
     return {row.entityIdx: row.sentiment for _, row in from_ratings.iterrows()}
 
 
-def _get_validation_dict(ratings, user_id, left_out):
-    return {
-        'positive': left_out,
-        'negative': _sample_unseen_items(ratings, user_id)
-    }
-
-
 def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters: List[CountFilter]):
     ratings = pd.read_csv(ratings_path)
     if not include_unknown:
         ratings = ratings[ratings.sentiment != 0]
+
+    # Find duplicate (user, item) pairs
+    duplicates = ratings.groupby(['uri', 'userId']).size()
+    if len(duplicates[duplicates > 1]):
+        logger.error('Found duplicate (user, uri) pairs')
+
+        exit(1)
 
     # Compute ratings per entity
     # In the future, this could be used for popularity sampling of negative samples
@@ -61,12 +67,10 @@ def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters:
             # Filter entity type
             if count_filter.entity_type != EntityType.ANY:
                 df_tmp = df_tmp[df_tmp.isItem == (count_filter.entity_type == EntityType.RECOMMENDABLE)]
-            logger.info(len(df_tmp))
 
             # Filter sentiment
             if count_filter.sentiment != Sentiment.ANY:
                 df_tmp = df_tmp[df_tmp.sentiment == sentiment_to_int(count_filter.sentiment)]
-            logger.info(len(df_tmp))
 
             # Group ratings by user
             df_tmp = df_tmp[['uri', 'userId']].groupby('userId').count()
@@ -87,80 +91,69 @@ def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters:
     return ratings, warm_start_users, cold_start_users, users
 
 
-def _get_training_data(ratings, warm_start_users, user_idx):
+def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users, user_idx):
     training_data = dict()
 
     progress = tqdm.tqdm(warm_start_users)
     for user in progress:
         progress.set_description(f'Processing warm-start user {user}')
 
-        u_ratings = ratings[ratings.userId == user]
+        u_ratings, ranking = _get_ranking(ratings, user, experiment.ranking_options)
 
-        val_sample = _sample_positive(u_ratings)
+        training_dict = _get_ratings_dict(u_ratings)
 
-        training_dict = _get_ratings_dict(u_ratings[u_ratings.entityIdx != val_sample])
-        validation_dict = _get_validation_dict(ratings, user, val_sample)
+        # Assert ranking samples not in training
+        assert not set(ranking.to_list()).intersection(training_dict.keys())
 
-        # Assert validation sample not in training
-        assert val_sample not in training_dict.keys()
-
-        # Assert positive sample not in negative samples
-        assert val_sample not in validation_dict['negative']
-
-        # Assert negative samples not in training
-        assert not set(validation_dict['negative']).intersection(training_dict.keys())
-
-        training_data[user_idx[user]] = WarmStartUser(training_dict, validation_dict)
+        training_data[user_idx[user]] = WarmStartUser(training_dict, ranking)
 
     return training_data
 
 
-def _get_testing_data(ratings, cold_start_users, user_idx, movie_indices):
+def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, user_idx, movie_indices):
     testing_data = dict()
 
     progress = tqdm.tqdm(cold_start_users)
     for user in progress:
         progress.set_description(f'Processing cold-start user {user}')
 
-        u_ratings = ratings[ratings.userId == user]
-
-        # Before exhaustive LOO, get validation sample
-        val_sample = _sample_positive(u_ratings)
-        validation_dict = _get_validation_dict(ratings, user, val_sample)
-
-        # For convenience, leave out the validation sample from the user's ratings
-        u_ratings = u_ratings[u_ratings.entityIdx != val_sample]
-
-        # Find all the user's positive item ratings
-        u_pos = u_ratings[u_ratings.isItem & u_ratings.sentiment == 1]
-        assert len(u_pos)
-
         # For each positive item, create an answer set with that item left out
         sets = []
-        for idx, pos in u_pos.iterrows():
-            answer_dict = _get_ratings_dict(u_ratings[u_ratings.entityIdx != pos.entityIdx])
-            pos_neg_dict = _get_validation_dict(ratings, user, pos.entityIdx)
+        for _ in range(experiment.evaluation_samples):
+            u_ratings, ranking = _get_ranking(ratings, user, experiment.ranking_options)
+            answer_dict = _get_ratings_dict(u_ratings)
 
             # Skip if user cannot provide any movie answers
             # By checking this, we can remove DEs from answer sets without losing users between comparisons
             if not set(answer_dict.keys()).intersection(movie_indices):
                 continue
 
-            # Assert that the positive item is not in the negative samples
-            assert pos.entityIdx not in pos_neg_dict['negative']
+            sets.append(ColdStartUserSet(answer_dict, ranking))
 
-            # Assert that user cannot answer about the positive item
-            assert pos.entityIdx not in answer_dict
-
-            sets.append(ColdStartUserSet(answer_dict, **pos_neg_dict))
-
-        # Check if user has any valid answer sets
-        if not sets:
-            continue
-
-        testing_data[user_idx[user]] = ColdStartUser(sets, validation_dict)
+        testing_data[user_idx[user]] = ColdStartUser(sets)
 
     return testing_data
+
+
+def _get_ranking(ratings: DataFrame, user_id: int, ranking_options: RankingOptions) -> (DataFrame, Ranking):
+    u_ratings = ratings[ratings.userId == user_id]
+
+    # Create ranking instance holding all samples to rank
+    ranking = Ranking()
+    for sentiment, n_samples in ranking_options.sentiment_count.items():
+        if sentiment == Sentiment.UNSEEN:
+            # For unseen items, we require the entire ratings DF to find unrated items
+            samples = _sample_unseen(ratings, user_id, n_samples)
+        else:
+            samples = _sample_seen(u_ratings, sentiment, n_samples)
+
+        ranking.sentiment_samples[sentiment] = samples
+
+    # Assert that we have sampled all required items (implicit check for cross-sentiment duplicates)
+    assert len(set(ranking.to_list())) == ranking_options.get_num_total()
+
+    # Return user's ratings without items to rank
+    return u_ratings[~u_ratings.entityIdx.isin(ranking.to_list())], ranking
 
 
 def _get_entities(entities_path):
@@ -209,8 +202,8 @@ def partition_seed(experiment: ExperimentOptions, seed: int, entities, output_di
     movie_indices = set(ratings[ratings.isItem].entityIdx.unique())
 
     # Partition training/testing data from users
-    training_data = _get_training_data(ratings, warm_users, user_idx)
-    testing_data = _get_testing_data(ratings, cold_users, user_idx, movie_indices)
+    training_data = _get_training_data(experiment, ratings, warm_users, user_idx)
+    testing_data = _get_testing_data(experiment, ratings, cold_users, user_idx, movie_indices)
 
     logger.info(f'Created {len(training_data)} training entries and {len(testing_data)} testing entries')
 
@@ -228,4 +221,7 @@ def partition_seed(experiment: ExperimentOptions, seed: int, entities, output_di
     with open(os.path.join(output_directory, 'meta.pkl'), 'wb') as fp:
         pickle.dump(Meta(entities=entities, uri_idx=entity_idx, users=list(user_idx.values()),
                          idx_item={row.entityIdx: row.isItem for idx, row in ratings.iterrows()},
-                         recommendable_entities=list(movie_indices), triples=_load_triples(triples_path)), fp)
+                         recommendable_entities=list(movie_indices), triples=_load_triples(triples_path),
+                         default_cutoff=experiment.ranking_options.default_cutoff,
+                         sentiment_utility=experiment.ranking_options.sentiment_utility,
+                         validator=experiment.validator), fp)

@@ -12,8 +12,9 @@ from loguru import logger
 from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
-from experiments.metrics import ndcg_at_k, ser_at_k, coverage
+from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
 from models.base_interviewer import InterviewerBase
+from models.dumb.dumb_interviewer import DumbInterviewer
 from models.melu.melu_interviewer import MeLUInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
@@ -23,12 +24,22 @@ from recommenders.knn.knn_recommender import KNNRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
+from recommenders.random.random_recommender import RandomRecommender
+from recommenders.toppop.toppop_recommender import TopPopRecommender
 from shared.meta import Meta
+from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
-from shared.utility import join_paths
-from shared.validators import valid_dir
+from shared.utility import join_paths, valid_dir
 
 models = {
+    'random': {
+      'class': DumbInterviewer,
+      'recommender': RandomRecommender
+    },
+    'toppop': {
+      'class': DumbInterviewer,
+      'recommender': TopPopRecommender
+    },
     'fmf': {
         'class': FMFInterviewer,
         'requires_interview_length': True
@@ -38,15 +49,15 @@ models = {
         'requires_interview_length': True,
         'use_cuda': False
     },
-    'naive-pr-collab': {
+    'naive-ppr-collab': {
         'class': NaiveInterviewer,
         'recommender': CollaborativePageRankRecommender
     },
-    'naive-pr-kg': {
+    'naive-ppr-kg': {
         'class': NaiveInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
     },
-    'naive-pr-joint': {
+    'naive-ppr-joint': {
         'class': NaiveInterviewer,
         'recommender': JointPageRankRecommender
     },
@@ -132,15 +143,10 @@ def _conduct_interview(model: InterviewerBase, answer_set: ColdStartUserSet, n_q
     return answer_state
 
 
-def _produce_ranking(model: InterviewerBase, answer_set: ColdStartUserSet, answers: Dict):
-    to_rank = [answer_set.positive] + answer_set.negative
-    item_scores = sorted(model.predict(to_rank, answers).items(), key=operator.itemgetter(1), reverse=True)
+def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
+    item_scores = sorted(model.predict(ranking.to_list(), answers).items(), key=operator.itemgetter(1), reverse=True)
 
     return [item[0] for item in item_scores]
-
-
-def _get_relevance_list(ranking, positive_item):
-    return [int(item == positive_item) for item in ranking]
 
 
 def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser]):
@@ -166,54 +172,62 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
     if not requires_interview_length:
         model_instance.warmup(training)
 
-    for nq in range(1, max_n_questions + 1, 1):
-        logger.info(f'Conducting interviews of length {nq}...')
+    for num_questions in range(1, max_n_questions + 1, 1):
+        logger.info(f'Conducting interviews of length {num_questions}...')
 
         hits = defaultdict(list)
         ndcgs = defaultdict(list)
+        taus = defaultdict(list)
         sers = defaultdict(list)
         covs = defaultdict(set)
 
         if requires_interview_length:
-            model_instance, _ = _instantiate_model(model_name, experiment, meta, nq)
-            model_instance.warmup(training, nq)
+            model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
+            model_instance.warmup(training, num_questions)
 
         popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
         for idx, user in tqdm(testing.items(), desc='[Testing]'):
             for answer_set in user.sets:
-                answers = _conduct_interview(model_instance, answer_set, nq)
-                ranking = _produce_ranking(model_instance, answer_set, answers)
-                relevance = _get_relevance_list(ranking, answer_set.positive)
+                # Query the interviewer for the next entity to ask about
+                # Then produce a ranked list given the current interview state
+                answers = _conduct_interview(model_instance, answer_set, num_questions)
+                ranked_list = _produce_ranking(model_instance, answer_set.ranking, answers)
+
+                # From the ranked list, get ordered binary relevance and utility
+                relevance = answer_set.ranking.get_relevance(ranked_list)
+                utility = answer_set.ranking.get_utility(ranked_list, meta.sentiment_utility)
 
                 for k in range(1, upper_cutoff + 1):
-                    cutoff = relevance[:k]
+                    ranked_cutoff = ranked_list[:k]
+                    relevance_cutoff = relevance[:k]
 
-                    hits[k].append(1 in cutoff)
-                    ndcgs[k].append(ndcg_at_k(cutoff, k))
-                    sers[k].append(ser_at_k(zip(ranking[:k], cutoff), popular_items, k, normalize=False))
-                    covs[k] = covs[k].union(set(ranking[:k]))
+                    hits[k].append(hr_at_k(relevance, k))
+                    ndcgs[k].append(ndcg_at_k(utility, k))
+                    taus[k].append(tau_at_k(utility, k))
+                    sers[k].append(ser_at_k(zip(ranked_cutoff, relevance_cutoff), popular_items, k, normalize=False))
+                    covs[k] = covs[k].union(set(ranked_cutoff))
 
         hr = dict()
         ndcg = dict()
+        tau = dict()
         ser = dict()
         cov = dict()
 
         for k in range(1, upper_cutoff + 1):
             hr[k] = np.mean(hits[k])
             ndcg[k] = np.mean(ndcgs[k])
+            tau[k] = np.mean(taus[k])
             ser[k] = np.mean(sers[k])
             cov[k] = coverage(covs[k], meta.recommendable_entities)
 
-        qs[nq] = {'hr': hr, 'ndcg': ndcg, 'ser': ser, 'cov': cov}
+        qs[num_questions] = {'hr': hr, 'ndcg': ndcg, 'tau': tau, 'ser': ser, 'cov': cov}
 
         logger.info(f'Results for {model_name}:')
-        logger.info(f'  HIT@10:  {hr[10]}')
-        logger.info(f'  NDCG@10: {ndcg[10]}')
-        logger.info(f'  SER@10:  {ser[10]}')
-        logger.info(f'  COV@10:  {cov[10]}')
+        for name, value in qs[num_questions].items():
+            logger.info(f'- {name.upper()}@{meta.default_cutoff}: {value[meta.default_cutoff]}')
 
-        yield model_instance, qs, nq
+        yield model_instance, qs, num_questions
 
 
 def _write_results(model_name, qs, split: Split):

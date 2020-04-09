@@ -262,7 +262,7 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
                 with tt.no_grad():
                     p[i] = preds[rank]
                     ordered = sorted(zip(preds, lst), reverse=True)
-                    hit += 1. if rank in [r for _, r in ordered][:10] else 0.
+                    hit += 1. if rank in [r for _, r in ordered][:self.meta.default_cutoff] else 0.
 
             with tt.no_grad():
                 hitrate = hit / float(validation_limit)
