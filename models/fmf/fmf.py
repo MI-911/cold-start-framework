@@ -96,6 +96,7 @@ class FMF:
 
         all_users = [u for u in range(self.n_users)]
 
+        # self.T.grow_test(all_users, candidates)
         self.T.grow(all_users, candidates)
         self.entity_embeddings = optimal_entity_embeddings(ratings, self.T,
                                                            self.n_latent_factors, self.regularization)
@@ -140,6 +141,20 @@ class Tree:
 
     def is_leaf(self):
         return self.depth == self.max_depth
+
+    def grow_test(self, users: List[int], candidates: List[int]):
+        self.users = users
+        if self.is_leaf():
+            self.user_embedding = optimal_group_embedding(self.users, self.fmf.entity_embeddings, self.fmf.ratings,
+                                                          self.fmf.regularization)
+            return
+
+        self.question = np.random.choice(candidates)
+        likes, dislikes, unknowns = split_users(self.users, self.question, self.fmf.ratings)
+
+        self.children[LIKE].grow_test(likes, [c for c in candidates if not c == self.question])
+        self.children[DISLIKE].grow_test(dislikes, [c for c in candidates if not c == self.question])
+        self.children[UNKNOWN].grow_test(unknowns, [c for c in candidates if not c == self.question])
 
     def grow(self, users: List[int], candidates: List[int]):
         self.users = users
