@@ -71,7 +71,8 @@ models = {
         'recommender': MatrixFactorizationRecommender
     },
     'fmf': {
-        'class': FMFInterviewer
+        'class': FMFInterviewer,
+        'requires_interview_length': True,
     },
     'melu': {
         'class': MeLUInterviewer,
