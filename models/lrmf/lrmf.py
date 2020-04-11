@@ -124,10 +124,10 @@ class LRMF:
         return {e: s for e, s in zip(to_validate, similarities)}
 
     def interview(self, answers: Dict[int, int]) -> int:
-        return self.T.interview_new_user(answers, [])
+        return self.T.interview_new_user(answers, {})
 
     def rank(self, items: List[int], answers: Dict[int, int]):
-        user_vector = self.T.interview_new_user(answers, [])
+        user_vector = self.T.interview_new_user(answers, {})
         similarities = user_vector @ self.entity_embeddings[items].T
         return {e: s for e, s in zip(items, similarities)}
 
@@ -203,22 +203,29 @@ class Tree:
         answer = self.lrmf.ratings[user, self.question]
         return self.children[answer].interview_existing_user(user)
 
-    def interview_new_user(self, answers: Dict[int, int], user_vector: List[int]) -> Union[int, np.ndarray]:
+    def interview_new_user(self, answers: Dict[int, int], user_answers: Dict[int, int]) -> Union[int, np.ndarray]:
         if self.is_leaf():
             # Have we asked all our local questions?
-            if len(user_vector) < self.lrmf.interview_length:
+            if len(user_answers) < self.lrmf.interview_length:
                 for local_question in self.l2_questions:
-                    if local_question not in answers:
+                    # First try to exhaust the available answers
+                    if local_question in answers:
+                        answer = answers[local_question]
+                        user_answers[local_question] = answer
+
+                        return self.interview_new_user({
+                            question: answer
+                            for question, answer in answers.items()
+                            if not question == local_question
+                        }, user_answers)
+
+                    # If we cannot get an answer from the arguments, return the question
+                    elif local_question not in user_answers:
                         return local_question
 
-                    answer = answers[local_question] if local_question in answers else DISLIKE
-
-                    return self.interview_new_user({
-                        question: answer
-                        for question, answer in answers.items()
-                        if not question == local_question
-                    }, user_vector + [answer])
+            # If we have asked all of our questions, return the transformed user vector
             else:
+                user_vector = [a for e, a in user_answers.items()]
                 user_vector.append(1)  # Add bias
                 return user_vector @ self.transformation
 
@@ -226,9 +233,11 @@ class Tree:
             return self.question
 
         answer = answers[self.question] if self.question in answers else DISLIKE
+        user_answers[self.question] = answer
+
         return self.children[answer].interview_new_user({
                 question: answer
                 for question, answer
                 in answers.items() if not question == self.question
-            }, user_vector + [answer]
+            }, user_answers
         )
