@@ -115,7 +115,7 @@ class LRMFInterviewer(InterviewerBase):
                               regularisation=self.params['reg'])
             self._fit(training)
 
-    def _fit(self, users: Dict[int, WarmStartUser], n_iterations=1) -> float:
+    def _fit(self, users: Dict[int, WarmStartUser], n_iterations=5) -> float:
         self.best_score = 0
         R = get_rating_matrix(users, self.n_users, self.n_entities)
         candidates = choose_candidates(R, n=100)
