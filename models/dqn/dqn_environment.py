@@ -59,6 +59,8 @@ class Environment:
         self.reward_metric = reward_metric
         self.n_users = len(meta.users)
         self.n_entities = len(meta.entities)
+        self.all_entities = [e for e in range(self.n_entities)]
+
         self.ratings = np.zeros((self.n_users, self.n_entities))
         self.top_pop_movies = None
 
@@ -125,12 +127,10 @@ class Environment:
     def _reward(self):
         answers_str = str(self.answers)
 
-        if answers_str in self.predictions_cache:
-            logger.debug(f'Using cached answers {answers_str}')
-        scores = self.predictions_cache[answers_str] \
-            if answers_str in self.predictions_cache \
-            else self.recommender.predict(self.to_rate, self.answers)
-        self.predictions_cache[answers_str] = scores
+        if answers_str not in self.predictions_cache:
+            self.predictions_cache[answers_str] = self.recommender.predict(self.all_entities, self.answers)
+
+        scores = {e: s for e, s in self.predictions_cache[answers_str].items() if e in self.to_rate}
 
         ranked = [e for e, s in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
 

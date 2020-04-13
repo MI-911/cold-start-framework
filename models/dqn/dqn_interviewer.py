@@ -104,6 +104,11 @@ class DqnInterviewer(InterviewerBase):
             t = tqdm(users)
             for user in t:
 
+                ps, = np.where(self.environment.ratings[user] > 0)
+                if not ps.any():
+                    logger.debug('Skipping user with no positive ratings')
+                    continue
+
                 t.set_description(f'Training on users (Scores: {recent_mean(scores)}, Loss: {recent_mean(losses)}, '
                                   f'Epsilon: {recent_mean(epsilons)})')
 
