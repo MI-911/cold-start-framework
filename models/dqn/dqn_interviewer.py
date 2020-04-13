@@ -75,10 +75,12 @@ class DqnInterviewer(InterviewerBase):
 
             best_params, _ = list(sorted(param_scores, key=lambda x: x[1], reverse=True))[0]
             logger.info(f'Found best params for DQN: {best_params}')
-            self.agent = DqnAgent(candidates=choose_candidates(training), n_entities=self.n_entities,
-                                  batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
-                                  eps_end=0.1, eps_dec=0.996, fc1_dims=best_params['fc1_dims'])
-            self.fit_dqn(training, interview_length)
+            self.params = best_params
+
+        self.agent = DqnAgent(candidates=choose_candidates(training), n_entities=self.n_entities,
+                              batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
+                              eps_end=0.1, eps_dec=0.996, fc1_dims=self.params['fc1_dims'])
+        self.fit_dqn(training, interview_length)
 
     def fit_dqn(self, training: Dict[int, WarmStartUser], interview_length: int) -> float:
         n_iterations = 10
@@ -101,6 +103,11 @@ class DqnInterviewer(InterviewerBase):
 
             t = tqdm(users)
             for user in t:
+
+                ps, = np.where(self.environment.ratings[user] > 0)
+                if not ps.any():
+                    logger.debug('Skipping user with no positive ratings')
+                    continue
 
                 t.set_description(f'Training on users (Scores: {recent_mean(scores)}, Loss: {recent_mean(losses)}, '
                                   f'Epsilon: {recent_mean(epsilons)})')

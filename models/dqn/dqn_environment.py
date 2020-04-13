@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Dict
 import numpy as np
+from loguru import logger
 
 from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
@@ -58,11 +59,15 @@ class Environment:
         self.reward_metric = reward_metric
         self.n_users = len(meta.users)
         self.n_entities = len(meta.entities)
+        self.all_entities = [e for e in range(self.n_entities)]
+
         self.ratings = np.zeros((self.n_users, self.n_entities))
         self.top_pop_movies = None
 
         self.state = []    # State keeping for the DQN agent (a numpy array)
         self.answers = {}  # State keeping for the environment (fits to the recommender.predict() method)
+
+        self.predictions_cache = {}  # Cache of { answers: predictions }
 
         self.current_user = None   # The user currently being interviewed.
         self.left_out_item = None  # The left out item. When resetting, we leave out a random liked entity for the user.
@@ -120,7 +125,13 @@ class Environment:
         return self.state, reward
 
     def _reward(self):
-        scores = self.recommender.predict(self.to_rate, self.answers)
+        answers_str = str(self.answers)
+
+        if answers_str not in self.predictions_cache:
+            self.predictions_cache[answers_str] = self.recommender.predict(self.all_entities, self.answers)
+
+        scores = {e: s for e, s in self.predictions_cache[answers_str].items() if e in self.to_rate}
+
         ranked = [e for e, s in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
 
         # What should we leave out?
