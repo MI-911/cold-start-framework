@@ -8,14 +8,32 @@ from shared.enums import Sentiment
 class Ranking:
     def __init__(self):
         self.sentiment_samples = dict()
+        self._list = None
+        self._data = None
+
+    def set_data(self, data):
+        self._data = data
+
+    def get_data(self):
+        # If no special data is used, return _list
+        if self._data is None:
+            # Ensure _list is set
+            if self._list is None:
+                self.to_list()
+
+            return self._list
+        else:
+            return self._data
 
     def to_list(self) -> List[int]:
-        as_list = list(itertools.chain.from_iterable(self.sentiment_samples.values()))
+        if self._list is None:
+            as_list = list(itertools.chain.from_iterable(self.sentiment_samples.values()))
 
-        # Shuffle to avoid any bias arising from
-        shuffle(as_list)
+            # Shuffle to avoid any bias arising from
+            shuffle(as_list)
+            self._list = as_list
 
-        return as_list
+        return self._list
 
     def _get_utility(self, entity_idx, sentiment_utility: Dict[Sentiment, float]) -> float:
         for sentiment, utility in sentiment_utility.items():

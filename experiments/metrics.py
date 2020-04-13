@@ -31,6 +31,10 @@ def dcg(rank, n=10):
 
 
 def tau_at_k(utility, k):
+    # Cutoff must match length of utility list
+    if len(utility) != k:
+        return np.NaN
+
     tau, p = stats.kendalltau(utility[:k], sorted(utility, reverse=True)[:k])
 
     return tau
@@ -79,4 +83,5 @@ def hr_at_k(relevance, cutoff):
 
 
 if __name__ == '__main__':
-    logger.info(ndcg_at_k([0, 0.5, 1.0], 3))
+    logger.info(ndcg_at_k([0, 0, 1.0], 3))
+    logger.info(ndcg_at_k([0, 0, 1], 3))

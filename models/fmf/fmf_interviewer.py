@@ -30,21 +30,22 @@ def visualise_tree(tree: Tree, meta: Meta):
         visualise_tree(tree.children[DISLIKE], meta)
 
 
-def get_rating_matrix(training, n_users, n_entities, rating_map=None):
+RATING_MAP = {
+    1: LIKE,
+    0: UNKNOWN,
+    -1: DISLIKE
+}
+
+
+def get_rating_matrix(training, n_users, n_entities):
     """
     Returns an [n_users x n_entities] ratings matrix.
     """
-    if rating_map is None:
-        rating_map = {
-            1: LIKE,
-            0: UNKNOWN,
-            -1: DISLIKE
-        }
 
-    R = np.ones((n_users, n_entities)) * rating_map[0]
+    R = np.ones((n_users, n_entities)) * RATING_MAP[0]
     for user, data in training.items():
         for entity, rating in data.training.items():
-            R[user, entity] = rating_map[rating]
+            R[user, entity] = RATING_MAP[rating]
 
     return R
 
@@ -81,8 +82,8 @@ class FMFInterviewer(InterviewerBase):
         if not self.params:
             param_scores = []
             for params in get_combinations({
-                'k': [1, 2, 5, 10, 20],
-                'reg': [0.01, 0.001, 0.0001]
+                'k': [1, 2, 5, 10],
+                'reg': [0.001]
             }):
                 logger.info(f'Fitting FMF with params {params}')
                 self.model = FMF(n_users=self.n_users, n_entities=self.n_entities, max_depth=interview_length,
@@ -126,10 +127,10 @@ class FMFInterviewer(InterviewerBase):
         return self.meta.validator.score(predictions, self.meta)
 
     def interview(self, answers: Dict[int, int], max_n_questions=5) -> List[int]:
-        return [self.model.interview(answers)]
+        return [self.model.interview({e: RATING_MAP[a] for e, a in answers.items()})]
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
-        return self.model.rank(items, answers)
+        return self.model.rank(items, {e: RATING_MAP[a] for e, a in answers.items()})
 
     def get_parameters(self):
         return self.params
