@@ -3,13 +3,18 @@ from shared.meta import Meta
 
 
 class DumbInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender=None, use_cuda=False):
+    def __init__(self, meta: Meta, recommender=None, recommender_kwargs=None, use_cuda=False):
         super().__init__(meta, use_cuda)
 
         if not recommender:
             raise RuntimeError('No underlying recommender provided to the dumb interviewer.')
 
-        self.recommender = recommender(meta)
+        kwargs = {'meta': meta}
+
+        if recommender_kwargs:
+            kwargs.update(recommender_kwargs)
+
+        self.recommender = recommender(**kwargs)
 
     def predict(self, items, answers):
         return self.recommender.predict(items, answers)

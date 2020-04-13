@@ -41,6 +41,13 @@ models = {
         'class': DumbInterviewer,
         'recommender': TopPopRecommender
     },
+    'top-liked': {
+        'class': DumbInterviewer,
+        'recommender': TopPopRecommender,
+        'recommender_kwargs': {
+            'likes_only': True
+        }
+    },
     'lrmf': {
         'class': LRMFInterviewer,
         'requires_interview_length': True,
@@ -97,6 +104,10 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
     recommender = models[model_name].get('recommender', None)
     if recommender:
         kwargs['recommender'] = recommender
+
+    recommender_kwargs = models[model_name].get('recommender_kwargs', None)
+    if recommender_kwargs:
+        kwargs['recommender_kwargs'] = recommender_kwargs
 
     instance = models[model_name]['class'](**kwargs)
     parameters = _get_parameters(model_name, experiment, interview_length)
