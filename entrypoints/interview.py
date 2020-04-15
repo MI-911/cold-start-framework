@@ -69,6 +69,10 @@ models = {
       'class': NaiveInterviewer,
       'recommender': KNNRecommender
     },
+    'dqn-knn': {
+        'class': DqnInterviewer,
+        'recommender': KNNRecommender
+    },
     'naive-mf': {
         'class': NaiveInterviewer,
         'recommender': MatrixFactorizationRecommender
