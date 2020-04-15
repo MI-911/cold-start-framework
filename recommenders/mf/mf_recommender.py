@@ -44,6 +44,8 @@ class MatrixFactorizationRecommender(RecommenderBase):
         n_users = len(self.meta.users)
         n_entities = len(self.meta.entities)
 
+        self.optimal_params = {'k': 1}  # TODO: Remove
+
         if self.optimal_params is None:
             scores = []
             parameters = {'k': [1, 2, 5, 10]}

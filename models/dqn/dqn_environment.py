@@ -7,7 +7,7 @@ from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
 from shared.user import WarmStartUser
 
-from experiments.metrics import ndcg_at_k, ser_at_k
+from experiments.metrics import ndcg_at_k, ser_at_k_v2
 
 
 class Rewards(Enum):
@@ -62,7 +62,7 @@ class Environment:
         self.all_entities = [e for e in range(self.n_entities)]
 
         self.ratings = np.zeros((self.n_users, self.n_entities))
-        self.top_pop_movies = None
+        self.n_ratings = np.zeros(self.n_entities)
 
         self.state = []    # State keeping for the DQN agent (a numpy array)
         self.answers = {}  # State keeping for the environment (fits to the recommender.predict() method)
@@ -80,7 +80,7 @@ class Environment:
         Trains the recommender model.
         """
         self.ratings = get_rating_matrix(training, self.n_users, self.n_entities)
-        self.top_pop_movies = self._top_pop_movies()
+        self.n_ratings = self._n_ratings()
         self.recommender.fit(training=training)
 
     def reset(self):
@@ -154,16 +154,10 @@ class Environment:
         metric_handlers = {
             Rewards.NDCG: ndcg_at_k(relevance, k=k),
             Rewards.HIT: sum(relevance[:k]),
-            Rewards.SERENDIPITY: ser_at_k(zip(rankings, relevance), self.top_pop_movies, k=k)
+            Rewards.SERENDIPITY: ser_at_k_v2(zip(rankings, relevance), self.n_ratings, k=k)
         }
 
         return metric_handlers[self.reward_metric]
 
-    def _top_pop_movies(self):
-        n_movie_ratings = self.ratings[:, self.meta.recommendable_entities].sum(axis=0)
-        sorted_popular_movies = sorted(zip(self.meta.recommendable_entities, n_movie_ratings),
-                                       key=lambda x: x[1], reverse=True)
-
-        return [m for m, rs in list(sorted_popular_movies)[:100]]
-
-
+    def _n_ratings(self): 
+        return self.ratings.sum(axis=0)

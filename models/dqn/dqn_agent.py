@@ -6,24 +6,21 @@ from models.dqn.dqn import DeepQNetwork
 
 
 class DqnAgent:
+    """
+    Constructs an agent for a DQN learning process
+    :param gamma: The discount rates for future predicted rewards. If 1, future rewards are just as important as current ones.
+    :param epsilon: The initial probability that the agent will explore a random question. Epsilon decreases over time by eps_dec at every batch iteration.
+    :param alpha: The learning rate.
+    :param n_entities: The number of entities.
+    :param candidates: The question candidates.
+    :param batch_size: The number of transitions in a batch during learning.
+    :param max_mem_size: The maximum number of stored transitions. If the size of stored transitions exceeds this value, they are replaced by new ones.
+    :param eps_end: The minimum epsilon value.
+    :param eps_dec: The decrease factor for epsilon. At every iteration, epsilon is decreased to epsilon * eps_dec.
+    """
     def __init__(self, gamma: float, epsilon: float, alpha: float, candidates: List[int], n_entities: int,
                  batch_size: int, fc1_dims: int,  max_mem_size: float = 100000, eps_end: float = 0.01, eps_dec: float = 0.996,
                  use_cuda: bool = False):
-        """
-        Constructs an agent for a DQN learning process
-        :param gamma: The discount rates for future predicted rewards.
-                      If 1, future rewards are just as important as current ones.
-        :param epsilon: The initial probability that the agent will explore a random question.
-                        Epsilon decreases over time by eps_dec at every batch iteration.
-        :param alpha: The learning rate.
-        :param n_entities: The number of entities.
-        :param candidates: The question candidates.
-        :param batch_size: The number of transitions in a batch during learning.
-        :param max_mem_size: The maximum number of stored transitions. If the size of stored
-                             transitions exceeds this value, they are replaced by new ones.
-        :param eps_end: The minimum epsilon value.
-        :param eps_dec: The decrease factor for epsilon. At every iteration, epsilon is decreased to epsilon * eps_dec.
-        """
         self.gamma = gamma
         self.epsilon = epsilon
         self.eps_end = eps_end

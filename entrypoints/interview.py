@@ -12,7 +12,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
-from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
+from experiments.metrics import ndcg_at_k, ser_at_k_v2, coverage, tau_at_k, hr_at_k
 from models.base_interviewer import InterviewerBase
 from models.dqn.dqn_interviewer import DqnInterviewer
 from models.dumb.dumb_interviewer import DumbInterviewer
@@ -37,70 +37,70 @@ models = {
         'class': DumbInterviewer,
         'recommender': RandomRecommender
     },
-    'top-pop': {
-        'class': DumbInterviewer,
-        'recommender': TopPopRecommender
-    },
-    'top-liked': {
-        'class': DumbInterviewer,
-        'recommender': TopPopRecommender,
-        'recommender_kwargs': {
-            'likes_only': True
-        }
-    },
-    'lrmf': {
-        'class': LRMFInterviewer,
-        'requires_interview_length': True,
-        'use_cuda': False
-    },
-    'naive-ppr-collab': {
-        'class': NaiveInterviewer,
-        'recommender': CollaborativePageRankRecommender
-    },
-    'naive-ppr-kg': {
-        'class': NaiveInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender
-    },
-    'naive-ppr-joint': {
-        'class': NaiveInterviewer,
-        'recommender': JointPageRankRecommender
-    },
-    'naive-knn': {
-      'class': NaiveInterviewer,
-      'recommender': KNNRecommender
-    },
-    'naive-mf': {
-        'class': NaiveInterviewer,
-        'recommender': MatrixFactorizationRecommender
-    },
-    'dqn-mf': {
-        'class': DqnInterviewer,
-        'recommender': MatrixFactorizationRecommender,
-        'requires_interview_length': True
-    },
-    'dqn-ppr-kg': {
-        'class': DqnInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender,
-        'requires_interview_length': True
-    },
-    'dqn-ppr-collab': {
-        'class': DqnInterviewer,
-        'recommender': CollaborativePageRankRecommender,
-        'requires_interview_length': True
-    },
-    'dqn-ppr-joint': {
-        'class': DqnInterviewer,
-        'recommender': JointPageRankRecommender,
-        'requires_interview_length': True
-    },
-    'fmf': {
-        'class': FMFInterviewer,
-        'requires_interview_length': True,
-    },
-    'melu': {
-        'class': MeLUInterviewer,
-        'use_cuda': True
-    }
+    # 'top-pop': {
+    #     'class': DumbInterviewer,
+    #     'recommender': TopPopRecommender
+    # },
+    # 'top-liked': {
+    #     'class': DumbInterviewer,
+    #     'recommender': TopPopRecommender,
+    #     'recommender_kwargs': {
+    #         'likes_only': True
+    #     }
+    # },
+    # 'lrmf': {
+    #     'class': LRMFInterviewer,
+    #     'requires_interview_length': True,
+    #     'use_cuda': False
+    # },
+    # 'naive-ppr-collab': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': CollaborativePageRankRecommender
+    # },
+    # 'naive-ppr-kg': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': KnowledgeGraphPageRankRecommender
+    # },
+    # 'naive-ppr-joint': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': JointPageRankRecommender
+    # },
+    # 'naive-knn': {
+    #   'class': NaiveInterviewer,
+    #   'recommender': KNNRecommender
+    # },
+    # 'naive-mf': {
+    #     'class': NaiveInterviewer,
+    #     'recommender': MatrixFactorizationRecommender
+    # },
+    # 'dqn-mf': {
+    #     'class': DqnInterviewer,
+    #     'recommender': MatrixFactorizationRecommender,
+    #     'requires_interview_length': True
+    # },
+    # 'dqn-ppr-kg': {
+    #     'class': DqnInterviewer,
+    #     'recommender': KnowledgeGraphPageRankRecommender,
+    #     'requires_interview_length': True
+    # },
+    # 'dqn-ppr-collab': {
+    #     'class': DqnInterviewer,
+    #     'recommender': CollaborativePageRankRecommender,
+    #     'requires_interview_length': True
+    # },
+    # 'dqn-ppr-joint': {
+    #     'class': DqnInterviewer,
+    #     'recommender': JointPageRankRecommender,
+    #     'requires_interview_length': True
+    # },
+    # 'fmf': {
+    #     'class': FMFInterviewer,
+    #     'requires_interview_length': True,
+    # },
+    # 'melu': {
+    #     'class': MeLUInterviewer,
+    #     'use_cuda': True
+    # }
 }
 
 parser = argparse.ArgumentParser()
@@ -189,6 +189,15 @@ def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
         return list()
 
 
+def _get_n_ratings(training: Dict[int, WarmStartUser], meta: Meta): 
+    R = np.zeros((len(meta.users), len(meta.entities)))
+    for user, data in training.items(): 
+        for entity, rating in data.training.items(): 
+            R[user, entity] = 1  # We just care whether there is a rating or not 
+    
+    return R.sum(axis=0)
+
+
 def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser]):
     recent_counts = {r: 0 for r in recents}
     for u, data in training.items():
@@ -225,7 +234,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
             model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
             model_instance.warmup(training, num_questions)
 
-        popular_items = _get_popular_recents(meta.recommendable_entities, training)
+        items_w_n_ratings = _get_n_ratings(training, meta)
 
         for idx, user in tqdm(testing.items(), desc='[Testing]'):
             for answer_set in user.sets:
@@ -245,7 +254,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
                     hits[k].append(hr_at_k(relevance, k))
                     ndcgs[k].append(ndcg_at_k(utility, k))
                     taus[k].append(tau_at_k(utility, k))
-                    sers[k].append(ser_at_k(zip(ranked_cutoff, relevance_cutoff), popular_items, k, normalize=False))
+                    sers[k].append(ser_at_k_v2(zip(ranked_cutoff, relevance_cutoff), items_w_n_ratings, k, normalize=False))
                     covs[k] = covs[k].union(set(ranked_cutoff))
 
         hr = dict()
@@ -306,13 +315,14 @@ def _parse_args():
         logger.add(sys.stderr, level='INFO')
 
     if not args.input:
-        args.input = ['../data']
+        args.input = ['data']
 
     return model_selection, args.input[0], set(args.experiments) if args.experiments else set()
 
 
 def run():
     model_selection, input_path, experiments = _parse_args()
+    experiments = ['default']
 
     dataset = Dataset(input_path)
     for experiment in dataset.experiments():

@@ -1,6 +1,7 @@
 import numpy as np
 from loguru import logger
 from scipy import stats
+from typing import List, Tuple
 
 
 def average_precision(ranked_relevancy_list):
@@ -64,6 +65,26 @@ def ser_at_k(ranked_labeled_items, top_pop_items, k, normalize=False):
         (item, relevance)
         for item, relevance in ranked_labeled_items
         if item not in top_pop_items[:k]
+    ]
+
+    if l := len(serendipitous_labeled_items) == 0:
+        return 0
+
+    return sum([relevance for item, relevance in serendipitous_labeled_items]) / (
+        l if normalize else 1
+    )
+
+
+def ser_at_k_v2(ranked_labeled_items: List[Tuple[int, int]], n_ratings: np.ndarray, k: int, normalize=False): 
+    ranked_labeled_items = list(ranked_labeled_items)
+    items = [i for i, _ in ranked_labeled_items]
+    top_pop = list(sorted([(i, rs) for i, rs in zip(items, n_ratings[items])], key=lambda x: x[1], reverse=True))
+    top_pop = [i for i, rs in top_pop]
+
+    serendipitous_labeled_items = [
+        (item, relevance)
+        for item, relevance in ranked_labeled_items
+        if item not in top_pop[:k]
     ]
 
     if l := len(serendipitous_labeled_items) == 0:
