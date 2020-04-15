@@ -71,7 +71,8 @@ models = {
     },
     'dqn-knn': {
         'class': DqnInterviewer,
-        'recommender': KNNRecommender
+        'recommender': KNNRecommender,
+        'requires_interview_length': True
     },
     'naive-mf': {
         'class': NaiveInterviewer,
