@@ -6,8 +6,8 @@ from scipy.linalg import solve_sylvester, inv, LinAlgError
 from models.lrmf.maxvol import py_rect_maxvol
 from tqdm import tqdm
 
-LIKE = 1
-DISLIKE = 0
+LIKE = 5
+DISLIKE = 1
 
 
 def except_item(lst, item):
