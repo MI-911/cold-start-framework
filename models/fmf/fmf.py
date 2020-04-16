@@ -4,9 +4,9 @@ import numpy as np
 from numpy.linalg import solve
 from tqdm import tqdm
 
-LIKE = 1
-UNKNOWN = 0.5
-DISLIKE = 0
+LIKE = 5
+UNKNOWN = 0
+DISLIKE = 1
 
 
 def split_users(users: List[int], entity: int, ratings: np.ndarray) -> Tuple[List[int], List[int], List[int]]:
