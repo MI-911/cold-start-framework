@@ -28,6 +28,7 @@ from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
+from recommenders.pagerank.linear_pagerank_recommender import LinearPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 from shared.meta import Meta
@@ -67,6 +68,10 @@ models = {
     'naive-ppr-joint': {
         'class': NaiveInterviewer,
         'recommender': JointPageRankRecommender
+    },
+    'naive-ppr-linear': {
+        'class': NaiveInterviewer,
+        'recommender': LinearPageRankRecommender
     },
     'naive-knn': {
       'class': NaiveInterviewer,

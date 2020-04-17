@@ -13,18 +13,19 @@ from shared.utility import get_combinations
 RATING_CATEGORIES = {1, 0, -1}
 
 
-def construct_collaborative_graph(graph: Graph, training: Dict[int, WarmStartUser]):
+def construct_collaborative_graph(graph: Graph, training: Dict[int, WarmStartUser], rating_type=None):
     for user_id, user in training.items():
         user_id = f'user_{user_id}'
         graph.add_node(user_id, entity=False)
 
         for entity_idx, sentiment in user.training.items():
-            # Skip don't knows
-            if sentiment == 0:
+            # Skip don't knows if no rating type have been specified
+            if rating_type is None and sentiment == 0:
                 continue
 
-            graph.add_node(entity_idx, entity=True)
-            graph.add_edge(user_id, entity_idx, sentiment=sentiment)
+            if rating_type is None or sentiment == rating_type:
+                graph.add_node(entity_idx, entity=True)
+                graph.add_edge(user_id, entity_idx, sentiment=sentiment)
 
     return graph
 
