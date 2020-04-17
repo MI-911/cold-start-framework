@@ -68,7 +68,7 @@ class DqnInterviewer(InterviewerBase):
             for params in get_combinations({'fc1_dims': [128, 256, 512]}):
                 self.agent = DqnAgent(candidates=choose_candidates(training), n_entities=self.n_entities,
                                       batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
-                                      eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'])
+                                      eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda)
 
                 score = self.fit_dqn(training, interview_length)
                 param_scores.append((params, score))

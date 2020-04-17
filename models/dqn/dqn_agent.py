@@ -7,7 +7,7 @@ from models.dqn.dqn import DeepQNetwork
 
 class DqnAgent:
     def __init__(self, gamma: float, epsilon: float, alpha: float, candidates: List[int], n_entities: int,
-                 batch_size: int, fc1_dims: int,  max_mem_size: float = 100000, eps_end: float = 0.01, eps_dec: float = 0.996,
+                 batch_size: int, fc1_dims: int,  max_mem_size: float = 10000, eps_end: float = 0.01, eps_dec: float = 0.996,
                  use_cuda: bool = False):
         """
         Constructs an agent for a DQN learning process
