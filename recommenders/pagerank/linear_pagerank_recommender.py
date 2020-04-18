@@ -11,14 +11,14 @@ from loguru import logger
 
 from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.pagerank_recommender import PageRankRecommender, construct_collaborative_graph, \
-    RATING_CATEGORIES
+    RATING_CATEGORIES, construct_knowledge_graph
 from shared.user import WarmStartUser
 from networkx import Graph, pagerank_scipy
 
 
 class GraphWrapper:
-    def __init__(self, training, rating_type):
-        self.graph =  construct_collaborative_graph(Graph(), training, rating_type)
+    def __init__(self, training, meta, rating_type):
+        self.graph = construct_collaborative_graph(construct_knowledge_graph(meta), training, rating_type)
         self.rating_type = rating_type
 
 
@@ -119,7 +119,7 @@ class LinearPageRankRecommender(RecommenderBase):
         sentiments = set(sentiments)
         graphs = []
         for sentiment in sentiments:
-            graphs.append(GraphWrapper(training, sentiment))
+            graphs.append(GraphWrapper(training, meta, sentiment))
 
         self.graphs = graphs
 
