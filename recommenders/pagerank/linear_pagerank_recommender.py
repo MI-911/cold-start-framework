@@ -38,7 +38,7 @@ class LinearPageRankRecommender(RecommenderBase):
 
     def _get_parameters(self):
         params = {'alphas': [0.2, 0.50, 0.85],
-                  'weights': [-2, -1, -0.5, 0, 0.5, 1, 2]}
+                  'weights': [-2, -1, -0.5, -0.4, -0.3, -0.2, 0, 0.2, 0.3, 0.4, 0.5, 1, 2]}
 
         return params
 
@@ -73,6 +73,7 @@ class LinearPageRankRecommender(RecommenderBase):
             real_predictions = {}
             for weight, (user, val, ps) in zip(weights, predictions[num_graphs-1]):
                 if user not in real_predictions:
+                    logger.debug(ps)
                     real_predictions[user] = (val, {k: v * weight for k, v in ps.items()})
                 else:
                     for k, v in ps.items():
@@ -95,7 +96,7 @@ class LinearPageRankRecommender(RecommenderBase):
             for weight in weights:
                 o = self._get_weight_options(weights, num_graphs - 1)
                 for option in o:
-                    if option is tuple:
+                    if isinstance(option, tuple):
                         options.append((weight, *option))
                     else:
                         options.append((weight, option))
@@ -171,7 +172,7 @@ class LinearPageRankRecommender(RecommenderBase):
 
     def _fit(self, training: Dict[int, WarmStartUser], graph: GraphWrapper):
         predictions = []
-        for user, warm in list(training.items())[:50]:
+        for user, warm in training.items():
             node_weights, any_ratings = self.get_node_weights(warm.training, graph.rating_type)
             if any_ratings:
                 prediction = self._scores(node_weights, warm.validation.to_list(), graph.graph)
