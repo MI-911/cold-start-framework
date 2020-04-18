@@ -57,8 +57,7 @@ class LinearPageRankRecommender(RecommenderBase):
                    0: 0.1 / len(unrated_entities)}
 
         # Assign weight to each node depending on their rating
-        return {idx: weight for sentiment, weight in weights.items() for idx in ratings[sentiment]}, \
-               len(rated_entities) > 0
+        return {idx: weight for sentiment, weight in weights.items() for idx in ratings[sentiment]}
 
     def _scores(self, node_weights, items, graph: Graph):
         scores = pagerank_scipy(graph, alpha=self.alpha, personalization=node_weights).items()
@@ -174,11 +173,8 @@ class LinearPageRankRecommender(RecommenderBase):
     def _fit(self, training: Dict[int, WarmStartUser], graph: GraphWrapper):
         predictions = []
         for user, warm in training.items():
-            node_weights, any_ratings = self.get_node_weights(warm.training, graph.rating_type)
-            if any_ratings:
-                prediction = self._scores(node_weights, warm.validation.to_list(), graph.graph)
-            else:
-                prediction = {k: 0 for k in warm.validation.to_list()}
+            node_weights = self.get_node_weights(warm.training, graph.rating_type)
+            prediction = self._scores(node_weights, warm.validation.to_list(), graph.graph)
             predictions.append((user, warm.validation, prediction))
 
         return predictions
@@ -186,13 +182,10 @@ class LinearPageRankRecommender(RecommenderBase):
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         predictions = defaultdict(int)
         for weight, graph in zip(self.weights, self.graphs):
-            node_weights, any_ratings = self.get_node_weights(answers, graph.rating_type)
-            if any_ratings:
-                preds = self._scores(node_weights, items, graph.graph)
-            else:
-                preds = {k: 0 for k in items}
+            node_weights = self.get_node_weights(answers, graph.rating_type)
+            preds = self._scores(node_weights, items, graph.graph)
 
-            for k, v in preds.items():
-                predictions[k] += v * weight
+            for item, score in preds.items():
+                predictions[item] += score * weight
 
         return predictions
