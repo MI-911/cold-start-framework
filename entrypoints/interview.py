@@ -77,6 +77,11 @@ models = {
       'class': NaiveInterviewer,
       'recommender': KNNRecommender
     },
+    'dqn-knn': {
+        'class': DqnInterviewer,
+        'recommender': KNNRecommender,
+        'requires_interview_length': True
+    },
     'naive-mf': {
         'class': NaiveInterviewer,
         'recommender': MatrixFactorizationRecommender
@@ -188,9 +193,12 @@ def _conduct_interview(model: InterviewerBase, answer_set: ColdStartUserSet, n_q
 
 def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
     try:
-        item_scores = sorted(model.predict(ranking.to_list(), answers).items(), key=operator.itemgetter(1), reverse=True)
+        to_rank = ranking.to_list()
+        item_scores = model.predict(to_rank, answers)
 
-        return [item[0] for item in item_scores]
+        # Sort items to rank by their score
+        # Items not present in the item_scores dictionary default to a zero score
+        return list(sorted(to_rank, key=lambda item: item_scores.get(item, 0), reverse=True))
     except Exception as e:
         logger.error(f'Exception during ranking: {e}')
 
