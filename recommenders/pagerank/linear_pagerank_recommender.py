@@ -62,8 +62,8 @@ class LinearPageRankRecommender(RecommenderBase):
 
     def _scores(self, node_weights, items, graph: Graph):
         scores = pagerank_scipy(graph, alpha=self.alpha, personalization=node_weights).items()
-
-        return {item: score for item, score in scores if item in items}
+        scores = {item: score for item, score in scores}
+        return {item: scores.get(item, 0) for item in items}
 
     def _optimize_weights(self, predictions, weights, num_graphs):
         best_score = 0
@@ -71,12 +71,13 @@ class LinearPageRankRecommender(RecommenderBase):
         best_weights = 0
         for weights in self._get_weight_options(weights, num_graphs):
             real_predictions = {}
-            for weight, (user, val, ps) in zip(weights, predictions[num_graphs-1]):
-                if user not in real_predictions:
-                    real_predictions[user] = (val, {k: v * weight for k, v in ps.items()})
-                else:
-                    for k, v in ps.items():
-                        real_predictions[user][1][k] += v * weight
+            for weight, preds in zip(weights, predictions):
+                for user, val, ps in preds:
+                    if user not in real_predictions:
+                        real_predictions[user] = (val, {k: v * weight for k, v in ps.items()})
+                    else:
+                        for k, v in ps.items():
+                            real_predictions[user][1][k] += v * weight
             preds = list(real_predictions.values())
             score = self.meta.validator.score(preds, self.meta)
 
@@ -132,7 +133,8 @@ class LinearPageRankRecommender(RecommenderBase):
 
                 preds = self._multi_fit(training, graphs)
                 preds, weights = self._optimize_weights(preds, parameters['weights'], len(graphs))
-                logger.debug(f'Best weights for alpha {alpha}: {weights}')
+                logger.debug(f'Best weights with rating for alpha {alpha}: '
+                             f'{[(weight, graph.rating_type) for weight, graph in zip(weights, self.graphs)]}')
 
                 score = self.meta.validator.score(preds, self.meta)
 
