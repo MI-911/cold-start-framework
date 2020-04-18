@@ -119,7 +119,7 @@ class LinearPageRankRecommender(RecommenderBase):
         sentiments = set(sentiments)
         graphs = []
         for sentiment in sentiments:
-            graphs.append(GraphWrapper(training, meta, sentiment))
+            graphs.append(GraphWrapper(training, self.meta, sentiment))
 
         self.graphs = graphs
 
