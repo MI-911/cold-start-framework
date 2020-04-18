@@ -73,7 +73,6 @@ class LinearPageRankRecommender(RecommenderBase):
             real_predictions = {}
             for weight, (user, val, ps) in zip(weights, predictions[num_graphs-1]):
                 if user not in real_predictions:
-                    logger.debug(ps)
                     real_predictions[user] = (val, {k: v * weight for k, v in ps.items()})
                 else:
                     for k, v in ps.items():
