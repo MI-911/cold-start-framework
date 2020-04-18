@@ -32,7 +32,7 @@ class LinearPageRankRecommender(RecommenderBase):
 
         # Parameters
         self.alpha = 0
-        self.graph_weights = None
+        self.weights = None
 
         self.optimal_params = None
 
@@ -53,8 +53,8 @@ class LinearPageRankRecommender(RecommenderBase):
 
         # Change if needed
         ratings = {1: rated_entities, 0: unrated_entities}
-        weights = {1: 1 / len(rated_entities) if len(rated_entities) > 0 else 0,
-                   0: 0}
+        weights = {1: 0.9 / len(rated_entities) if len(rated_entities) > 0 else 0,
+                   0: 0.1 / len(unrated_entities)}
 
         # Assign weight to each node depending on their rating
         return {idx: weight for sentiment, weight in weights.items() for idx in ratings[sentiment]}, \
@@ -105,7 +105,7 @@ class LinearPageRankRecommender(RecommenderBase):
 
     def _set_parameters(self, parameters):
         self.alpha = parameters['alpha']
-        self.graph_weights = parameters['weights']
+        self.weights = parameters['weights']
 
     def fit(self, training: Dict[int, WarmStartUser]):
         # Get sentiments and entities
@@ -139,7 +139,7 @@ class LinearPageRankRecommender(RecommenderBase):
                 score = self.meta.validator.score(preds, self.meta)
 
                 if score > best_score:
-                    logger.debug(f'Parameters were better with score: {score}')
+                    logger.debug(f'New best with score: {score} and params, alpha: {alpha}, weights:{weights}')
                     best_score = score
                     best_params = {'alpha': alpha, 'weights': weights}
 
@@ -185,14 +185,14 @@ class LinearPageRankRecommender(RecommenderBase):
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         predictions = defaultdict(int)
-        for weight, graph in zip(self.graph_weights, self.graphs):
+        for weight, graph in zip(self.weights, self.graphs):
             node_weights, any_ratings = self.get_node_weights(answers, graph.rating_type)
             if any_ratings:
-                prediction = self._scores(node_weights, items, graph.graph)
+                preds = self._scores(node_weights, items, graph.graph)
             else:
-                prediction = {k: 0 for k in items}
+                preds = {k: 0 for k in items}
 
-            for k, v in prediction.items():
+            for k, v in preds.items():
                 predictions[k] += v * weight
 
         return predictions
