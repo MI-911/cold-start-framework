@@ -12,13 +12,16 @@ from loguru import logger
 from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.pagerank_recommender import PageRankRecommender, construct_collaborative_graph, \
     RATING_CATEGORIES, construct_knowledge_graph
+from shared.meta import Meta
 from shared.user import WarmStartUser
 from networkx import Graph, pagerank_scipy
 
 
 class GraphWrapper:
-    def __init__(self, training, rating_type, meta=None):
-        if meta is None:
+    def __init__(self, training, rating_type, meta=None, only_kg=False):
+        if only_kg:
+          self.graph = construct_knowledge_graph(meta)
+        elif meta is None:
             self.graph = construct_collaborative_graph(Graph(), training, rating_type)
         else:
             self.graph = construct_collaborative_graph(construct_knowledge_graph(meta), training, rating_type)
@@ -39,13 +42,16 @@ class LinearPageRankRecommender(RecommenderBase):
 
         self.optimal_params = None
 
+    def construct_graph(self, training: Dict[int, WarmStartUser]) -> List[GraphWrapper]:
+        raise NotImplementedError()
+
     def _get_parameters(self):
         params = {'alphas': [0.2, 0.50, 0.85],
                   'weights': [-2, -1, -0.5, -0.4, -0.3, -0.2, 0, 0.2, 0.3, 0.4, 0.5, 1, 2]}
 
         return params
 
-    def get_node_weights(self, answers, rating_type):
+    def _get_node_weights(self, answers, rating_type):
         rated_entities = []
 
         for entity_idx, sentiment in answers.items():
@@ -117,13 +123,7 @@ class LinearPageRankRecommender(RecommenderBase):
                 self.entity_indices.add(entity)
                 sentiments.append(sentiment)
 
-        # Create graphs
-        sentiments = set(sentiments)
-        graphs = []
-        for sentiment in sentiments:
-            graphs.append(GraphWrapper(training, sentiment))
-
-        self.graphs = graphs
+        self.graphs = self.construct_graph(training)
 
         if self.optimal_params is None:
             best_score = -1
@@ -176,7 +176,7 @@ class LinearPageRankRecommender(RecommenderBase):
     def _fit(self, training: Dict[int, WarmStartUser], graph: GraphWrapper):
         predictions = []
         for user, warm in training.items():
-            node_weights = self.get_node_weights(warm.training, graph.rating_type)
+            node_weights = self._get_node_weights(warm.training, graph.rating_type)
             prediction = self._scores(node_weights, warm.validation.to_list(), graph.graph)
             predictions.append((user, warm.validation, prediction))
 
@@ -185,7 +185,7 @@ class LinearPageRankRecommender(RecommenderBase):
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         predictions = defaultdict(int)
         for weight, graph in zip(self.weights, self.graphs):
-            node_weights = self.get_node_weights(answers, graph.rating_type)
+            node_weights = self._get_node_weights(answers, graph.rating_type)
             preds = self._scores(node_weights, items, graph.graph)
 
             for item, score in preds.items():

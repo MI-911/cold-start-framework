@@ -1,7 +1,6 @@
 import argparse
 import json
 import multiprocessing
-import operator
 import os
 import sys
 import time
@@ -12,7 +11,6 @@ from typing import Dict, Set, List
 
 import numpy as np
 from loguru import logger
-from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
@@ -28,7 +26,9 @@ from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
-from recommenders.pagerank.linear_pagerank_recommender import LinearPageRankRecommender
+from recommenders.pagerank.linear_collaborative_pagerank_recommender import LinearCollaborativePageRankRecommender
+from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointPageRankRecommender
+from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 from shared.meta import Meta
@@ -69,9 +69,17 @@ models = {
         'class': NaiveInterviewer,
         'recommender': JointPageRankRecommender
     },
-    'naive-ppr-linear': {
+    'naive-ppr-linear-collab': {
         'class': NaiveInterviewer,
-        'recommender': LinearPageRankRecommender
+        'recommender': LinearCollaborativePageRankRecommender
+    },
+    'naive-ppr-linear-joint': {
+        'class': NaiveInterviewer,
+        'recommender': LinearJointPageRankRecommender
+    },
+    'naive-ppr-linear-kg': {
+        'class': NaiveInterviewer,
+        'recommender': LinearKGPageRankRecommender
     },
     'naive-knn': {
       'class': NaiveInterviewer,
