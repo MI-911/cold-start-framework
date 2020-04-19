@@ -17,8 +17,11 @@ from networkx import Graph, pagerank_scipy
 
 
 class GraphWrapper:
-    def __init__(self, training, meta, rating_type):
-        self.graph = construct_collaborative_graph(construct_knowledge_graph(meta), training, rating_type)
+    def __init__(self, training, rating_type, meta=None):
+        if meta is None:
+            self.graph = construct_collaborative_graph(Graph(), training, rating_type)
+        else:
+            self.graph = construct_collaborative_graph(construct_knowledge_graph(meta), training, rating_type)
         self.rating_type = rating_type
 
 
@@ -53,8 +56,8 @@ class LinearPageRankRecommender(RecommenderBase):
 
         # Change if needed
         ratings = {1: rated_entities, 0: unrated_entities}
-        weights = {1: 0.9 / len(rated_entities) if len(rated_entities) > 0 else 0,
-                   0: 0.1 / len(unrated_entities)}
+        weights = {1: 1.0,
+                   0: 0. if len(rated_entities) > 0 else 1.}
 
         # Assign weight to each node depending on their rating
         return {idx: weight for sentiment, weight in weights.items() for idx in ratings[sentiment]}
@@ -118,7 +121,7 @@ class LinearPageRankRecommender(RecommenderBase):
         sentiments = set(sentiments)
         graphs = []
         for sentiment in sentiments:
-            graphs.append(GraphWrapper(training, self.meta, sentiment))
+            graphs.append(GraphWrapper(training, sentiment))
 
         self.graphs = graphs
 
@@ -130,8 +133,8 @@ class LinearPageRankRecommender(RecommenderBase):
                 logger.debug(f'Trying with alpha: {alpha}')
                 self.alpha = alpha
 
-                preds = self._multi_fit(training, graphs)
-                preds, weights = self._optimize_weights(preds, parameters['weights'], len(graphs))
+                preds = self._multi_fit(training)
+                preds, weights = self._optimize_weights(preds, parameters['weights'], len(self.graphs))
                 logger.debug(f'Best weights with rating for alpha {alpha}: '
                              f'{[(weight, graph.rating_type) for weight, graph in zip(weights, self.graphs)]}')
 
@@ -146,14 +149,14 @@ class LinearPageRankRecommender(RecommenderBase):
 
         self._set_parameters(self.optimal_params)
 
-    def _multi_fit(self, training: Dict[int, WarmStartUser], graphs: List[GraphWrapper]):
+    def _multi_fit(self, training: Dict[int, WarmStartUser]):
         futures = []
-        outer_workers = len(graphs)
+        outer_workers = len(self.graphs)
         inner_workers = multiprocessing.cpu_count() // outer_workers
         inner_workers = inner_workers if inner_workers != 0 else 1
 
         with ThreadPoolExecutor(max_workers=outer_workers) as executor:
-            for graph in graphs[::-1]:
+            for graph in self.graphs:
                 futures.append(executor.submit(self._inner_multi_fit, training, graph, inner_workers))
 
             wait(futures)
