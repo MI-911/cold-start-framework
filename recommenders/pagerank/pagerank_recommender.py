@@ -4,6 +4,7 @@ from typing import List, Dict
 
 from loguru import logger
 from networkx import Graph, pagerank_scipy
+from tqdm import tqdm
 
 from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
@@ -108,7 +109,7 @@ class PageRankRecommender(RecommenderBase):
                 logger.debug(f'Trying {combination}')
 
                 predictions = list()
-                for _, user in training.items():
+                for _, user in tqdm(training.items()):
                     node_weights = self.get_node_weights(user.training, combination['importance'])
                     prediction = self._scores(combination['alpha'], node_weights, user.validation.to_list())
 
