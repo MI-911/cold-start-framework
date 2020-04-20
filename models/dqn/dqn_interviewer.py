@@ -1,11 +1,9 @@
-from collections import defaultdict
 from typing import List, Dict, Union
 import numpy as np
 from loguru import logger
 from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
-from models.dqn.dqn import DeepQNetwork
 from models.dqn.dqn_agent import DqnAgent
 from models.dqn.dqn_environment import Environment, Rewards
 from recommenders.base_recommender import RecommenderBase
@@ -66,6 +64,9 @@ class DqnInterviewer(InterviewerBase):
         if not self.params:
             param_scores = []
             for params in get_combinations({'fc1_dims': [128, 256, 512]}):
+                del self.agent
+                # logger.info(f'Waiting for GC...')
+                # time.sleep(5)
                 self.agent = DqnAgent(candidates=choose_candidates(training), n_entities=self.n_entities,
                                       batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
                                       eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda)
@@ -83,7 +84,7 @@ class DqnInterviewer(InterviewerBase):
         self.fit_dqn(training, interview_length)
 
     def fit_dqn(self, training: Dict[int, WarmStartUser], interview_length: int) -> float:
-        n_iterations = 10
+        n_iterations = 5
 
         epsilons = []
         scores = []
@@ -133,7 +134,7 @@ class DqnInterviewer(InterviewerBase):
                 epsilons.append(self.agent.epsilon)
                 scores.append(_reward)
                 if _loss is not None:
-                    losses.append(_loss.detach().numpy())
+                    losses.append(_loss.cpu().detach().numpy())
 
         return recent_mean(scores)
 
