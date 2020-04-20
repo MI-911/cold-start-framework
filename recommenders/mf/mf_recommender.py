@@ -77,8 +77,6 @@ class MatrixFactorizationRecommender(RecommenderBase):
             random.shuffle(training_triples)
             self.model.train_als(training_triples)
 
-            score = self._validate(users)
-
     def _validate(self, users: Dict[int, WarmStartUser]):
         # Validate on users using the meta.validator
         predictions = []
