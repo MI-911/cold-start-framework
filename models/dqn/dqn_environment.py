@@ -115,34 +115,37 @@ class Environment:
 
         # Adjust state
         entity_state_idx = entity * 2
+        if self.state[entity_state_idx]:
+            # This question has already been asked, no reward
+            return self.state, 0.0
+
         self.state[entity_state_idx] = 1
         self.state[entity_state_idx + 1] = answer
 
         self.answers[entity] = answer
 
+        # Prevent the model just learning to ask towards non-popular items
+        if answer == 0:
+            return self.state, 0.0
+
         # Calculate reward
-        reward = self._reward()
+        reward = self._reward_with_caching()
         return self.state, reward
 
-    def _reward(self):
-        answers_str = str(self.answers)
-
+    def _reward_with_caching(self):
+        answers_str = str(sorted(self.answers.items(), key=lambda x: x[0]))
         if answers_str not in self.predictions_cache:
             self.predictions_cache[answers_str] = self.recommender.predict(self.all_entities, self.answers)
 
         scores = {e: s for e, s in self.predictions_cache[answers_str].items() if e in self.to_rate}
-
         ranked = [e for e, s in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
 
-        # What should we leave out?
-        # 1. Pick a random liked entity that has not yet been answered on
-        #   - Issue: There might not be any entities left.
-        # 2. When resetting, ask to reset to a specific user.
-        #    When this happens, pick, at random, a liked entity and remove
-        #    its rating from the rating matrix.
-        #    This is the LOO entity that we will generate rewards from.
-        #    Also, when resetting, re-insert the old LOO entity into the
-        #    ratings matrix.
+        metric_score = self._compute_metric(ranked, self.left_out_item)
+        return metric_score
+
+    def _reward(self):
+        scores = self.recommender.predict(self.all_entities, self.answers)
+        ranked = [e for e, s in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
 
         metric_score = self._compute_metric(ranked, self.left_out_item)
         return metric_score
