@@ -4,6 +4,7 @@ import random
 from typing import List
 
 import pandas as pd
+import numpy as np
 import tqdm
 from loguru import logger
 from pandas import DataFrame
@@ -38,7 +39,11 @@ def _get_ratings_dict(from_ratings):
     return {row.entityIdx: row.sentiment for _, row in from_ratings.iterrows()}
 
 
-def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters: List[CountFilter]):
+def _chunks(lst, ratio):
+    return [set(arr) for arr in np.array_split(lst, int(1 / ratio))]
+
+
+def _get_ratings(ratings_path, include_unknown, cold_start_ratio, count_filters: List[CountFilter]):
     ratings = pd.read_csv(ratings_path)
     if not include_unknown:
         ratings = ratings[ratings.sentiment != 0]
@@ -82,13 +87,26 @@ def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters:
     users = ratings['userId'].unique()
     random.shuffle(users)
 
-    num_warm_start = int(len(users) * warm_start_ratio)
-    warm_start_users = set(users[:num_warm_start])
-    cold_start_users = set(users[num_warm_start:])
+    splits = list()
 
-    assert warm_start_users.isdisjoint(cold_start_users)
+    # Create splits corresponding to 1 / cold_start_ratio
+    for cold_start_users in _chunks(users, cold_start_ratio):
+        warm_start_users = set(users) - set(cold_start_users)
 
-    return ratings, warm_start_users, cold_start_users, users
+        assert warm_start_users.isdisjoint(cold_start_users)
+        assert len(cold_start_users) + len(warm_start_users) == len(users)
+
+        splits.append((warm_start_users, cold_start_users))
+
+    # Assert that no cold start user appears twice
+    for i, (_, cold_users) in enumerate(splits):
+        for j, (_, other_cold_users) in enumerate(splits):
+            if i == j:
+                continue
+
+            assert not cold_users.intersection(other_cold_users)
+
+    return ratings, users, splits
 
 
 def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users, user_idx):
@@ -174,25 +192,24 @@ def partition(experiment: ExperimentOptions, input_directory, output_directory):
     triples_path = os.path.join(input_directory, 'triples.csv')
 
     entities = _get_entities(entities_path)
+    random.seed(experiment.seed)
 
-    for idx, seed in enumerate(experiment.split_seeds):
+    # Load ratings data
+    ratings, users, splits = _get_ratings(ratings_path, experiment.include_unknown, experiment.cold_start_ratio,
+                                          count_filters=experiment.count_filters)
+
+    for idx, (warm_users, cold_users) in enumerate(splits):
         split_name = f'split_{idx}'
         split_output_directory = os.path.join(os.path.join(output_directory, experiment.name), split_name)
 
-        logger.info(f'Partitioning {experiment.name}/{split_name}')
+        logger.info(f'Creating split {experiment.name}/{split_name}')
 
-        partition_seed(experiment, seed, entities, split_output_directory, ratings_path, triples_path)
+        _create_split(experiment, entities, split_output_directory, triples_path, ratings, users, warm_users,
+                      cold_users)
 
 
-def partition_seed(experiment: ExperimentOptions, seed: int, entities, output_directory: str,
-                   ratings_path: str, triples_path: str):
-    random.seed(seed)
-
-    # Load ratings data
-    ratings, warm_users, cold_users, users = _get_ratings(ratings_path, experiment.include_unknown,
-                                                          experiment.warm_start_ratio,
-                                                          count_filters=experiment.count_filters)
-
+def _create_split(experiment: ExperimentOptions, entities, output_directory: str, triples_path: str, ratings, users,
+                  warm_users, cold_users):
     # Map users and entities to indices
     user_idx = {k: v for v, k in enumerate(users)}
     entity_idx = {k: v for v, k in enumerate(set(entities.keys()))}
@@ -207,7 +224,6 @@ def partition_seed(experiment: ExperimentOptions, seed: int, entities, output_di
 
     logger.info(f'Created {len(training_data)} training entries and {len(testing_data)} testing entries')
 
-    # Write data to disk
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
 

@@ -46,14 +46,14 @@ class CountFilter:
 
 
 class ExperimentOptions:
-    def __init__(self, name: str, split_seeds: List[int], ranking_options: RankingOptions,
-                 count_filters: List[CountFilter] = None, warm_start_ratio: float = 0.75,
+    def __init__(self, name: str, seed: int, ranking_options: RankingOptions,
+                 count_filters: List[CountFilter] = None, cold_start_ratio: float = 0.25,
                  include_unknown: bool = False, evaluation_samples: int = 10,
                  validator: Validator = None):
         self.name = name
-        self.split_seeds = split_seeds
+        self.seed = seed
         self.count_filters = count_filters
-        self.warm_start_ratio = warm_start_ratio
+        self.cold_start_ratio = cold_start_ratio
         self.include_unknown = include_unknown
         self.ranking_options = ranking_options
         self.evaluation_samples = evaluation_samples
