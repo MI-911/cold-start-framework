@@ -11,6 +11,7 @@ from typing import Dict, Set, List
 
 import numpy as np
 from loguru import logger
+from tqdm import tqdm
 
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
@@ -232,7 +233,7 @@ def test(testing, model_instance, num_questions, upper_cutoff, meta, popular_ite
     sers = defaultdict(list)
     covs = defaultdict(set)
 
-    for idx, user in testing.items():
+    for idx, user in tqdm(testing.items(), total=len(testing)):
         for answer_set in user.sets:
             # Query the interviewer for the next entity to ask about
             # Then produce a ranked list given the current interview state
@@ -276,32 +277,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
         popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
-        workers = multiprocessing.cpu_count()
-        lst = list(testing.items())
-        chunks = [lst[i::workers] for i in range(workers)]
-
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            futures = []
-            for chunk in chunks:
-                futures.append(executor.submit(test, dict(chunk), model_instance,
-                                               num_questions, upper_cutoff, meta, popular_items))
-
-        wait(futures)
-
-        hits = defaultdict(list)
-        ndcgs = defaultdict(list)
-        taus = defaultdict(list)
-        sers = defaultdict(list)
-        covs = defaultdict(set)
-
-        for future in futures:
-            h, n, t, s, c = future.result()
-            for k in range(1, upper_cutoff + 1):
-                hits[k].extend(h[k])
-                ndcgs[k].extend(n[k])
-                taus[k].extend(t[k])
-                sers[k].extend(s[k])
-                covs[k] = covs[k].union(c[k])
+        hits, ndcgs, taus, sers, covs = test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items)
 
         hr = dict()
         ndcg = dict()
