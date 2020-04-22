@@ -1,14 +1,18 @@
 import operator
 from functools import reduce
+from random import shuffle
 from typing import List, Dict
 
 from loguru import logger
 from networkx import Graph, pagerank_scipy
+from tqdm import tqdm
 
 from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
 from shared.user import WarmStartUser
 from shared.utility import get_combinations
+
+from scipy.stats import ttest_rel
 
 RATING_CATEGORIES = {1, 0, -1}
 
@@ -94,10 +98,11 @@ class PageRankRecommender(RecommenderBase):
 
         if not self.optimal_params:
             parameters = {
-                'alpha': [0.25, 0.50, 0.85],
+                'alpha': [0.15, 0.5, 0.85],
                 'importance': [
-                    {1: 0.9, 0: 0.1, -1: 0.0},
-                    {1: 0.5, 0: 0.5, -1: 0.0},
+                    {1: 0.95, 0: 0.05, -1: 0.0},
+                    {1: 0.75, 0: 0.25, -1: 0.0},
+                    {1: 0.45, 0: 0.10, -1: 0.45},
                 ]
             }
 
@@ -105,11 +110,14 @@ class PageRankRecommender(RecommenderBase):
 
             results = list()
 
+            validation_users = list(training.items())
+            shuffle(validation_users)
+
             for combination in combinations:
                 logger.debug(f'Trying {combination}')
 
                 predictions = list()
-                for _, user in training.items():
+                for _, user in tqdm(validation_users[:int(len(validation_users) * 0.1)]):
                     node_weights = self.get_node_weights(user.training, combination['importance'])
                     prediction = self._scores(combination['alpha'], node_weights, user.validation.to_list())
 

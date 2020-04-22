@@ -28,7 +28,7 @@ class NaiveInterviewer(InterviewerBase):
 
     @staticmethod
     def _compute_weight(popularity, variance):
-        return np.log2(popularity) * variance
+        return popularity
 
     def warmup(self, training, interview_length=5):
         self.recommender.fit(training)

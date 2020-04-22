@@ -28,7 +28,8 @@ def download_triples(path):
 def download_ratings(path):
     logger.info('Downloading ratings')
 
-    urlretrieve(f'{BASE_URL}/ratings?versions=100k,100k-newer,100k-fix', os.path.join(path, 'ratings.csv'))
+    # versions=100k,100k-newer,100k-fix
+    urlretrieve(f'{BASE_URL}/ratings?versions=100k,100k-newer,100k-fix&final=yes', os.path.join(path, 'ratings.csv'))
 
 
 if __name__ == '__main__':
@@ -40,6 +41,6 @@ if __name__ == '__main__':
 
     output_path = args.output[0]
 
-    download_ratings(output_path)
     download_entities(output_path)
+    download_ratings(output_path)
     download_triples(output_path)

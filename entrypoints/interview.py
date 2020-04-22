@@ -98,22 +98,26 @@ models = {
     'dqn-mf': {
         'class': DqnInterviewer,
         'recommender': MatrixFactorizationRecommender,
-        'requires_interview_length': True
+        'requires_interview_length': True,
+        'use_cuda': True
     },
     'dqn-ppr-kg': {
         'class': DqnInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender,
-        'requires_interview_length': True
+        'requires_interview_length': True,
+        'use_cuda': True
     },
     'dqn-ppr-collab': {
         'class': DqnInterviewer,
         'recommender': CollaborativePageRankRecommender,
-        'requires_interview_length': True
+        'requires_interview_length': True,
+        'use_cuda': True
     },
     'dqn-ppr-joint': {
         'class': DqnInterviewer,
         'recommender': JointPageRankRecommender,
-        'requires_interview_length': True
+        'requires_interview_length': True,
+        'use_cuda': True
     },
     'fmf': {
         'class': FMFInterviewer,
