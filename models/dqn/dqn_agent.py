@@ -1,8 +1,6 @@
 import torch as tt
 import numpy as np
-from typing import List, Union
-
-from memory_profiler import profile
+from typing import List
 
 from models.dqn.dqn import DeepQNetwork
 import pickle
