@@ -122,14 +122,6 @@ class KNNRecommender(RecommenderBase):
             predictions.append((warm.validation, preds))
         return predictions
 
-    def _score_function(self, users, similarities, ratings):
-        if self.user_bias:
-            ratings = ratings - self.user_mean[users]
-
-        score = np.sum(ratings * similarities) / np.sum(similarities)
-
-        return score
-
     def _predict(self, user_vector, item: int):
         related = np.where(self.entity_vectors[:, item] != 0)[0]
 

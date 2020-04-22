@@ -1,10 +1,12 @@
 import argparse
 import json
-import operator
+import multiprocessing
 import os
 import sys
 import time
 from collections import defaultdict
+from concurrent.futures._base import wait
+from concurrent.futures.process import ProcessPoolExecutor
 from typing import Dict, Set, List
 
 import numpy as np
@@ -25,6 +27,9 @@ from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
+from recommenders.pagerank.linear_collaborative_pagerank_recommender import LinearCollaborativePageRankRecommender
+from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointPageRankRecommender
+from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 from shared.meta import Meta
@@ -64,6 +69,18 @@ models = {
     'naive-ppr-joint': {
         'class': NaiveInterviewer,
         'recommender': JointPageRankRecommender
+    },
+    'naive-ppr-linear-collab': {
+        'class': NaiveInterviewer,
+        'recommender': LinearCollaborativePageRankRecommender
+    },
+    'naive-ppr-linear-joint': {
+        'class': NaiveInterviewer,
+        'recommender': LinearJointPageRankRecommender
+    },
+    'naive-ppr-linear-kg': {
+        'class': NaiveInterviewer,
+        'recommender': LinearKGPageRankRecommender
     },
     'naive-knn': {
       'class': NaiveInterviewer,
@@ -213,6 +230,37 @@ def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser])
             in sorted(recent_counts.items(), key=lambda x: x[1], reverse=True)]
 
 
+def test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items):
+    hits = defaultdict(list)
+    ndcgs = defaultdict(list)
+    taus = defaultdict(list)
+    sers = defaultdict(list)
+    covs = defaultdict(set)
+
+    for idx, user in tqdm(testing.items(), total=len(testing)):
+        for answer_set in user.sets:
+            # Query the interviewer for the next entity to ask about
+            # Then produce a ranked list given the current interview state
+            answers = _conduct_interview(model_instance, answer_set, num_questions)
+            ranked_list = _produce_ranking(model_instance, answer_set.ranking, answers)
+
+            # From the ranked list, get ordered binary relevance and utility
+            relevance = answer_set.ranking.get_relevance(ranked_list)
+            utility = answer_set.ranking.get_utility(ranked_list, meta.sentiment_utility)
+
+            for k in range(1, upper_cutoff + 1):
+                ranked_cutoff = ranked_list[:k]
+                relevance_cutoff = relevance[:k]
+
+                hits[k].append(hr_at_k(relevance, k))
+                ndcgs[k].append(ndcg_at_k(utility, k))
+                taus[k].append(tau_at_k(utility, k))
+                sers[k].append(ser_at_k(zip(ranked_cutoff, relevance_cutoff), popular_items, k, normalize=False))
+                covs[k] = covs[k].union(set(ranked_cutoff))
+
+    return hits, ndcgs, taus, sers, covs
+
+
 def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[int, WarmStartUser],
                testing: Dict[int, ColdStartUser], max_n_questions=5, upper_cutoff=50):
     model_instance, requires_interview_length = _instantiate_model(model_name, experiment, meta)
@@ -227,38 +275,13 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
     for num_questions in range(1, max_n_questions + 1, 1):
         logger.info(f'Conducting interviews of length {num_questions}...')
 
-        hits = defaultdict(list)
-        ndcgs = defaultdict(list)
-        taus = defaultdict(list)
-        sers = defaultdict(list)
-        covs = defaultdict(set)
-
         if requires_interview_length:
             model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
             model_instance.warmup(training, num_questions)
 
         popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
-        for idx, user in tqdm(testing.items(), desc='[Testing]'):
-            for answer_set in user.sets:
-                # Query the interviewer for the next entity to ask about
-                # Then produce a ranked list given the current interview state
-                answers = _conduct_interview(model_instance, answer_set, num_questions)
-                ranked_list = _produce_ranking(model_instance, answer_set.ranking, answers)
-
-                # From the ranked list, get ordered binary relevance and utility
-                relevance = answer_set.ranking.get_relevance(ranked_list)
-                utility = answer_set.ranking.get_utility(ranked_list, meta.sentiment_utility)
-
-                for k in range(1, upper_cutoff + 1):
-                    ranked_cutoff = ranked_list[:k]
-                    relevance_cutoff = relevance[:k]
-
-                    hits[k].append(hr_at_k(relevance, k))
-                    ndcgs[k].append(ndcg_at_k(utility, k))
-                    taus[k].append(tau_at_k(utility, k))
-                    sers[k].append(ser_at_k(zip(ranked_cutoff, relevance_cutoff), popular_items, k, normalize=False))
-                    covs[k] = covs[k].union(set(ranked_cutoff))
+        hits, ndcgs, taus, sers, covs = test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items)
 
         hr = dict()
         ndcg = dict()
