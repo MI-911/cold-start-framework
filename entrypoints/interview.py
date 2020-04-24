@@ -119,6 +119,24 @@ models = {
         'requires_interview_length': True,
         'use_cuda': True
     },
+    'dqn-ppr-linear-kg': {
+        'class': DqnInterviewer,
+        'recommender': LinearKGPageRankRecommender,
+        'requires_interview_length': True,
+        'use_cuda': True
+    },
+    'dqn-ppr-linear-joint': {
+        'class': DqnInterviewer,
+        'recommender': LinearJointPageRankRecommender,
+        'requires_interview_length': True,
+        'use_cuda': True
+    },
+    'dqn-ppr-linear-collab': {
+        'class': DqnInterviewer,
+        'recommender': LinearCollaborativePageRankRecommender,
+        'requires_interview_length': True,
+        'use_cuda': True
+    },
     'fmf': {
         'class': FMFInterviewer,
         'requires_interview_length': True,
