@@ -23,7 +23,9 @@ if __name__ == '__main__':
     ax2.set_ylabel('Time (s)', color=color)
     ax2.plot(particles, times, color=color)
     ax2.tick_params(axis='y', labelcolor=color)
+    plt.grid()
 
     fig.tight_layout()
 
+    plt.savefig('pf_experiment.pdf', bbox_inches='tight')
     plt.show()

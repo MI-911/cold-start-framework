@@ -9,7 +9,7 @@ import tqdm
 from neo4j import GraphDatabase
 from loguru import logger
 
-num_particles = [10, 25, 50, 75, 100, 200, 500, 1000]
+num_particles = [1000]
 
 _uri = environ.get('BOLT_URI', 'bolt://localhost:7778')
 driver = GraphDatabase.driver(_uri, auth=("neo4j", "root123"))
@@ -64,8 +64,8 @@ def run_filtering(num_particles, cutoff, source_uris, rank):
 
 
 def benchmark_particles():
-    training = pickle.load(open('../data/basic/split_0/training.pkl', 'rb'))
-    meta = pickle.load(open('../data/basic/split_0/meta.pkl', 'rb'))
+    training = pickle.load(open('../data/default/split_0/training.pkl', 'rb'))
+    meta = pickle.load(open('../data/default/split_0/meta.pkl', 'rb'))
 
     idx_uri = {v: k for k, v in meta.uri_idx.items()}
     cutoff = 10
@@ -76,10 +76,8 @@ def benchmark_particles():
         hits = list()
 
         for user, data in tqdm.tqdm(training.items()):
-            start_time = time.time()
-            positive_uri = idx_uri[data.validation['positive']]
             liked_uris = [idx_uri[idx] for idx, rating in data.training.items() if rating == 1]
-            uris_to_rank = [positive_uri] + [idx_uri[idx] for idx in data.validation['negative']]
+            uris_to_rank = [idx_uri[idx] for idx in data.validation.to_list()]
             shuffle(uris_to_rank)
 
             assert not set(liked_uris).intersection(set(uris_to_rank))
@@ -87,11 +85,13 @@ def benchmark_particles():
             if not liked_uris or not uris_to_rank:
                 continue
 
-            # ranked_list = run_ppr(0.25, cutoff, liked_uris, uris_to_rank)
+            start_time = time.time()
+            #ranked_list = run_ppr(0.85, cutoff, liked_uris, uris_to_rank)
             ranked_list = run_filtering(particles, cutoff, liked_uris, uris_to_rank)
-
-            hits.append(positive_uri in ranked_list)
             time_taken.append(time.time() - start_time)
+
+            ranked_list = [meta.uri_idx[uri] for uri in ranked_list]
+            hits.append(1 in data.validation.get_relevance(ranked_list))
 
         logger.info(f'Finished n_particles={particles}')
 
