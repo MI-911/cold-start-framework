@@ -280,7 +280,7 @@ def test(testing, model_instance, num_questions, upper_cutoff, meta, popular_ite
 
 
 def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[int, WarmStartUser],
-               testing: Dict[int, ColdStartUser], max_n_questions=5, upper_cutoff=50):
+               testing: Dict[int, ColdStartUser], max_n_questions, upper_cutoff=50):
     model_instance, requires_interview_length = _instantiate_model(model_name, experiment, meta)
 
     logger.info(f'Running model {model_name}')
@@ -340,7 +340,7 @@ def _run_split(model_selection: Set[str], split: Split):
         start_time = time.time()
         logger.info(f'Running {model} on {split}')
 
-        for model_instance, qs, nq in _run_model(model, split.experiment, meta, training, testing, max_n_questions=5):
+        for model_instance, qs, nq in _run_model(model, split.experiment, meta, training, testing, max_n_questions=10):
             logger.info(f'Writing results and parameters for {model} on split {split.name}, interview length {nq}')
             _write_parameters(model, split.experiment, model_instance, nq)
             _write_results(model, qs, split)

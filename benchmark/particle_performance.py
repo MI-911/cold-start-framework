@@ -9,7 +9,7 @@ import tqdm
 from neo4j import GraphDatabase
 from loguru import logger
 
-num_particles = [1000]
+num_particles = [10, 25, 50, 75, 100, 200, 500, 1000]
 
 _uri = environ.get('BOLT_URI', 'bolt://localhost:7778')
 driver = GraphDatabase.driver(_uri, auth=("neo4j", "root123"))

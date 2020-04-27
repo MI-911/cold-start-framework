@@ -24,15 +24,19 @@ def _sample_seen(ratings: DataFrame, sentiment: Sentiment, n_items=1):
     return set(items[:n_items])
 
 
-def _sample_unseen(ratings: DataFrame, user_id: int, n_items=100):
+def _choice(lst, count, probabilities):
+    return np.random.choice(lst, size=count, replace=False, p=np.array(probabilities) / np.sum(probabilities))
+
+
+def _sample_unseen(ratings: DataFrame, user_id: int, n_items):
     item_ratings = ratings[ratings.isItem]
 
     seen_items = set(item_ratings[item_ratings.userId == user_id].entityIdx.unique())
     unseen_items = list(set(item_ratings.entityIdx.unique()).difference(seen_items))
 
-    random.shuffle(unseen_items)
+    entity_weight = dict(zip(item_ratings['entityIdx'], item_ratings['num_ratings']))
 
-    return set(unseen_items[:n_items])
+    return _choice(unseen_items, n_items, [entity_weight[item] for item in unseen_items])
 
 
 def _get_ratings_dict(from_ratings):
@@ -56,9 +60,11 @@ def _get_ratings(ratings_path, include_unknown, cold_start_ratio, count_filters:
         exit(1)
 
     # Compute ratings per entity
-    # In the future, this could be used for popularity sampling of negative samples
     entity_ratings = ratings[['uri', 'userId']].groupby('uri').count()
     entity_ratings.columns = ['num_ratings']
+
+    # Add number of ratings to ratings, used for entity sampling
+    ratings = ratings.merge(entity_ratings, on='uri')
 
     # Filter users with count filters
     if count_filters:
