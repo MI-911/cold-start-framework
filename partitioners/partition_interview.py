@@ -36,7 +36,7 @@ def _sample_unseen(ratings: DataFrame, user_id: int, n_items, positive_items: Li
 
     entity_weight = dict(zip(item_ratings['entityIdx'], item_ratings['num_ratings']))
 
-    if positive_items:
+    if positive_items and False:
         positive_ratings = np.mean([entity_weight[item] for item in positive_items])
 
         entity_weight = {e: pow(abs(positive_ratings - w) + 1, -alpha) for e, w in entity_weight.items()}
