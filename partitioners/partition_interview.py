@@ -28,13 +28,18 @@ def _choice(lst, count, probabilities):
     return np.random.choice(lst, size=count, replace=False, p=np.array(probabilities) / np.sum(probabilities))
 
 
-def _sample_unseen(ratings: DataFrame, user_id: int, n_items):
+def _sample_unseen(ratings: DataFrame, user_id: int, n_items, positive_items: List[int] = None, alpha=3):
     item_ratings = ratings[ratings.isItem]
 
     seen_items = set(item_ratings[item_ratings.userId == user_id].entityIdx.unique())
     unseen_items = list(set(item_ratings.entityIdx.unique()).difference(seen_items))
 
     entity_weight = dict(zip(item_ratings['entityIdx'], item_ratings['num_ratings']))
+
+    if positive_items:
+        positive_ratings = np.mean([entity_weight[item] for item in positive_items])
+
+        entity_weight = {e: pow(abs(positive_ratings - w) + 1, -alpha) for e, w in entity_weight.items()}
 
     return _choice(unseen_items, n_items, [entity_weight[item] for item in unseen_items])
 
@@ -159,22 +164,24 @@ def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, 
     return testing_data
 
 
-def _get_ranking(ratings: DataFrame, user_id: int, ranking_options: RankingOptions) -> (DataFrame, Ranking):
+def _get_ranking(ratings: DataFrame, user_id: int, options: RankingOptions) -> (DataFrame, Ranking):
     u_ratings = ratings[ratings.userId == user_id]
 
     # Create ranking instance holding all samples to rank
     ranking = Ranking()
-    for sentiment, n_samples in ranking_options.sentiment_count.items():
+    for sentiment, n_samples in options.sentiment_count.items():
         if sentiment == Sentiment.UNSEEN:
-            # For unseen items, we require the entire ratings DF to find unrated items
-            samples = _sample_unseen(ratings, user_id, n_samples)
-        else:
-            samples = _sample_seen(u_ratings, sentiment, n_samples)
+            continue
 
-        ranking.sentiment_samples[sentiment] = samples
+        ranking.sentiment_samples[sentiment] = _sample_seen(u_ratings, sentiment, n_samples)
+
+    # Handle unseen items separately
+    ranking.sentiment_samples[Sentiment.UNSEEN] = _sample_unseen(ratings, user_id,
+                                                                 options.sentiment_count.get(Sentiment.UNSEEN, 0),
+                                                                 ranking.sentiment_samples.get(Sentiment.POSITIVE, []))
 
     # Assert that we have sampled all required items (implicit check for cross-sentiment duplicates)
-    assert len(set(ranking.to_list())) == ranking_options.get_num_total()
+    assert len(set(ranking.to_list())) == options.get_num_total()
 
     # Return user's ratings without items to rank
     return u_ratings[~u_ratings.entityIdx.isin(ranking.to_list())], ranking
