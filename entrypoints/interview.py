@@ -1,12 +1,9 @@
 import argparse
 import json
-import multiprocessing
 import os
 import sys
 import time
 from collections import defaultdict
-from concurrent.futures._base import wait
-from concurrent.futures.process import ProcessPoolExecutor
 from typing import Dict, Set, List
 
 import numpy as np
@@ -16,136 +13,11 @@ from tqdm import tqdm
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
 from models.base_interviewer import InterviewerBase
-from models.dqn.dqn_interviewer import DqnInterviewer
-from models.dumb.dumb_interviewer import DumbInterviewer
-from models.melu.melu_interviewer import MeLUInterviewer
-from models.fmf.fmf_interviewer import FMFInterviewer
-from models.lrmf.lrmf_interviewer import LRMFInterviewer
-from models.naive.naive_interviewer import NaiveInterviewer
-from recommenders.knn.knn_recommender import KNNRecommender
-from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
-from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
-from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
-from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
-from recommenders.pagerank.linear_collaborative_pagerank_recommender import LinearCollaborativePageRankRecommender
-from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointPageRankRecommender
-from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
-from recommenders.random.random_recommender import RandomRecommender
-from recommenders.toppop.toppop_recommender import TopPopRecommender
+from models.configuration import models
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths, valid_dir
-
-models = {
-    'random': {
-        'class': DumbInterviewer,
-        'recommender': RandomRecommender
-    },
-    'top-pop': {
-        'class': DumbInterviewer,
-        'recommender': TopPopRecommender
-    },
-    'top-liked': {
-        'class': DumbInterviewer,
-        'recommender': TopPopRecommender,
-        'recommender_kwargs': {
-            'likes_only': True
-        }
-    },
-    'lrmf': {
-        'class': LRMFInterviewer,
-        'requires_interview_length': True,
-        'use_cuda': False
-    },
-    'naive-ppr-collab': {
-        'class': NaiveInterviewer,
-        'recommender': CollaborativePageRankRecommender
-    },
-    'naive-ppr-kg': {
-        'class': NaiveInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender
-    },
-    'naive-ppr-joint': {
-        'class': NaiveInterviewer,
-        'recommender': JointPageRankRecommender
-    },
-    'naive-ppr-linear-collab': {
-        'class': NaiveInterviewer,
-        'recommender': LinearCollaborativePageRankRecommender
-    },
-    'naive-ppr-linear-joint': {
-        'class': NaiveInterviewer,
-        'recommender': LinearJointPageRankRecommender
-    },
-    'naive-ppr-linear-kg': {
-        'class': NaiveInterviewer,
-        'recommender': LinearKGPageRankRecommender
-    },
-    'naive-knn': {
-      'class': NaiveInterviewer,
-      'recommender': KNNRecommender
-    },
-    'dqn-knn': {
-        'class': DqnInterviewer,
-        'recommender': KNNRecommender,
-        'requires_interview_length': True
-    },
-    'naive-mf': {
-        'class': NaiveInterviewer,
-        'recommender': MatrixFactorizationRecommender
-    },
-    'dqn-mf': {
-        'class': DqnInterviewer,
-        'recommender': MatrixFactorizationRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'dqn-ppr-kg': {
-        'class': DqnInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'dqn-ppr-collab': {
-        'class': DqnInterviewer,
-        'recommender': CollaborativePageRankRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'dqn-ppr-joint': {
-        'class': DqnInterviewer,
-        'recommender': JointPageRankRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'dqn-ppr-linear-kg': {
-        'class': DqnInterviewer,
-        'recommender': LinearKGPageRankRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'dqn-ppr-linear-joint': {
-        'class': DqnInterviewer,
-        'recommender': LinearJointPageRankRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'dqn-ppr-linear-collab': {
-        'class': DqnInterviewer,
-        'recommender': LinearCollaborativePageRankRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'fmf': {
-        'class': FMFInterviewer,
-        'requires_interview_length': True,
-    },
-    'melu': {
-        'class': MeLUInterviewer,
-        'use_cuda': True
-    }
-}
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
@@ -248,7 +120,7 @@ def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser])
             in sorted(recent_counts.items(), key=lambda x: x[1], reverse=True)]
 
 
-def test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items):
+def _test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items):
     hits = defaultdict(list)
     ndcgs = defaultdict(list)
     taus = defaultdict(list)
@@ -299,7 +171,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
         popular_items = _get_popular_recents(meta.recommendable_entities, training)
 
-        hits, ndcgs, taus, sers, covs = test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items)
+        hits, ndcgs, taus, sers, covs = _test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items)
 
         hr = dict()
         ndcg = dict()

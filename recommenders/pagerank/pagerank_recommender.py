@@ -12,8 +12,6 @@ from shared.meta import Meta
 from shared.user import WarmStartUser
 from shared.utility import get_combinations
 
-from scipy.stats import ttest_rel
-
 RATING_CATEGORIES = {1, 0, -1}
 
 
@@ -53,7 +51,7 @@ class PageRankRecommender(RecommenderBase):
         super().__init__(meta)
         self.graph = None
         self.entity_indices = set()
-        self.optimal_params = None
+        self.optimal_params = {'alpha': 0.85, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
@@ -98,11 +96,11 @@ class PageRankRecommender(RecommenderBase):
 
         if not self.optimal_params:
             parameters = {
-                'alpha': [0.15, 0.5, 0.85],
+                'alpha': [0.05, 0.15, 0.5, 0.85],
                 'importance': [
                     {1: 0.95, 0: 0.05, -1: 0.0},
-                    {1: 0.75, 0: 0.25, -1: 0.0},
-                    {1: 0.45, 0: 0.10, -1: 0.45},
+                    {1: 1/3, 0: 1/3, -1: 1/3},
+                    {1: 0.45, 0: 0.10, -1: 0.45}
                 ]
             }
 

@@ -1,7 +1,7 @@
 import os
 import pickle
 import random
-from typing import List
+from typing import List, Dict
 
 import pandas as pd
 import numpy as np
@@ -36,10 +36,10 @@ def _sample_unseen(ratings: DataFrame, user_id: int, n_items, positive_items: Li
 
     entity_weight = dict(zip(item_ratings['entityIdx'], item_ratings['num_ratings']))
 
-    if positive_items and False:
+    if positive_items:
         positive_ratings = np.mean([entity_weight[item] for item in positive_items])
 
-        entity_weight = {e: pow(abs(positive_ratings - w) + 1, -alpha) for e, w in entity_weight.items()}
+        entity_weight = {e: pow(pow(positive_ratings - w, 2) + 1, -alpha) for e, w in entity_weight.items()}
 
     return _choice(unseen_items, n_items, [entity_weight[item] for item in unseen_items])
 
@@ -120,7 +120,7 @@ def _get_ratings(ratings_path, include_unknown, cold_start_ratio, count_filters:
     return ratings, users, splits
 
 
-def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users, user_idx):
+def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users, user_idx) -> Dict[int, WarmStartUser]:
     training_data = dict()
 
     progress = tqdm.tqdm(warm_start_users)
@@ -139,7 +139,8 @@ def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users,
     return training_data
 
 
-def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, user_idx, movie_indices):
+def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, user_idx,
+                      movie_indices) -> Dict[int, ColdStartUser]:
     testing_data = dict()
 
     progress = tqdm.tqdm(cold_start_users)
@@ -200,7 +201,7 @@ def _load_triples(triples_path):
 
 
 def partition(experiment: ExperimentOptions, input_directory, output_directory):
-    ratings_path = os.path.join(input_directory, 'ratings.csv')
+    ratings_path = os.path.join(input_directory, experiment.ratings_file)
     entities_path = os.path.join(input_directory, 'entities.csv')
     triples_path = os.path.join(input_directory, 'triples.csv')
 
@@ -221,6 +222,16 @@ def partition(experiment: ExperimentOptions, input_directory, output_directory):
                       cold_users)
 
 
+def _get_rated_entities(training_data: Dict[int, WarmStartUser]):
+    rated_entities = set()
+
+    for _, ratings in training_data.items():
+        for entity, rating in ratings.training.items():
+            rated_entities.add(entity)
+
+    return rated_entities
+
+
 def _create_split(experiment: ExperimentOptions, entities, output_directory: str, triples_path: str, ratings, users,
                   warm_users, cold_users):
     # Map users and entities to indices
@@ -231,9 +242,13 @@ def _create_split(experiment: ExperimentOptions, entities, output_directory: str
     # Find movie indices
     movie_indices = set(ratings[ratings.isItem].entityIdx.unique())
 
-    # Partition training/testing data from users
+    # Partition training data from users
     training_data = _get_training_data(experiment, ratings, warm_users, user_idx)
-    testing_data = _get_testing_data(experiment, ratings, cold_users, user_idx, movie_indices)
+
+    # Partition testing data, limit to observed entities
+    rated_entities = _get_rated_entities(training_data)
+    testing_data = _get_testing_data(experiment, ratings[ratings.entityIdx.isin(rated_entities)], cold_users, user_idx,
+                                     movie_indices)
 
     logger.info(f'Created {len(training_data)} training entries and {len(testing_data)} testing entries')
 
