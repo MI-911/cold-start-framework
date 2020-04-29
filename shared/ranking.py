@@ -25,6 +25,10 @@ class Ranking:
         else:
             return self._data
 
+    def get_seen_samples(self):
+        return set(itertools.chain.from_iterable(
+            [value for key, value in self.sentiment_samples.items() if key != Sentiment.UNSEEN]))
+
     def to_list(self) -> List[int]:
         if self._list is None:
             as_list = list(itertools.chain.from_iterable(self.sentiment_samples.values()))

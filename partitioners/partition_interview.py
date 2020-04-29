@@ -176,10 +176,10 @@ def _get_ranking(ratings: DataFrame, user_id: int, options: RankingOptions) -> (
 
         ranking.sentiment_samples[sentiment] = _sample_seen(u_ratings, sentiment, n_samples)
 
-    # Handle unseen items separately
+    # Handle unseen items separately, as it is based on the popularity of the sampled seen items
     ranking.sentiment_samples[Sentiment.UNSEEN] = _sample_unseen(ratings, user_id,
                                                                  options.sentiment_count.get(Sentiment.UNSEEN, 0),
-                                                                 ranking.sentiment_samples.get(Sentiment.POSITIVE, []))
+                                                                 ranking.get_seen_samples())
 
     # Assert that we have sampled all required items (implicit check for cross-sentiment duplicates)
     assert len(set(ranking.to_list())) == options.get_num_total()

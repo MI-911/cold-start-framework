@@ -26,9 +26,15 @@ separation = ExperimentOptions(name='separation', seed=33, count_filters=[
 default = ExperimentOptions(name='default', seed=33, count_filters=[
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE),
         CountFilter(lambda count: count >= 5, entity_type=EntityType.DESCRIPTIVE, sentiment=Sentiment.ANY)
-    ], ranking_options=RankingOptions(num_positive=1, num_unseen=100), include_unknown=False, evaluation_samples=1)
+    ], ranking_options=RankingOptions(num_positive=1, num_unseen=100), include_unknown=False, evaluation_samples=1,)
 
-experiments = [default]
+
+movielens = ExperimentOptions(name='movielens', seed=33, count_filters=[
+        CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE)
+    ], ranking_options=RankingOptions(num_positive=1, num_unseen=100), include_unknown=False, evaluation_samples=1,
+                              ratings_file='movielens.csv')
+
+experiments = [movielens]
 
 if __name__ == '__main__':
     logger.info(f'Working directory: {os.getcwd()}')
