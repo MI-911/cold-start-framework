@@ -34,7 +34,7 @@ movielens = ExperimentOptions(name='movielens', seed=33, count_filters=[
     ], ranking_options=RankingOptions(num_positive=1, num_unseen=100), include_unknown=False, evaluation_samples=1,
                               ratings_file='movielens.csv')
 
-experiments = [movielens]
+experiments = [default]
 
 if __name__ == '__main__':
     logger.info(f'Working directory: {os.getcwd()}')
