@@ -1,6 +1,7 @@
 import operator
 
 import numpy as np
+from loguru import logger
 
 from models.base_interviewer import InterviewerBase
 from shared.meta import Meta
@@ -11,12 +12,13 @@ class NaiveInterviewer(InterviewerBase):
         super().__init__(meta, use_cuda)
 
         if not recommender:
-            raise RuntimeError('No underlying recommender provided to the naive interviewer.')
+            logger.warning('No underlying recommender provided to the naive interviewer.')
 
         self.entity_variance = None
         self.entity_popularity = None
         self.entity_weight = None
-        self.recommender = recommender(meta)
+
+        self.recommender = recommender(meta) if recommender else None
 
     def predict(self, items, answers):
         return self.recommender.predict(items, answers)
@@ -27,14 +29,15 @@ class NaiveInterviewer(InterviewerBase):
         return [item[0] for item in sorted(valid_items.items(), key=operator.itemgetter(1), reverse=True)]
 
     def get_top_k_popular(self, k):
-        return self.interview(dict(), max_n_questions=k)
+        return self.interview(dict())[:k]
 
     @staticmethod
     def _compute_weight(popularity, variance):
         return popularity
 
     def warmup(self, training, interview_length=5):
-        self.recommender.fit(training)
+        if self.recommender is not None:
+            self.recommender.fit(training)
 
         entity_ratings = dict()
 

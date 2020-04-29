@@ -7,6 +7,7 @@ from loguru import logger
 from networkx import Graph, pagerank_scipy
 from tqdm import tqdm
 
+from models.naive.naive_interviewer import NaiveInterviewer
 from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
 from shared.user import WarmStartUser
@@ -53,6 +54,10 @@ class PageRankRecommender(RecommenderBase):
         self.entity_indices = set()
         self.optimal_params = None
 
+        self.naive = NaiveInterviewer(meta)
+        self.top_k_entities = None
+        self.idx_uri = self.meta.get_idx_uri()
+
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
 
@@ -72,7 +77,8 @@ class PageRankRecommender(RecommenderBase):
         ratings = {category: set() for category in RATING_CATEGORIES}
 
         for entity_idx, sentiment in answers.items():
-            ratings[sentiment].add(entity_idx)
+            if entity_idx in self.top_k_entities:
+                ratings[sentiment].add(entity_idx)
 
         # Find rated and unrated entities
         rated_entities = reduce(lambda a, b: a.union(b), ratings.values())
@@ -88,6 +94,10 @@ class PageRankRecommender(RecommenderBase):
         return {idx: rating_weight[category] for category in RATING_CATEGORIES for idx in ratings[category]}
 
     def fit(self, training: Dict[int, WarmStartUser]):
+        self.naive.warmup(training)
+        self.top_k_entities = set(self.naive.get_top_k_popular(10))
+        logger.info([self.idx_uri[idx] for idx in self.top_k_entities])
+
         for _, user in training.items():
             for entity in user.training.keys():
                 self.entity_indices.add(entity)
@@ -109,7 +119,7 @@ class PageRankRecommender(RecommenderBase):
             results = list()
 
             validation_users = list(training.items())
-            shuffle(validation_users)
+            # shuffle(validation_users)
 
             for combination in combinations:
                 logger.debug(f'Trying {combination}')
