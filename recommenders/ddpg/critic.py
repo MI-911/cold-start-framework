@@ -10,11 +10,16 @@ class Critic(nn.Module):
         self.hidden = nn.Linear(fc1_dims, fc2_dims)
         self.output = nn.Linear(fc2_dims, output_dims)
 
+        self.device = tt.device('cuda')
+        self.to(self.device)
+
     def forward(self, state, action):
         """
         Criticises the act of taking this action in this
         state by returning a reward.
         """
+        state = state.to(self.device)
+        action = action.to(self.device)
         x = tt.cat([state, action], 1)
         x = ff.relu(self.state_action_input(x))
         x = ff.relu(self.hidden(x))

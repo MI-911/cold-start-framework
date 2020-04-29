@@ -15,10 +15,14 @@ class Actor(nn.Module):
         self.hidden = nn.Linear(fc1_dims, fc2_dims)
         self.action_output = nn.Linear(fc2_dims, action_dims)
 
+        self.device = tt.device('cuda')
+        self.to(self.device)
+
     def forward(self, state):
         """
         Generates an action vector from a state
         """
+        state = state.to(self.device)
         x = ff.relu(self.state_input(state))
         x = ff.relu(self.hidden(x))
         return tt.tanh(self.action_output(x))
