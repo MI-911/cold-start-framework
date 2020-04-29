@@ -51,7 +51,7 @@ class PageRankRecommender(RecommenderBase):
         super().__init__(meta)
         self.graph = None
         self.entity_indices = set()
-        self.optimal_params = {'alpha': 0.85, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        self.optimal_params = None
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()

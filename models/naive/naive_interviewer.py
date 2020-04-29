@@ -26,6 +26,9 @@ class NaiveInterviewer(InterviewerBase):
         valid_items = {k: v for k, v in self.entity_weight.items() if k not in answers.keys()}
         return [item[0] for item in sorted(valid_items.items(), key=operator.itemgetter(1), reverse=True)]
 
+    def get_top_k_popular(self, k):
+        return self.interview(dict(), max_n_questions=k)
+
     @staticmethod
     def _compute_weight(popularity, variance):
         return popularity
