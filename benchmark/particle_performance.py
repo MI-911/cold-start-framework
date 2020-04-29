@@ -67,7 +67,7 @@ def benchmark_particles():
     training = pickle.load(open('../data/default/split_0/training.pkl', 'rb'))
     meta = pickle.load(open('../data/default/split_0/meta.pkl', 'rb'))
 
-    idx_uri = {v: k for k, v in meta.uri_idx.items()}
+    idx_uri = meta.get_idx_uri()
     cutoff = 10
     results = dict()
 

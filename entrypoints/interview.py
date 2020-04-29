@@ -214,6 +214,7 @@ def _run_split(model_selection: Set[str], split: Split):
 
         for model_instance, qs, nq in _run_model(model, split.experiment, meta, training, testing, max_n_questions=10):
             logger.info(f'Writing results and parameters for {model} on split {split.name}, interview length {nq}')
+
             _write_parameters(model, split.experiment, model_instance, nq)
             _write_results(model, qs, split)
 

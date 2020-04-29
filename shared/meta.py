@@ -19,3 +19,6 @@ class Meta:
         self.default_cutoff = default_cutoff
         self.sentiment_utility = sentiment_utility
         self.validator = validator
+
+    def get_idx_uri(self):
+        return {idx: uri for uri, idx in self.uri_idx.items()}

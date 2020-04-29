@@ -19,7 +19,7 @@ def _generic_get(tx, query, args=None):
 class ParticleFilteringRecommender(RecommenderBase):
     def __init__(self, meta: Meta):
         super().__init__(meta)
-        self.idx_uri = {idx: uri for uri, idx in meta.uri_idx.items()}
+        self.idx_uri = meta.get_idx_uri()
         self.uri = environ.get('BOLT_URI', 'bolt://localhost:7778')
         self.driver = GraphDatabase.driver(self.uri, auth=(environ.get('BOLT_USER', 'neo4j'), environ.get('BOLT_PASSWORD', 'root123')))
 
