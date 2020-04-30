@@ -14,7 +14,7 @@ class SparseGraph:
         self.M = self.Q * self.M
 
     def scores(self, alpha=0.85, personalization=None, max_iterations=100, tol=1.0e-6):
-        # initial vector
+        # Initialize with equal PageRank to each node
         x = scipy.repeat(1.0 / self.N, self.N)
 
         # Personalization vector
