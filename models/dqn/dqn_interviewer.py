@@ -19,7 +19,8 @@ def choose_candidates(ratings: Dict[int, WarmStartUser], n=100):
         for entity, rating in data.training.items():
             if entity not in entity_ratings:
                 entity_ratings[entity] = 0
-            entity_ratings[entity] += 1
+            if rating > 0:
+                entity_ratings[entity] += 1
 
     sorted_entity_ratings = sorted(entity_ratings.items(), key=lambda x: x[1], reverse=True)
     return [e for e, r in sorted_entity_ratings][:n]
@@ -55,19 +56,23 @@ class DqnInterviewer(InterviewerBase):
 
         self.n_users = len(self.meta.users)
         self.n_entities = len(self.meta.entities)
+        self.candidates = []
 
     def warmup(self, training: Dict[int, WarmStartUser], interview_length=5):
+        n_candidates = 100
+        self.candidates = choose_candidates(training, n=n_candidates)
+
         logger.info(f'DQN warming up environment...')
-        self.environment = Environment(recommender=self.recommender, reward_metric=Rewards.NDCG, meta=self.meta)
+        self.environment = Environment(
+            recommender=self.recommender, reward_metric=Rewards.NDCG, meta=self.meta, state_size=n_candidates)
         self.environment.warmup(training)
 
         if not self.params:
             param_scores = []
             for params in get_combinations({'fc1_dims': [128, 256, 512]}):
                 del self.agent
-                # logger.info(f'Waiting for GC...')
-                # time.sleep(5)
-                self.agent = DqnAgent(candidates=choose_candidates(training), n_entities=self.n_entities,
+
+                self.agent = DqnAgent(candidates=self.candidates, n_entities=self.n_entities,
                                       batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
                                       eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda)
 
@@ -78,7 +83,7 @@ class DqnInterviewer(InterviewerBase):
             logger.info(f'Found best params for DQN: {best_params}')
             self.params = best_params
 
-        self.agent = DqnAgent(candidates=choose_candidates(training), n_entities=self.n_entities,
+        self.agent = DqnAgent(candidates=self.candidates, n_entities=self.n_entities,
                               batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
                               eps_end=0.1, eps_dec=0.996, fc1_dims=self.params['fc1_dims'])
         self.fit_dqn(training, interview_length)
@@ -95,6 +100,8 @@ class DqnInterviewer(InterviewerBase):
                 return 0
             recent = lst[l - 10:] if l >= 10 else lst
             return np.mean(recent)
+
+        self.agent.Q_eval.train()
 
         for i in range(n_iterations):
             logger.info(f'DQN starting iteration {i}...')
@@ -122,7 +129,7 @@ class DqnInterviewer(InterviewerBase):
 
                 for q in range(interview_length):
                     question = self.agent.choose_action(state)
-                    new_state, reward = self.environment.ask(user, question)
+                    new_state, reward = self.environment.ask(user, question, self.candidates[question])
 
                     # Store the memory for training
                     self.agent.store_memory(state, question, new_state, reward, q == interview_length)
@@ -136,17 +143,18 @@ class DqnInterviewer(InterviewerBase):
                 if _loss is not None:
                     losses.append(_loss.cpu().detach().numpy())
 
+        self.agent.Q_eval.eval()
         return recent_mean(scores)
 
     def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
-        state = np.zeros((self.n_entities * 2,), dtype=np.float32)
+        state = np.zeros((len(self.candidates) * 2,), dtype=np.float32)
         for entity, rating in answers.items():
-            entity_state_idx = entity * 2
+            entity_state_idx = self.candidates.index(entity) * 2
             state[entity_state_idx] = 1
             state[entity_state_idx + 1] = rating
 
-        question = self.agent.choose_action(state)
-        return [question]
+        question_idx = self.agent.choose_action(state, explore=False)
+        return [self.candidates[question_idx]]
 
     def predict(self, items: List[int], answers: Dict) -> Dict[int, float]:
         return self.environment.recommender.predict(items, answers)
