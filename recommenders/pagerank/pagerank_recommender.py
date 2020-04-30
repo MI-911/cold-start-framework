@@ -119,8 +119,6 @@ class PageRankRecommender(RecommenderBase):
         self.graph = self.construct_graph(training)
         self.sparse_graph = SparseGraph(self.graph)
 
-        self.optimal_params = {'alpha': 0.05, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
-
         if not self.optimal_params:
             parameters = {
                 'alpha': [0.05, 0.15, 0.5, 0.85],
