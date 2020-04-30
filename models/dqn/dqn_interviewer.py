@@ -89,7 +89,7 @@ class DqnInterviewer(InterviewerBase):
         self.fit_dqn(training, interview_length)
 
     def fit_dqn(self, training: Dict[int, WarmStartUser], interview_length: int) -> float:
-        n_iterations = 5
+        n_iterations = 10
 
         epsilons = []
         scores = []
