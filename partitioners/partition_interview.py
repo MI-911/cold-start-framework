@@ -234,9 +234,10 @@ def _get_rated_entities(training_data: Dict[int, WarmStartUser]):
 
 def _create_split(experiment: ExperimentOptions, entities, output_directory: str, triples_path: str, ratings, users,
                   warm_users, cold_users):
-    # Limit entities to available URIs
-    uris = set(ratings.uri.unique())
-    entities = {entity: _ for entity, _ in entities.items() if entity in uris}
+    # Optionally limit entities to available URIs
+    if experiment.limit_entities:
+        uris = set(ratings.uri.unique())
+        entities = {entity: _ for entity, _ in entities.items() if entity in uris}
 
     # Map users and entities to indices
     user_idx = {k: v for v, k in enumerate(users)}
