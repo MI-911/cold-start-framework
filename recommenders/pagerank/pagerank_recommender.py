@@ -46,6 +46,10 @@ def construct_knowledge_graph(meta: Meta):
     return graph
 
 
+def get_cache_id(answers):
+    return str(sorted(answers.items(), key=lambda x: x[0]))
+
+
 class PageRankRecommender(RecommenderBase):
     def __init__(self, meta: Meta):
         super().__init__(meta)
@@ -57,16 +61,21 @@ class PageRankRecommender(RecommenderBase):
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
 
-    def _scores(self, alpha, node_weights, items, answers):
-        # Sort answers by the entity indexes to eliminate duplicates
-        answers_cache_str = str(sorted(answers.items(), key=lambda x: x[0]))
+    def _scores(self, alpha, node_weights, items, answers=None):
+        """
+        Produces a ranking of items. If answers is not none, the ranking
+        will be reused if produced previously.
+        """
+        if not answers:
+            scores = pagerank_scipy(self.graph, alpha=alpha, personalization=node_weights).items()
+            return {item: score for item, score in scores if item in items}
 
-        # Store this prediction if the answer set is new, otherwise return the cached predictions
-        if answers_cache_str not in self.predictions_cache:
-            self.predictions_cache[answers_cache_str] = pagerank_scipy(
-                self.graph, alpha=alpha, personalization=node_weights).items()
+        cache_id = get_cache_id(answers)
+        if cache_id not in self.predictions_cache:
+            scores = pagerank_scipy(self.graph, alpha=alpha, personalization=node_weights).items()
+            self.predictions_cache[cache_id] = {entity: score for entity, score in scores}
 
-        return {item: score for item, score in self.predictions_cache[answers_cache_str] if item in items}
+        return {item: self.predictions_cache[cache_id].get(item, 0.0) for item in items}
 
     @staticmethod
     def _weight(category, ratings, importance):
@@ -100,6 +109,11 @@ class PageRankRecommender(RecommenderBase):
                 self.entity_indices.add(entity)
 
         self.graph = self.construct_graph(training)
+
+        self.optimal_params = {
+            'alpha': 0.05,
+            'importance': {1: 0.95, 0: 0.05, -1: 0.0}
+        }
 
         if not self.optimal_params:
             parameters = {
@@ -138,4 +152,4 @@ class PageRankRecommender(RecommenderBase):
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         return self._scores(self.optimal_params['alpha'],
-                            self.get_node_weights(answers, self.optimal_params['importance']), items)
+                            self.get_node_weights(answers, self.optimal_params['importance']), items, answers=answers)
