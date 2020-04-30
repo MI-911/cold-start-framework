@@ -59,7 +59,6 @@ def get_cache_key(answers):
 class PageRankRecommender(RecommenderBase):
     def __init__(self, meta: Meta):
         super().__init__(meta)
-        self.graph = None
         self.entity_indices = set()
         self.optimal_params = None
         self.predictions_cache = {}
@@ -116,8 +115,7 @@ class PageRankRecommender(RecommenderBase):
             for entity in user.training.keys():
                 self.entity_indices.add(entity)
 
-        self.graph = self.construct_graph(training)
-        self.sparse_graph = SparseGraph(self.graph)
+        self.sparse_graph = SparseGraph(self.construct_graph(training))
 
         if not self.optimal_params:
             parameters = {
