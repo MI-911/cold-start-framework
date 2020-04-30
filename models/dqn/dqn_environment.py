@@ -129,7 +129,7 @@ class Environment:
             return self.state, 0.0
 
         # Calculate reward
-        reward = self._reward_with_caching()
+        reward = self._reward()
         return self.state, reward
 
     def _reward_with_caching(self):
