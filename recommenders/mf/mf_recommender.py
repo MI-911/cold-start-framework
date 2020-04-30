@@ -23,6 +23,10 @@ def flatten_rating_triples(training: Dict[int, WarmStartUser]):
     return training_triples
 
 
+def get_cache_id(answers):
+    return str(sorted(answers.items(), key=lambda x: x[0]))
+
+
 def convert_rating(rating):
     if rating == 1:
         return 1
@@ -39,6 +43,7 @@ class MatrixFactorizationRecommender(RecommenderBase):
         self.meta = meta
         self.optimal_params = None
         self.model = None
+        self.predictions_cache = {}
 
     def fit(self, training: Dict[int, WarmStartUser]) -> None:
         n_users = len(self.meta.users)
@@ -89,7 +94,12 @@ class MatrixFactorizationRecommender(RecommenderBase):
     def predict(self, items, answers):
         # Predict a user as the avg embedding of the items they liked
         u_embedding_items = [e for e, r in answers.items() if r == 1]
-        return self.model.predict_avg_items(u_embedding_items, items)
+
+        cache_id = get_cache_id(answers)
+        if cache_id not in self.predictions_cache:
+            self.predictions_cache[cache_id] = self.model.predict_avg_items(
+                u_embedding_items, [e for e in range(len(self.meta.entities))])
+        return {item: self.predictions_cache[cache_id][item] for item in items}
 
     def get_parameters(self):
         return self.optimal_params
