@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Dict
 import numpy as np
 from loguru import logger
+import random
 
 from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
@@ -42,7 +43,7 @@ class Environment:
     The environment allows the model to ask questions for a user, receive
     answers, and a reward when the interview is over.
     """
-    def __init__(self, recommender: RecommenderBase, reward_metric: Rewards, meta: Meta):
+    def __init__(self, recommender: RecommenderBase, reward_metric: Rewards, meta: Meta, state_size: int):
         """
         Constructs an environment object.
         :param recommender: The recommendation model used to generate rewards.
@@ -60,6 +61,7 @@ class Environment:
         self.n_users = len(meta.users)
         self.n_entities = len(meta.entities)
         self.all_entities = [e for e in range(self.n_entities)]
+        self.state_size = state_size
 
         self.ratings = np.zeros((self.n_users, self.n_entities))
         self.top_pop_movies = None
@@ -92,7 +94,7 @@ class Environment:
         self.to_rate = None
 
         # Reset states, return to the agent
-        self.state = np.zeros((self.n_entities * 2,), dtype=np.float32)
+        self.state = np.zeros((self.state_size * 2,), dtype=np.float32)
         self.answers = {}
         return self.state
 
@@ -110,11 +112,11 @@ class Environment:
         # Erase that rating from the ratings matrix so they can't answer it during interviews
         self.ratings[self.current_user, self.left_out_item] = 0
 
-    def ask(self, user, entity):
-        answer = self.ratings[user, entity]
+    def ask(self, user, state_idx, entity_idx):
+        answer = self.ratings[user, entity_idx]
 
         # Adjust state
-        entity_state_idx = entity * 2
+        entity_state_idx = state_idx * 2
         if self.state[entity_state_idx]:
             # This question has already been asked, no reward
             return self.state, 0.0
@@ -122,14 +124,14 @@ class Environment:
         self.state[entity_state_idx] = 1
         self.state[entity_state_idx + 1] = answer
 
-        self.answers[entity] = answer
+        self.answers[entity_idx] = answer
 
         # Prevent the model just learning to ask towards non-popular items
         if answer == 0:
             return self.state, 0.0
 
         # Calculate reward
-        reward = self._reward_with_caching()
+        reward = self._reward()
         return self.state, reward
 
     def _reward_with_caching(self):
@@ -144,7 +146,10 @@ class Environment:
         return metric_score
 
     def _reward(self):
-        scores = self.recommender.predict(self.all_entities, self.answers)
+        unseen_items, = np.where(self.ratings[self.current_user] == 0)
+        negative_samples = random.sample(list(unseen_items), 100)
+
+        scores = self.recommender.predict(negative_samples + [self.left_out_item], self.answers)
         ranked = [e for e, s in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
 
         metric_score = self._compute_metric(ranked, self.left_out_item)

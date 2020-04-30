@@ -236,7 +236,7 @@ def _create_split(experiment: ExperimentOptions, entities, output_directory: str
                   warm_users, cold_users):
     # Limit entities to available URIs
     uris = set(ratings.uri.unique())
-    entities = {entity: _ for entity, _ in entities.items() if entity in uris}
+    # entities = {entity: _ for entity, _ in entities.items() if entity in uris}
 
     # Map users and entities to indices
     user_idx = {k: v for v, k in enumerate(users)}
