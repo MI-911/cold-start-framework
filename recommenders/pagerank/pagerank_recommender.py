@@ -52,14 +52,21 @@ class PageRankRecommender(RecommenderBase):
         self.graph = None
         self.entity_indices = set()
         self.optimal_params = None
+        self.predictions_cache = {}
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
 
-    def _scores(self, alpha, node_weights, items):
-        scores = pagerank_scipy(self.graph, alpha=alpha, personalization=node_weights).items()
+    def _scores(self, alpha, node_weights, items, answers):
+        # Sort answers by the entity indexes to eliminate duplicates
+        answers_cache_str = str(sorted(answers.items(), key=lambda x: x[0]))
 
-        return {item: score for item, score in scores if item in items}
+        # Store this prediction if the answer set is new, otherwise return the cached predictions
+        if answers_cache_str not in self.predictions_cache:
+            self.predictions_cache[answers_cache_str] = pagerank_scipy(
+                self.graph, alpha=alpha, personalization=node_weights).items()
+
+        return {item: score for item, score in self.predictions_cache[answers_cache_str] if item in items}
 
     @staticmethod
     def _weight(category, ratings, importance):
