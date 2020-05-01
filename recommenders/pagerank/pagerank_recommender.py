@@ -76,9 +76,6 @@ class PageRankRecommender(RecommenderBase):
         def get_scores():
             return self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
 
-        if not answers:
-            return {item: score for item, score in get_scores().items() if item in items}
-
         cache_key = get_cache_key(answers)
         if cache_key not in self.predictions_cache:
             self.predictions_cache[cache_key] = {entity: score for entity, score in get_scores().items()}
@@ -118,7 +115,7 @@ class PageRankRecommender(RecommenderBase):
 
         self.sparse_graph = SparseGraph(self.construct_graph(training))
 
-        can_ask_about = set(get_top_entities(training))  #[:50]
+        can_ask_about = set(get_top_entities(training))
 
         if not self.parameters:
             parameters = {
