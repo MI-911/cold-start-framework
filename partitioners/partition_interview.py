@@ -1,6 +1,5 @@
 import os
 import pickle
-import random
 from typing import List, Dict
 
 import pandas as pd
@@ -19,7 +18,7 @@ from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 def _sample_seen(ratings: DataFrame, sentiment: Sentiment, n_items=1):
     items = list(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
-    random.shuffle(items)
+    np.random.shuffle(items)
 
     return set(items[:n_items])
 
@@ -96,7 +95,7 @@ def _get_ratings(ratings_path, include_unknown, cold_start_ratio, count_filters:
 
     # Partition into warm and cold start users
     users = ratings['userId'].unique()
-    random.shuffle(users)
+    np.random.shuffle(users)
 
     splits = list()
 
@@ -206,7 +205,7 @@ def partition(experiment: ExperimentOptions, input_directory, output_directory):
     triples_path = os.path.join(input_directory, 'triples.csv')
 
     entities = _get_entities(entities_path)
-    random.seed(experiment.seed)
+    np.random.seed(experiment.seed)
 
     # Load ratings data
     ratings, users, splits = _get_ratings(ratings_path, experiment.include_unknown, experiment.cold_start_ratio,
