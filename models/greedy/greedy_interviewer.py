@@ -1,27 +1,12 @@
 import json
-import operator
-from typing import Dict
 
-import numpy as np
-from loguru import logger
 from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
+from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
-from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
-from shared.enums import Metric
 from shared.meta import Meta
-
-
-def get_top_entities(training):
-    entity_ratings = dict()
-
-    # Aggregate ratings per entity
-    for user, data in training.items():
-        for idx, sentiment in data.training.items():
-            entity_ratings.setdefault(idx, []).append(sentiment)
-
-    return list([item[0] for item in sorted(entity_ratings.items(), key=lambda x: len(x[1]), reverse=True)])
+from shared.utility import get_top_entities
 
 
 class GreedyInterviewer(InterviewerBase):
@@ -30,7 +15,7 @@ class GreedyInterviewer(InterviewerBase):
 
         self.questions = None
         self.recommender = JointPageRankRecommender(meta)
-        self.recommender.optimal_params = {'alpha': 0.5, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        #self.recommender.parameters = {'alpha': 0.5, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.idx_uri = self.meta.get_idx_uri()
 
     def get_idx_name(self, idx):
@@ -43,18 +28,32 @@ class GreedyInterviewer(InterviewerBase):
         # Exclude answers to entities already asked about
         return self.questions
 
-    def get_top_k_popular(self, k):
-        return self.interview(dict(), max_n_questions=k)
-
-    @staticmethod
-    def _compute_weight(popularity, variance):
-        return popularity
-
     def warmup(self, training, interview_length=5):
         self.recommender.fit(training)
 
-        root = Node(self).construct(training, get_top_entities(training))
-        print('done')
+        entity_scores = list()
+        entities = get_top_entities(training)[:100]
+        progress = tqdm(entities)
+
+        for entity in progress:
+            user_validation = list()
+            for user, ratings in training.items():
+                answers = {entity: ratings.training.get(entity, 0)}
+
+                prediction = self.predict(ratings.validation.to_list(), answers)
+                user_validation.append((ratings.validation, prediction))
+
+            score = self.meta.validator.score(user_validation, self.meta)
+            entity_scores.append((entity, score))
+
+            progress.set_description(f'{self.get_idx_name(entity)}: {score}')
+
+        entity_scores = list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
+
+        rank_score = list(sorted([(entities.index(entity) + 1, score) for entity, score in entity_scores], key=lambda pair: pair[0]))
+        json.dump(rank_score, open('entity_scores.json', 'w'))
+
+        self.questions = [pair[0] for pair in entity_scores]
 
     def get_parameters(self):
         pass
@@ -80,32 +79,22 @@ class Node:
         self.UNKNOWN = None
 
         self.question = None
+        self.question_name = 'N/A'
+
         self.interviewer = interviewer
+        self.answers = dict()
 
     def get_best_split(self, users, entities):
-        entity_scores = list()
-        progress = tqdm(entities)
 
-        for entity in progress:
-            user_validation = list()
-            for user, ratings in users.items():
-                answers = {entity: ratings.training.get(entity, 0)}
 
-                prediction = self.interviewer.predict(ratings.validation.to_list(), answers)
-                user_validation.append((ratings.validation, prediction))
 
-            score = self.interviewer.meta.validator.score(user_validation, self.interviewer.meta)
-            entity_scores.append((entity, score))
-
-            progress.set_description(f'{self.interviewer.get_idx_name(entity)}: {score}')
-
-        entity_scores = list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
 
         return entity_scores[0][0]
 
     def construct(self, users, entities, depth=0):
         # Try splitting on each
         self.question = self.get_best_split(users, entities[:10])
+        self.question_name = self.interviewer.get_idx_name(self.question)
 
         # In the nodes below, do not consider entity split on in this parent node
         entities = [entity for entity in entities if entity != self.question]
