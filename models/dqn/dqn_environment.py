@@ -145,6 +145,9 @@ class Environment:
         metric_score = self._compute_metric(ranked, self.left_out_item)
         return metric_score
 
+    def rank(self, items):
+        return self.recommender.predict(items, self.answers)
+
     def _reward(self):
         unseen_items, = np.where(self.ratings[self.current_user] == 0)
         negative_samples = random.sample(list(unseen_items), 100)

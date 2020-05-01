@@ -1,8 +1,8 @@
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Tuple
 import numpy as np
 from loguru import logger
 from tqdm import tqdm
-
+import pickle
 from models.base_interviewer import InterviewerBase
 from models.dqn.dqn_agent import DqnAgent
 from models.dqn.dqn_environment import Environment, Rewards
@@ -24,6 +24,13 @@ def choose_candidates(ratings: Dict[int, WarmStartUser], n=100):
 
     sorted_entity_ratings = sorted(entity_ratings.items(), key=lambda x: x[1], reverse=True)
     return [e for e, r in sorted_entity_ratings][:n]
+
+
+def recent_mean(lst, recency=10):
+    if l := len(lst) == 0:
+        return 0.0
+    recent = lst[l - recency:] if l >= recency else lst
+    return np.mean(recent)
 
 
 class DqnInterviewer(InterviewerBase):
@@ -49,7 +56,7 @@ class DqnInterviewer(InterviewerBase):
             raise RuntimeError('No underlying recommender provided to the naive interviewer.')
 
         self.recommender: RecommenderBase = recommender(meta)
-        self.environment: Union[RecommenderBase, None] = None
+        self.environment: Union[Environment, None] = None
 
         # Allocate DQN agent
         self.agent: Union[DqnAgent, None] = None
@@ -67,44 +74,80 @@ class DqnInterviewer(InterviewerBase):
             recommender=self.recommender, reward_metric=Rewards.NDCG, meta=self.meta, state_size=n_candidates)
         self.environment.warmup(training)
 
+        best_agent, best_score, best_params = None, 0, None
+
         if not self.params:
-            param_scores = []
             for params in get_combinations({'fc1_dims': [128, 256, 512]}):
                 del self.agent
+                agent, score = self.train_dqn(training, interview_length, params)
+                if score > best_score:
+                    best_agent = agent
+                    best_params = params
 
-                self.agent = DqnAgent(candidates=self.candidates, n_entities=self.n_entities,
-                                      batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
-                                      eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda)
-
-                score = self.fit_dqn(training, interview_length)
-                param_scores.append((params, score))
-
-            best_params, _ = list(sorted(param_scores, key=lambda x: x[1], reverse=True))[0]
-            logger.info(f'Found best params for DQN: {best_params}')
             self.params = best_params
+            self.agent = best_agent
+        else:
+            logger.info(f'Reusing params for DQN: {self.params}')
+            self.agent, _ = self.train_dqn(training, interview_length, self.params)
 
-        self.agent = DqnAgent(candidates=self.candidates, n_entities=self.n_entities,
-                              batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
-                              eps_end=0.1, eps_dec=0.996, fc1_dims=self.params['fc1_dims'])
-        self.fit_dqn(training, interview_length)
+    def train_dqn(self, training: Dict[int, WarmStartUser], interview_length: int, params: Dict):
+        # Trains k different DqnAgents and returns the best performing one
+        n_agents = 10
+        best_agent = None
+        best_score = 0
 
-    def fit_dqn(self, training: Dict[int, WarmStartUser], interview_length: int) -> float:
+        for n in range(n_agents):
+            del self.agent
+
+            self.agent = DqnAgent(candidates=self.candidates, n_entities=self.n_entities,
+                                  batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
+                                  eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda)
+
+            logger.info(f'Training {n+1} of {n_agents} agents...')
+            agent = self.fit_dqn(training, interview_length)
+            score = self.validate_dqn(training, interview_length)
+
+            logger.info(f'Validated with score {score} ({self.meta.validator.metric})')
+
+            if score > best_score:
+                logger.info(f'Found new best DQN with params {params}, score {score}')
+                best_agent = pickle.loads(pickle.dumps(agent))
+                best_score = score
+
+        return best_agent, best_score
+
+    def validate_dqn(self, training: Dict[int, WarmStartUser], interview_length: int) -> float:
+        # Validates the performance of a DqnAgent and returns the validation score
+
+        rankings = []
+
+        for user, data in training.items():
+            state = self.environment.reset()
+            self.environment.select_user(user)
+
+            for q in range(interview_length):
+                # Ask questions, disregard the reward
+                question = self.agent.choose_action(state)
+                new_state, _ = self.environment.ask(user, question, self.candidates[question])
+                state = new_state
+
+            # Send the state to the environment's recommender along with user.validation, get the ranking
+            ranking = self.environment.rank(data.validation.to_list())
+            rankings.append((data.validation, ranking))
+
+        # Return the meta.validator() score
+        return self.meta.validator.score(rankings, self.meta)
+
+    def fit_dqn(self, training: Dict[int, WarmStartUser], interview_length: int) -> DqnAgent:
         n_iterations = 10
 
         epsilons = []
         scores = []
         losses = []
 
-        def recent_mean(lst):
-            if l := len(lst) == 0:
-                return 0
-            recent = lst[l - 10:] if l >= 10 else lst
-            return np.mean(recent)
-
         self.agent.Q_eval.train()
 
         for i in range(n_iterations):
-            logger.info(f'DQN starting iteration {i}...')
 
             users = list(training.keys())
             np.random.shuffle(users)
@@ -117,7 +160,7 @@ class DqnInterviewer(InterviewerBase):
                     logger.debug('Skipping user with no positive ratings')
                     continue
 
-                t.set_description(f'Training on users (Scores: {recent_mean(scores)}, Loss: {recent_mean(losses)}, '
+                t.set_description(f'Iteration {i} (Scores: {recent_mean(scores)}, Loss: {recent_mean(losses)}, '
                                   f'Epsilon: {recent_mean(epsilons)})')
 
                 state = self.environment.reset()
@@ -144,7 +187,7 @@ class DqnInterviewer(InterviewerBase):
                     losses.append(_loss.cpu().detach().numpy())
 
         self.agent.Q_eval.eval()
-        return recent_mean(scores)
+        return self.agent
 
     def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
         state = np.zeros((len(self.candidates) * 2,), dtype=np.float32)
