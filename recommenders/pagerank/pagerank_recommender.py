@@ -4,10 +4,11 @@ from random import shuffle
 from typing import List, Dict
 
 from loguru import logger
-from networkx import Graph, pagerank_scipy
+import networkx as nx
 from tqdm import tqdm
 
 from recommenders.base_recommender import RecommenderBase
+from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
 from shared.user import WarmStartUser
 from shared.utility import get_combinations
@@ -15,7 +16,7 @@ from shared.utility import get_combinations
 RATING_CATEGORIES = {1, 0, -1}
 
 
-def construct_collaborative_graph(graph: Graph, training: Dict[int, WarmStartUser], rating_type=None):
+def construct_collaborative_graph(graph: nx.Graph, training: Dict[int, WarmStartUser], rating_type=None):
     for user_id, user in training.items():
         user_id = f'user_{user_id}'
         graph.add_node(user_id, entity=False)
@@ -33,9 +34,14 @@ def construct_collaborative_graph(graph: Graph, training: Dict[int, WarmStartUse
 
 
 def construct_knowledge_graph(meta: Meta):
-    graph = Graph()
+    graph = nx.Graph()
 
     for triple in meta.triples:
+        if triple.head not in meta.uri_idx or triple.tail not in meta.uri_idx:
+            logger.warning(f'Could not lookup triple data for {triple.head} or {triple.tail}')
+
+            continue
+
         head = meta.uri_idx[triple.head]
         tail = meta.uri_idx[triple.tail]
 
@@ -46,17 +52,17 @@ def construct_knowledge_graph(meta: Meta):
     return graph
 
 
-def get_cache_id(answers):
+def get_cache_key(answers):
     return str(sorted(answers.items(), key=lambda x: x[0]))
 
 
 class PageRankRecommender(RecommenderBase):
     def __init__(self, meta: Meta):
         super().__init__(meta)
-        self.graph = None
         self.entity_indices = set()
         self.optimal_params = None
         self.predictions_cache = {}
+        self.sparse_graph = None
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
@@ -66,16 +72,17 @@ class PageRankRecommender(RecommenderBase):
         Produces a ranking of items. If answers is not none, the ranking
         will be reused if produced previously.
         """
+        def get_scores():
+            return self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
+
         if not answers:
-            scores = pagerank_scipy(self.graph, alpha=alpha, personalization=node_weights).items()
-            return {item: score for item, score in scores if item in items}
+            return {item: score for item, score in get_scores().items() if item in items}
 
-        cache_id = get_cache_id(answers)
-        if cache_id not in self.predictions_cache:
-            scores = pagerank_scipy(self.graph, alpha=alpha, personalization=node_weights).items()
-            self.predictions_cache[cache_id] = {entity: score for entity, score in scores}
+        cache_key = get_cache_key(answers)
+        if cache_key not in self.predictions_cache:
+            self.predictions_cache[cache_key] = {entity: score for entity, score in get_scores().items()}
 
-        return {item: self.predictions_cache[cache_id].get(item, 0.0) for item in items}
+        return {item: self.predictions_cache[cache_key].get(item, 0.0) for item in items}
 
     @staticmethod
     def _weight(category, ratings, importance):
@@ -92,7 +99,7 @@ class PageRankRecommender(RecommenderBase):
 
         # Find rated and unrated entities
         rated_entities = reduce(lambda a, b: a.union(b), ratings.values())
-        unrated_entities = self.entity_indices.difference(rated_entities)
+        unrated_entities = self.sparse_graph.node_set.difference(rated_entities)
 
         # Treat unrated entities as unknown ratings
         ratings[0] = ratings[0].union(unrated_entities)
@@ -108,7 +115,7 @@ class PageRankRecommender(RecommenderBase):
             for entity in user.training.keys():
                 self.entity_indices.add(entity)
 
-        self.graph = self.construct_graph(training)
+        self.sparse_graph = SparseGraph(self.construct_graph(training))
 
         if not self.optimal_params:
             parameters = {
@@ -124,14 +131,11 @@ class PageRankRecommender(RecommenderBase):
 
             results = list()
 
-            validation_users = list(training.items())
-            shuffle(validation_users)
-
             for combination in combinations:
                 logger.debug(f'Trying {combination}')
 
                 predictions = list()
-                for _, user in tqdm(validation_users[:int(len(validation_users) * 0.25)]):
+                for _, user in tqdm(training.items()):
                     node_weights = self.get_node_weights(user.training, combination['importance'])
                     prediction = self._scores(combination['alpha'], node_weights, user.validation.to_list())
 

@@ -49,7 +49,7 @@ class ExperimentOptions:
     def __init__(self, name: str, seed: int, ranking_options: RankingOptions,
                  count_filters: List[CountFilter] = None, cold_start_ratio: float = 0.25,
                  include_unknown: bool = False, evaluation_samples: int = 10,
-                 validator: Validator = None, ratings_file: str = 'ratings.csv'):
+                 validator: Validator = None, ratings_file: str = 'ratings.csv', limit_entities: bool = False):
         self.name = name
         self.seed = seed
         self.count_filters = count_filters
@@ -59,6 +59,7 @@ class ExperimentOptions:
         self.evaluation_samples = evaluation_samples
         self.validator = validator if validator else Validator(metric=Metric.NDCG, cutoff=10)
         self.ratings_file = ratings_file
+        self.limit_entities = limit_entities
 
 
 class Dataset:
