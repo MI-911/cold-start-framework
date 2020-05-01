@@ -129,13 +129,16 @@ class PageRankRecommender(RecommenderBase):
 
             combinations = get_combinations(parameters)
 
+            validation_users = list(training.items())
+            shuffle(validation_users)
+
             results = list()
 
             for combination in combinations:
                 logger.debug(f'Trying {combination}')
 
                 predictions = list()
-                for _, user in tqdm(training.items()):
+                for _, user in tqdm(validation_users[:int(len(validation_users) * 0.25)]):
                     node_weights = self.get_node_weights(user.training, combination['importance'])
                     prediction = self._scores(combination['alpha'], node_weights, user.validation.to_list())
 
