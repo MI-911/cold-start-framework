@@ -1,6 +1,7 @@
 from models.dqn.dqn_interviewer import DqnInterviewer
 from models.dumb.dumb_interviewer import DumbInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
+from models.greedy.greedy_interviewer import GreedyInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
 from models.melu.melu_interviewer import MeLUInterviewer
 from models.naive.naive_interviewer import NaiveInterviewer
@@ -32,6 +33,9 @@ models = {
         'recommender_kwargs': {
             'likes_only': True
         }
+    },
+    'greedy': {
+        'class': GreedyInterviewer,
     },
     'lrmf': {
         'class': LRMFInterviewer,
