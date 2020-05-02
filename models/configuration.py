@@ -27,15 +27,38 @@ models = {
         'class': DumbInterviewer,
         'recommender': TopPopRecommender
     },
-    'top-liked': {
-        'class': DumbInterviewer,
-        'recommender': TopPopRecommender,
+    'greedy-ppr-kg': {
+        'class': GreedyInterviewer,
+        'recommender': KnowledgeGraphPageRankRecommender
+    },
+    'greedy-ppr-kg-limited': {
+        'class': GreedyInterviewer,
+        'recommender': KnowledgeGraphPageRankRecommender,
         'recommender_kwargs': {
-            'likes_only': True
+            'ask_limit': 50
         }
     },
-    'greedy': {
+    'greedy-ppr-collab': {
         'class': GreedyInterviewer,
+        'recommender': CollaborativePageRankRecommender
+    },
+    'greedy-ppr-collab-limited': {
+        'class': GreedyInterviewer,
+        'recommender': CollaborativePageRankRecommender,
+        'recommender_kwargs': {
+            'ask_limit': 50
+        }
+    },
+    'greedy-ppr-joint': {
+        'class': GreedyInterviewer,
+        'recommender': JointPageRankRecommender
+    },
+    'greedy-ppr-joint-limited': {
+        'class': GreedyInterviewer,
+        'recommender': JointPageRankRecommender,
+        'recommender_kwargs': {
+            'ask_limit': 50
+        }
     },
     'lrmf': {
         'class': LRMFInterviewer,

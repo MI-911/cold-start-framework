@@ -1,23 +1,32 @@
 import json
 from collections import defaultdict
+from typing import List
 
+from loguru import logger
 from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
+from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
+from recommenders.pagerank.pagerank_recommender import PageRankRecommender
+from shared.enums import Metric
 from shared.meta import Meta
 from shared.utility import get_top_entities
 
 
 class GreedyInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, use_cuda=False):
+    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False):
         super().__init__(meta, use_cuda)
 
         self.questions = None
-        self.recommender = JointPageRankRecommender(meta)
-        self.recommender.parameters = {'alpha': 0.45, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.idx_uri = self.meta.get_idx_uri()
+
+        kwargs = {'meta': meta}
+        if recommender_kwargs:
+            kwargs.update(recommender_kwargs)
+
+        self.recommender = recommender(**kwargs)
 
     def get_entity_name(self, idx):
         return self._get_entity_property(idx, 'name')
@@ -35,17 +44,14 @@ class GreedyInterviewer(InterviewerBase):
         # Exclude answers to entities already asked about
         return self.questions
 
-    def warmup(self, training, interview_length=5):
-        self.recommender.fit(training)
-
+    def _entity_scores(self, training, entities: List, existing_entities: List):
         entity_scores = list()
-        entities = get_top_entities(training)[:100]
         progress = tqdm(entities)
 
         for entity in progress:
             user_validation = list()
             for user, ratings in training.items():
-                answers = {entity: ratings.training.get(entity, 0)}
+                answers = {e: ratings.training.get(e, 0) for e in existing_entities + [entity]}
 
                 prediction = self.predict(ratings.validation.to_list(), answers)
                 user_validation.append((ratings.validation, prediction))
@@ -55,18 +61,49 @@ class GreedyInterviewer(InterviewerBase):
 
             progress.set_description(f'{self.get_entity_name(entity)}: {score}')
 
+        return list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
+
+    def _get_label_scores(self, training):
+        entities = get_top_entities(training)[:100]
+
         label_scores = defaultdict(list)
-        entity_scores = list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
+        entity_scores = self._entity_scores(training, entities, [])
 
         for entity, score in entity_scores:
             primary_label = self.get_entity_labels(entity)[0]
 
             label_scores[primary_label].append((entities.index(entity) + 1, score))
 
-        #rank_score = list(sorted([(entities.index(entity) + 1, score) for entity, score in entity_scores], key=lambda pair: pair[0]))
         json.dump(label_scores, open('label_scores.json', 'w'))
 
-        self.questions = [pair[0] for pair in entity_scores]
+    def _get_questions(self, training):
+        questions = list()
+        entities = get_top_entities(training)[:50]
+
+        for _ in range(10):
+            entity_scores = self._entity_scores(training, entities, questions)
+            # return [entity for entity, _ in entity_scores if entity]
+
+            next_question = entity_scores[0][0]
+            entities = [entity for entity, _ in entity_scores if entity != next_question]
+
+            questions.append(next_question)
+
+            self.recommender.clear_cache()
+
+        return questions
+
+    def warmup(self, training, interview_length=5):
+        self.recommender.fit(training)
+        self.meta.validator.metric = Metric.HR
+
+        # self.recommender.disable_cache()
+
+        self.questions = self._get_questions(training)
+
+        # Print questions
+        for idx, entity in enumerate(self.questions):
+            logger.info(f'{idx + 1}. {self.get_entity_name(entity)}')
 
     def get_parameters(self):
         pass
@@ -98,11 +135,7 @@ class Node:
         self.answers = dict()
 
     def get_best_split(self, users, entities):
-
-
-
-
-        return entity_scores[0][0]
+        pass
 
     def construct(self, users, entities, depth=0):
         # Try splitting on each

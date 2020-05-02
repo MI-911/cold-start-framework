@@ -57,14 +57,17 @@ def get_cache_key(answers):
 
 
 class PageRankRecommender(RecommenderBase):
-    def __init__(self, meta: Meta):
+    def __init__(self, meta: Meta, ask_limit: int):
         super().__init__(meta)
-        self.entity_indices = set()
         self.predictions_cache = dict()
-        self.parameters = None
-        self.sparse_graph = None
-        self.validation_ratio = 1
         self.use_caching = True
+        self.parameters = None
+
+        self.entity_indices = set()
+        self.sparse_graph = None
+
+        # How many of the top-k entities we can ask about in validation
+        self.ask_limit = ask_limit
 
     def disable_cache(self):
         self.use_caching = False
@@ -127,7 +130,11 @@ class PageRankRecommender(RecommenderBase):
 
         self.sparse_graph = SparseGraph(self.construct_graph(training))
 
-        can_ask_about = set(get_top_entities(training))
+        can_ask_about = get_top_entities(training)
+        if self.ask_limit:
+            can_ask_about = can_ask_about[:self.ask_limit]
+
+        can_ask_about = set(can_ask_about)
 
         if not self.parameters:
             parameters = {
@@ -141,9 +148,6 @@ class PageRankRecommender(RecommenderBase):
 
             combinations = get_combinations(parameters)
 
-            validation_users = list(training.items())
-            shuffle(validation_users)
-
             results = list()
 
             for combination in combinations:
@@ -152,7 +156,7 @@ class PageRankRecommender(RecommenderBase):
                 self.parameters = combination
 
                 predictions = list()
-                for _, user in tqdm(validation_users[:int(len(validation_users) * self.validation_ratio)]):
+                for _, user in tqdm(training.items()):
                     user_answers = {idx: rating for idx, rating in user.training.items() if idx in can_ask_about}
                     prediction = self.predict(user.validation.to_list(), user_answers)
 
