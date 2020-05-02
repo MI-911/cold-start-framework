@@ -52,6 +52,6 @@ fi
 
 for model in $MODELS
 do
-  echo "singularity instance start -B ..:/app ../coldstart4.sigm $model interview.py --include $model $ECMD"
-  singularity instance start -B ..:/app ../coldstart4.sigm $model interview.py --include $model $ECMD
+  echo "singularity instance start --nv -B ..:/app ../coldstart4.sigm $model interview.py --include $model $ECMD"
+  singularity instance start --nv -B ..:/app ../coldstart.sigm $model interview.py --include $model $ECMD
 done

@@ -1,10 +1,11 @@
 Bootstrap: docker
-From: pytorch/pytorch:latest
+From: nvcr.io/nvidia/pytorch:20.03-py3
+
 %files
     ./requirements.txt /app/
+
 %post
-    chmod -R 775 /app
-    cd /app
+    cd /app/
     apt update
     apt install -y software-properties-common nano less
     add-apt-repository ppa:deadsnakes/ppa -y
@@ -12,6 +13,7 @@ From: pytorch/pytorch:latest
     apt install -y python3.8 python3-pip
     python3.8 -m pip install pip
     python3.8 -m pip install -r requirements.txt
+
 %environment
     export PYTHONPATH=/app
 
