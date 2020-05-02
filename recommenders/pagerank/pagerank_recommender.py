@@ -64,6 +64,14 @@ class PageRankRecommender(RecommenderBase):
         self.parameters = None
         self.sparse_graph = None
         self.validation_ratio = 1
+        self.use_caching = True
+
+    def disable_cache(self):
+        self.use_caching = False
+        self.clear_cache()
+
+    def clear_cache(self):
+        self.predictions_cache.clear()
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
@@ -76,7 +84,11 @@ class PageRankRecommender(RecommenderBase):
         def get_scores():
             return self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
 
-        cache_key = get_cache_key(answers)
+        if not self.use_caching:
+            return get_scores()
+
+        # Get cache key, excluding "don't know" to decrease cache misses
+        cache_key = get_cache_key({e: r for e, r in answers.items() if r})
         if cache_key not in self.predictions_cache:
             self.predictions_cache[cache_key] = {entity: score for entity, score in get_scores().items()}
 
@@ -115,7 +127,7 @@ class PageRankRecommender(RecommenderBase):
 
         self.sparse_graph = SparseGraph(self.construct_graph(training))
 
-        entities = set(get_top_entities(training)[:50])
+        can_ask_about = set(get_top_entities(training))
 
         if not self.parameters:
             parameters = {
@@ -141,7 +153,7 @@ class PageRankRecommender(RecommenderBase):
 
                 predictions = list()
                 for _, user in tqdm(validation_users[:int(len(validation_users) * self.validation_ratio)]):
-                    user_answers = {idx: rating for idx, rating in user.training.items() if idx in entities and rating}
+                    user_answers = {idx: rating for idx, rating in user.training.items() if idx in can_ask_about}
                     prediction = self.predict(user.validation.to_list(), user_answers)
 
                     predictions.append((user.validation, prediction))
@@ -151,7 +163,7 @@ class PageRankRecommender(RecommenderBase):
 
                 logger.info(f'Score: {score}')
 
-                self.predictions_cache.clear()
+                self.clear_cache()
 
             self.parameters = sorted(results, key=operator.itemgetter(1), reverse=True)[0][0]
 

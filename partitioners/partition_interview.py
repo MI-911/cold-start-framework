@@ -40,7 +40,7 @@ def _sample_unseen(ratings: DataFrame, user_id: int, n_items, positive_items: Li
 
         entity_weight = {e: pow(pow(positive_ratings - w, 2) + 1, -alpha) for e, w in entity_weight.items()}
 
-    return _choice(unseen_items, n_items, [1 for item in unseen_items])
+    return _choice(unseen_items, n_items, [entity_weight[item] for item in unseen_items])
 
 
 def _get_ratings_dict(from_ratings):
