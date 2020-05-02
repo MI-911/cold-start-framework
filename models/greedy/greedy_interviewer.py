@@ -1,4 +1,5 @@
 import json
+from collections import defaultdict
 
 from tqdm import tqdm
 
@@ -15,11 +16,17 @@ class GreedyInterviewer(InterviewerBase):
 
         self.questions = None
         self.recommender = JointPageRankRecommender(meta)
-        #self.recommender.parameters = {'alpha': 0.5, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        self.recommender.parameters = {'alpha': 0.45, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.idx_uri = self.meta.get_idx_uri()
 
-    def get_idx_name(self, idx):
-        return self.meta.entities[self.idx_uri[idx]]['name']
+    def get_entity_name(self, idx):
+        return self._get_entity_property(idx, 'name')
+
+    def get_entity_labels(self, idx):
+        return self._get_entity_property(idx, 'labels')
+
+    def _get_entity_property(self, idx, prop):
+        return self.meta.entities[self.idx_uri[idx]][prop]
 
     def predict(self, items, answers):
         return self.recommender.predict(items, answers)
@@ -46,12 +53,18 @@ class GreedyInterviewer(InterviewerBase):
             score = self.meta.validator.score(user_validation, self.meta)
             entity_scores.append((entity, score))
 
-            progress.set_description(f'{self.get_idx_name(entity)}: {score}')
+            progress.set_description(f'{self.get_entity_name(entity)}: {score}')
 
+        label_scores = defaultdict(list)
         entity_scores = list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
 
-        rank_score = list(sorted([(entities.index(entity) + 1, score) for entity, score in entity_scores], key=lambda pair: pair[0]))
-        json.dump(rank_score, open('entity_scores.json', 'w'))
+        for entity, score in entity_scores:
+            primary_label = self.get_entity_labels(entity)[0]
+
+            label_scores[primary_label].append((entities.index(entity) + 1, score))
+
+        #rank_score = list(sorted([(entities.index(entity) + 1, score) for entity, score in entity_scores], key=lambda pair: pair[0]))
+        json.dump(label_scores, open('label_scores.json', 'w'))
 
         self.questions = [pair[0] for pair in entity_scores]
 
@@ -94,7 +107,7 @@ class Node:
     def construct(self, users, entities, depth=0):
         # Try splitting on each
         self.question = self.get_best_split(users, entities[:10])
-        self.question_name = self.interviewer.get_idx_name(self.question)
+        self.question_name = self.interviewer.get_entity_name(self.question)
 
         # In the nodes below, do not consider entity split on in this parent node
         entities = [entity for entity in entities if entity != self.question]

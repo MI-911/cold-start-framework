@@ -5,8 +5,8 @@ from typing import List, Dict
 
 from loguru import logger
 import networkx as nx
+import numpy as np
 from tqdm import tqdm
-import sys
 from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
@@ -115,11 +115,11 @@ class PageRankRecommender(RecommenderBase):
 
         self.sparse_graph = SparseGraph(self.construct_graph(training))
 
-        can_ask_about = set(get_top_entities(training))
+        entities = set(get_top_entities(training)[:50])
 
         if not self.parameters:
             parameters = {
-                'alpha': [0.05, 0.15, 0.5, 0.85],
+                'alpha': np.arange(0.1, 1, 0.1),
                 'importance': [
                     {1: 0.95, 0: 0.05, -1: 0.0},
                     {1: 1/3, 0: 1/3, -1: 1/3},
@@ -141,7 +141,7 @@ class PageRankRecommender(RecommenderBase):
 
                 predictions = list()
                 for _, user in tqdm(validation_users[:int(len(validation_users) * self.validation_ratio)]):
-                    user_answers = {idx: rating for idx, rating in user.training.items() if idx in can_ask_about}
+                    user_answers = {idx: rating for idx, rating in user.training.items() if idx in entities and rating}
                     prediction = self.predict(user.validation.to_list(), user_answers)
 
                     predictions.append((user.validation, prediction))
@@ -149,7 +149,6 @@ class PageRankRecommender(RecommenderBase):
                 score = self.meta.validator.score(predictions, self.meta)
                 results.append((combination, score))
 
-                logger.info(f'Cache: {len(self.predictions_cache.keys())}')
                 logger.info(f'Score: {score}')
 
                 self.predictions_cache.clear()
