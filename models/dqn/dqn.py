@@ -2,6 +2,7 @@ import torch as tt
 import torch.nn as nn
 import torch.nn.functional as ff
 import torch.optim as optim
+from loguru import logger
 
 
 class DeepQNetwork(nn.Module):
@@ -25,6 +26,8 @@ class DeepQNetwork(nn.Module):
         # Send the model to GPU if possible
         self.device = tt.device('cuda' if tt.cuda.is_available() else 'cpu')
         self.to(self.device)
+
+        logger.info(f'Sent DQN model to device: {self.device}')
 
     def forward(self, state):
         state = tt.tensor(state).to(self.device)

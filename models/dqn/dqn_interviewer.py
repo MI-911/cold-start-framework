@@ -78,7 +78,6 @@ class DqnInterviewer(InterviewerBase):
 
         if not self.params:
             for params in get_combinations({'fc1_dims': [128, 256, 512]}):
-                del self.agent
                 agent, score = self.train_dqn(training, interview_length, params)
                 if score > best_score:
                     best_agent = agent
@@ -97,8 +96,6 @@ class DqnInterviewer(InterviewerBase):
         best_score = 0
 
         for n in range(n_agents):
-            del self.agent
-
             self.agent = DqnAgent(candidates=self.candidates, n_entities=self.n_entities,
                                   batch_size=64, alpha=0.0003, gamma=1.0, epsilon=1.0,
                                   eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda)
@@ -160,8 +157,8 @@ class DqnInterviewer(InterviewerBase):
                     logger.debug('Skipping user with no positive ratings')
                     continue
 
-                t.set_description(f'Iteration {i} (Scores: {recent_mean(scores)}, Loss: {recent_mean(losses)}, '
-                                  f'Epsilon: {recent_mean(epsilons)})')
+                t.set_description(f'Iteration {i} (Scores: {recent_mean(scores) : 0.4f}, Loss: {recent_mean(losses) : 0.7f}, '
+                                  f'Epsilon: {recent_mean(epsilons) : 0.4f})')
 
                 state = self.environment.reset()
                 self.environment.select_user(user)
