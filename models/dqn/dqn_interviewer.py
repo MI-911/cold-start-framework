@@ -157,8 +157,8 @@ class DqnInterviewer(InterviewerBase):
                     logger.debug('Skipping user with no positive ratings')
                     continue
 
-                t.set_description(f'Iteration {i} (Scores: {recent_mean(scores)}, Loss: {recent_mean(losses)}, '
-                                  f'Epsilon: {recent_mean(epsilons)})')
+                t.set_description(f'Iteration {i} (Scores: {recent_mean(scores) : 0.4f}, Loss: {recent_mean(losses) : 0.7f}, '
+                                  f'Epsilon: {recent_mean(epsilons) : 0.4f})')
 
                 state = self.environment.reset()
                 self.environment.select_user(user)
