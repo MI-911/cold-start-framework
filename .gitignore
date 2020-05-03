@@ -7,7 +7,8 @@
 /.venv
 *.pkl
 /results
-/sources/
+/sources
+/debug
 
 *.json
 
