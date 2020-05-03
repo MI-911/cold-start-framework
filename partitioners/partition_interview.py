@@ -1,10 +1,10 @@
-import json
+import os
 import os
 import pickle
 from typing import List, Dict
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import tqdm
 from loguru import logger
 from pandas import DataFrame
@@ -18,7 +18,7 @@ from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 
 def _sample_seen(ratings: DataFrame, sentiment: Sentiment, n_items=1):
-    items = list(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
+    items = sorted(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
     np.random.shuffle(items)
 
     return set(items[:n_items])
@@ -170,7 +170,7 @@ def _get_ranking(ratings: DataFrame, user_id: int, options: RankingOptions) -> (
 
     # Create ranking instance holding all samples to rank
     ranking = Ranking()
-    for sentiment in sorted(options.sentiment_count.keys(), key=lambda k: int(k)):
+    for sentiment in sorted(options.sentiment_count.keys()):
         if sentiment == Sentiment.UNSEEN:
             continue
 
