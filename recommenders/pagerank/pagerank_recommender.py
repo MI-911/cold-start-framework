@@ -138,9 +138,10 @@ class PageRankRecommender(RecommenderBase):
 
         if not self.parameters:
             parameters = {
-                'alpha': np.arange(0.1, 1, 0.1),
+                'alpha': np.arange(0.1, 1, 0.15),
                 'importance': [
                     {1: 0.95, 0: 0.05, -1: 0.0},
+                    {1: 0.80, 0: 0.20, -1: 0.0},
                     {1: 1/3, 0: 1/3, -1: 1/3},
                     {1: 0.45, 0: 0.10, -1: 0.45}
                 ]
