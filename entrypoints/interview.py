@@ -91,7 +91,7 @@ def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
 
         # Sort items to rank by their score
         # Items not present in the item_scores dictionary default to a zero score
-        return list(sorted(to_rank, key=lambda item: item_scores.get(item, 0), reverse=True))
+        return list(sorted(to_rank, key=lambda item: (item_scores.get(item, 0), item), reverse=True))
     except Exception as e:
         logger.error(f'Exception during ranking: {e}')
 
