@@ -184,6 +184,8 @@ def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, 
             # Skip if user cannot provide any movie answers
             # By checking this, we can remove DEs from answer sets without losing users between comparisons
             if not set(answer_dict.keys()).intersection(movie_indices):
+                logger.warning(f'No item answers for cold-start user {user}, skipping')
+
                 continue
 
             sets.append(ColdStartUserSet(answer_dict, ranking))

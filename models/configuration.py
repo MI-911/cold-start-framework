@@ -31,7 +31,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
     },
-    'greedy-ppr-kg-more-limited': {
+    'greedy-ppr-kg-limited': {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender,
         'recommender_kwargs': {
