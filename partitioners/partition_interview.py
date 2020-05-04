@@ -10,6 +10,7 @@ from pandas import DataFrame
 
 from experiments.experiment import ExperimentOptions, CountFilter, Sentiment, sentiment_to_int, EntityType, \
     RankingOptions
+from shared.enums import Sampling
 from shared.graph_triple import GraphTriple
 from shared.meta import Meta
 from shared.ranking import Ranking
@@ -26,20 +27,30 @@ def _choice(lst, count, probabilities):
     return np.random.choice(lst, size=count, replace=False, p=np.array(probabilities) / np.sum(probabilities))
 
 
-def _sample_unseen(ratings: DataFrame, user_id: int, n_items, positive_items: List[int] = None, alpha=3):
+def _get_unseen_weights(item_ratings, unseen_items: List, options: RankingOptions, positive_items: List[int] = None,
+                        alpha=3):
+    if options.unseen_sampling == Sampling.UNIFORM:
+        return [1 for _ in unseen_items]
+
+    entity_weight = dict(zip(item_ratings['entityIdx'], item_ratings['num_ratings']))
+
+    if options.unseen_sampling == Sampling.EQUAL_POPULARITY and positive_items:
+        positive_ratings = np.mean([entity_weight[item] for item in positive_items])
+
+        entity_weight = {e: pow(pow(positive_ratings - w, 2) + 1, -alpha) for e, w in entity_weight.items()}
+
+    return [entity_weight[entity] for entity in unseen_items]
+
+
+def _sample_unseen(ratings: DataFrame, user_id: int, options: RankingOptions, positive_items: List[int] = None):
     item_ratings = ratings[ratings.isItem]
 
     seen_items = set(item_ratings[item_ratings.userId == user_id].entityIdx.unique())
     unseen_items = sorted(set(item_ratings.entityIdx.unique()).difference(seen_items))
 
-    entity_weight = dict(zip(item_ratings['entityIdx'], item_ratings['num_ratings']))
+    unseen_weights = _get_unseen_weights(item_ratings, unseen_items, options, positive_items)
 
-    if positive_items:
-        positive_ratings = np.mean([entity_weight[item] for item in positive_items])
-
-        entity_weight = {e: pow(pow(positive_ratings - w, 2) + 1, -alpha) for e, w in entity_weight.items()}
-
-    return _choice(unseen_items, n_items, [entity_weight[item] for item in unseen_items])
+    return _choice(unseen_items, options.sentiment_count.get(Sentiment.UNSEEN, 0), unseen_weights)
 
 
 def _get_ratings_dict(from_ratings):
@@ -176,9 +187,7 @@ def _get_ranking(ratings: DataFrame, user_id: int, options: RankingOptions) -> (
                                                             options.sentiment_count.get(sentiment, 0))
 
     # Handle unseen items separately, as it is based on the popularity of the sampled seen items
-    ranking.sentiment_samples[Sentiment.UNSEEN] = _sample_unseen(ratings, user_id,
-                                                                 options.sentiment_count.get(Sentiment.UNSEEN, 0),
-                                                                 ranking.get_seen_samples())
+    ranking.sentiment_samples[Sentiment.UNSEEN] = _sample_unseen(ratings, user_id, options, ranking.get_seen_samples())
 
     # Assert that we have sampled all required items (implicit check for cross-sentiment duplicates)
     assert len(set(ranking.to_list())) == options.get_num_total()
