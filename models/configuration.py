@@ -35,29 +35,29 @@ models = {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 15
+            'ask_limit': 100
         }
     },
     'greedy-ppr-collab': {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender
     },
-    'greedy-ppr-collab-more-limited': {
+    'greedy-ppr-collab-limited': {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 15
+            'ask_limit': 100
         }
     },
     'greedy-ppr-joint': {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender
     },
-    'greedy-ppr-joint-more-limited': {
+    'greedy-ppr-joint-limited': {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 15
+            'ask_limit': 100
         }
     },
     'lrmf': {

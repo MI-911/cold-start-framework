@@ -160,20 +160,16 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         hits, ndcgs, taus, sers, covs, answers = _test(testing, model_instance, num_questions, upper_cutoff, meta,
                                                        popular_items)
 
-        hr = dict()
-        ndcg = dict()
-        tau = dict()
-        ser = dict()
-        cov = dict()
-
+        # Compute metrics at different cutoffs
+        metric = defaultdict(dict)
         for k in range(1, upper_cutoff + 1):
-            hr[k] = np.mean(hits[k])
-            ndcg[k] = np.mean(ndcgs[k])
-            tau[k] = np.mean(taus[k])
-            ser[k] = np.mean(sers[k])
-            cov[k] = coverage(covs[k], meta.recommendable_entities)
+            metric['hr'][k] = np.mean(hits[k])
+            metric['ndcg'][k] = np.mean(ndcgs[k])
+            metric['tau'][k] = np.mean(taus[k])
+            metric['ser'][k] = np.mean(sers[k])
+            metric['cov'][k] = coverage(covs[k], meta.recommendable_entities)
 
-        metrics[num_questions] = {'hr': hr, 'ndcg': ndcg, 'tau': tau, 'ser': ser, 'cov': cov}
+        metrics[num_questions] = metric
         all_answers[num_questions] = answers
 
         logger.info(f'Results for {model_name}:')
