@@ -120,7 +120,8 @@ class DqnInterviewer(InterviewerBase):
 
         for user, data in training.items():
             state = self.environment.reset()
-            self.environment.select_user(user)
+
+            self.environment.select_user(user, remove_positive_sample=False)
 
             for q in range(interview_length):
                 # Ask questions, disregard the reward
@@ -161,6 +162,12 @@ class DqnInterviewer(InterviewerBase):
                                   f'Epsilon: {recent_mean(epsilons) : 0.4f})')
 
                 state = self.environment.reset()
+
+                pos_ratings, = np.where(self.environment.ratings[user] == 1)
+                if len(pos_ratings) == 0:
+                    logger.debug(f'Skipping user {user} due to no positive ratings')
+                    continue
+
                 self.environment.select_user(user)
 
                 # Train on the memories

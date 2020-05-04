@@ -98,8 +98,11 @@ class Environment:
         self.answers = {}
         return self.state
 
-    def select_user(self, user):
+    def select_user(self, user, remove_positive_sample=True):
         self.current_user = user
+
+        if not remove_positive_sample:
+            return
 
         # Choose a random liked entity as the left-out entity
         positive_samples, = np.where(self.ratings[self.current_user] == 1)
@@ -141,7 +144,7 @@ class Environment:
 
         scores = {e: s for e, s in self.predictions_cache[answers_str].items() if e in self.to_rate}
         ranked = [e for e, s in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
-
+        self.left_out_item = np.random.choice(positive_samples)
         metric_score = self._compute_metric(ranked, self.left_out_item)
         return metric_score
 
