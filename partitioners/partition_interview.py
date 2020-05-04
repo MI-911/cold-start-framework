@@ -1,5 +1,4 @@
 import os
-import os
 import pickle
 from typing import List, Dict
 
@@ -19,9 +18,8 @@ from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 def _sample_seen(ratings: DataFrame, sentiment: Sentiment, n_items=1):
     items = sorted(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
-    np.random.shuffle(items)
 
-    return set(items[:n_items])
+    return np.random.choice(items, size=n_items, replace=False)
 
 
 def _choice(lst, count, probabilities):
