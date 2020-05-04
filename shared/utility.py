@@ -1,9 +1,11 @@
 import argparse
 import itertools as it
 import os
-from typing import Dict
+from typing import Dict, List
 
 from scipy.sparse import csr_matrix
+
+from shared.user import WarmStartUser
 
 
 def get_combinations(parameters):
@@ -58,3 +60,7 @@ def get_top_entities(training):
             entity_ratings.setdefault(idx, []).append(sentiment)
 
     return list([item[0] for item in sorted(entity_ratings.items(), key=lambda x: len(x[1]), reverse=True)])
+
+
+def get_popular_items(items: List[int], training: Dict[int, WarmStartUser]):
+    return [entity for entity in get_top_entities(training) if entity in items]

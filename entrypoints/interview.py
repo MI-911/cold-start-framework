@@ -4,7 +4,7 @@ import os
 import sys
 import time
 from collections import defaultdict
-from typing import Dict, Set, List
+from typing import Dict, Set
 
 import numpy as np
 from loguru import logger
@@ -17,7 +17,7 @@ from models.configuration import models
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
-from shared.utility import join_paths, valid_dir
+from shared.utility import join_paths, valid_dir, get_popular_items
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
@@ -98,18 +98,6 @@ def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
         return list()
 
 
-def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser]):
-    recent_counts = {r: 0 for r in recents}
-    for u, data in training.items():
-        for idx, sentiment in data.training.items():
-            if idx in recent_counts and not sentiment == 0:
-                recent_counts[idx] += 1
-
-    return [recent
-            for recent, count
-            in sorted(recent_counts.items(), key=lambda x: x[1], reverse=True)]
-
-
 def _test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items):
     # Keep track of answers provided
     all_answers = list()
@@ -167,7 +155,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
             model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
             model_instance.warmup(training, num_questions)
 
-        popular_items = _get_popular_recents(meta.recommendable_entities, training)
+        popular_items = get_popular_items(meta.recommendable_entities, training)
 
         hits, ndcgs, taus, sers, covs, answers = _test(testing, model_instance, num_questions, upper_cutoff, meta,
                                                        popular_items)

@@ -1,10 +1,15 @@
 from enum import Enum, IntEnum
 
 
-class Sampling(Enum):
+class UnseenSampling(Enum):
     UNIFORM = 1
     POPULARITY = 2
     EQUAL_POPULARITY = 3
+
+
+class SeenSampling(Enum):
+    STANDARD = 1
+    LONG_TAIL = 2
 
 
 class EntityType(Enum):
