@@ -1,9 +1,10 @@
 import os
+import os
 import pickle
 from typing import List, Dict
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 import tqdm
 from loguru import logger
 from pandas import DataFrame
@@ -17,7 +18,7 @@ from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 
 def _sample_seen(ratings: DataFrame, sentiment: Sentiment, n_items=1):
-    items = list(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
+    items = sorted(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
     np.random.shuffle(items)
 
     return set(items[:n_items])
@@ -31,7 +32,7 @@ def _sample_unseen(ratings: DataFrame, user_id: int, n_items, positive_items: Li
     item_ratings = ratings[ratings.isItem]
 
     seen_items = set(item_ratings[item_ratings.userId == user_id].entityIdx.unique())
-    unseen_items = list(set(item_ratings.entityIdx.unique()).difference(seen_items))
+    unseen_items = sorted(set(item_ratings.entityIdx.unique()).difference(seen_items))
 
     entity_weight = dict(zip(item_ratings['entityIdx'], item_ratings['num_ratings']))
 
@@ -94,7 +95,7 @@ def _get_ratings(ratings_path, include_unknown, cold_start_ratio, count_filters:
             ratings = ratings[ratings.userId.isin(df_tmp[count_filter.filter_func(df_tmp.num_ratings)].index)]
 
     # Partition into warm and cold start users
-    users = ratings['userId'].unique()
+    users = sorted(ratings['userId'].unique())
     np.random.shuffle(users)
 
     splits = list()
@@ -122,7 +123,7 @@ def _get_ratings(ratings_path, include_unknown, cold_start_ratio, count_filters:
 def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users, user_idx) -> Dict[int, WarmStartUser]:
     training_data = dict()
 
-    progress = tqdm.tqdm(warm_start_users)
+    progress = tqdm.tqdm(sorted(warm_start_users))
     for user in progress:
         progress.set_description(f'Processing warm-start user {user}')
 
@@ -142,7 +143,7 @@ def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, 
                       movie_indices) -> Dict[int, ColdStartUser]:
     testing_data = dict()
 
-    progress = tqdm.tqdm(cold_start_users)
+    progress = tqdm.tqdm(sorted(cold_start_users))
     for user in progress:
         progress.set_description(f'Processing cold-start user {user}')
 
@@ -169,11 +170,12 @@ def _get_ranking(ratings: DataFrame, user_id: int, options: RankingOptions) -> (
 
     # Create ranking instance holding all samples to rank
     ranking = Ranking()
-    for sentiment, n_samples in options.sentiment_count.items():
+    for sentiment in sorted(options.sentiment_count.keys()):
         if sentiment == Sentiment.UNSEEN:
             continue
 
-        ranking.sentiment_samples[sentiment] = _sample_seen(u_ratings, sentiment, n_samples)
+        ranking.sentiment_samples[sentiment] = _sample_seen(u_ratings, sentiment,
+                                                            options.sentiment_count.get(sentiment, 0))
 
     # Handle unseen items separately, as it is based on the popularity of the sampled seen items
     ranking.sentiment_samples[Sentiment.UNSEEN] = _sample_unseen(ratings, user_id,
@@ -239,8 +241,8 @@ def _create_split(experiment: ExperimentOptions, entities, output_directory: str
         entities = {entity: _ for entity, _ in entities.items() if entity in uris}
 
     # Map users and entities to indices
-    user_idx = {k: v for v, k in enumerate(users)}
-    entity_idx = {k: v for v, k in enumerate(set(entities.keys()))}
+    user_idx = {k: v for v, k in enumerate(sorted(users))}
+    entity_idx = {k: v for v, k in enumerate(sorted(entities.keys()))}
     ratings['entityIdx'] = ratings.uri.transform(entity_idx.get)
 
     # Find movie indices

@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, IntEnum
 
 
 class EntityType(Enum):
@@ -7,7 +7,7 @@ class EntityType(Enum):
     ANY = 3
 
 
-class Sentiment(Enum):
+class Sentiment(IntEnum):
     NEGATIVE = 1
     UNKNOWN = 2
     POSITIVE = 3
