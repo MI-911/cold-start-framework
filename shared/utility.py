@@ -1,8 +1,14 @@
 import argparse
 import itertools as it
+import json
 import os
+import pickle
+from functools import lru_cache, wraps
 from typing import Dict
 
+import numpy
+from numpy import int64
+from numpy.core.multiarray import ndarray
 from scipy.sparse import csr_matrix
 
 
@@ -58,3 +64,32 @@ def get_top_entities(training):
             entity_ratings.setdefault(idx, []).append(sentiment)
 
     return list([item[0] for item in sorted(entity_ratings.items(), key=lambda x: len(x[1]), reverse=True)])
+
+
+def hashable_lru(maxsize=None):
+    def inner_lru(func):
+        cache = lru_cache(maxsize=maxsize)
+
+        def deserialise(value):
+            try:
+                return pickle.loads(value)
+            except Exception:
+                return value
+
+        def func_with_serialized_params(*args, **kwargs):
+            _args = tuple([deserialise(arg) for arg in args])
+            _kwargs = {k: deserialise(v) for k, v in kwargs.items()}
+            return func(*_args, **_kwargs)
+
+        cached_function = cache(func_with_serialized_params)
+
+        @wraps(func)
+        def lru_decorator(*args, **kwargs):
+            _args = tuple([pickle.dumps(arg) if type(arg) in (list, dict, ndarray, int64) else arg for arg in args])
+            _kwargs = {k: pickle.dumps(v) if type(v) in (list, dict, ndarray, int64) else v for k, v in kwargs.items()}
+            return cached_function(*_args, **_kwargs)
+        lru_decorator.cache_info = cached_function.cache_info
+        lru_decorator.cache_clear = cached_function.cache_clear
+        return lru_decorator
+
+    return inner_lru

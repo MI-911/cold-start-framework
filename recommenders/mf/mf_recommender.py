@@ -11,7 +11,7 @@ from loguru import logger
 
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations
+from shared.utility import get_combinations, hashable_lru
 
 
 def flatten_rating_triples(training: Dict[int, WarmStartUser]):
@@ -89,8 +89,11 @@ class MatrixFactorizationRecommender(RecommenderBase):
             prediction = self.model.predict(u_idx, user.validation.to_list())
             predictions.append((user.validation, prediction))
 
+        self.predict.cache_clear()
+
         return self.meta.validator.score(predictions, self.meta)
 
+    @hashable_lru()
     def predict(self, items, answers):
         # Predict a user as the avg embedding of the items they liked
         u_embedding_items = [e for e, r in answers.items() if r == 1]
