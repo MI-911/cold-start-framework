@@ -270,7 +270,7 @@ def _get_short_head_items(ratings_df: DataFrame):
         short_head_items.add(item)
         cumulative_ratings += ratings
 
-        if cumulative_ratings >= total_ratings * 0.2:
+        if cumulative_ratings >= total_ratings * 0.3:
             break
 
     return short_head_items

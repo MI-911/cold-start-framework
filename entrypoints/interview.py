@@ -85,15 +85,17 @@ def _conduct_interview(model: InterviewerBase, answer_set: ColdStartUserSet, n_q
 
 
 def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
-    to_rank = ranking.to_list()
-    item_scores = model.predict(to_rank, answers)
     try:
+        to_rank = ranking.to_list()
+        item_scores = model.predict(to_rank, answers)
+
         # Sort items to rank by their score
         # Items not present in the item_scores dictionary default to a zero score
         return list(sorted(to_rank, key=lambda item: (item_scores.get(item, 0), item), reverse=True))
     except Exception as e:
         logger.error(f'Exception during ranking: {e}')
 
+        return list()
 
 
 def _test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items):
