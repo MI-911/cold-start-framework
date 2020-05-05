@@ -35,7 +35,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 100
+            'ask_limit': 50
         }
     },
     'greedy-ppr-collab': {
@@ -46,7 +46,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 100
+            'ask_limit': 50
         }
     },
     'greedy-ppr-joint': {
@@ -57,7 +57,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 100
+            'ask_limit': 50
         }
     },
     'lrmf': {

@@ -95,7 +95,6 @@ class GreedyInterviewer(InterviewerBase):
 
     def warmup(self, training, interview_length=5):
         self.recommender.fit(training)
-        self.meta.validator.metric = Metric.HR
 
         # self.recommender.disable_cache()
 
