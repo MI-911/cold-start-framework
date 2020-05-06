@@ -23,12 +23,12 @@ separation = ExperimentOptions(name='separation', seed=123, count_filters=[
                                       sentiment_utility={Sentiment.POSITIVE: 1, Sentiment.UNKNOWN: 0.5}),
                                validator=Validator(metric=Metric.TAU, cutoff=3), include_unknown=True)
 
-default = ExperimentOptions(name='default_long_tail', seed=123, count_filters=[
+default = ExperimentOptions(name='default_uniform', seed=123, count_filters=[
         CountFilter(lambda count: count >= 5, entity_type=EntityType.DESCRIPTIVE, sentiment=Sentiment.ANY),
         CountFilter(lambda count: count >= 5, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.ANY),
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE)
-    ], ranking_options=RankingOptions(unseen_sampling=UnseenSampling.UNIFORM, seen_sampling=SeenSampling.LONG_TAIL,
-                                      num_positive=1, num_unseen=100), include_unknown=False, evaluation_samples=1)
+    ], ranking_options=RankingOptions(unseen_sampling=UnseenSampling.UNIFORM, num_positive=1, num_unseen=100),
+                            include_unknown=False, evaluation_samples=1)
 
 movielens = ExperimentOptions(name='movielens', seed=123, count_filters=[
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE)
