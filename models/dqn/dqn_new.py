@@ -277,8 +277,18 @@ class DqnInterviewer(InterviewerBase):
                 # reward = self.meta.validator.score([(training[user].validation, scores)], self.meta)
 
                 # Store the transitions in the agent memory
-                for q, (state, question, answer, new_state, is_done) in enumerate(transitions):
-                    self.agent.store_memory(state, question, new_state, reward if is_done else -1.0 if not answer else 0.0, is_done, q)
+                c = 0
+                smoke_test_answers = [1, 2, 3]
+                for state, question, answer, new_state, is_done in transitions:
+                    _reward = 1.0 if question == smoke_test_answers[c] else 0.0
+                    self.agent.store_memory(state, question, new_state, _reward, is_done)
+
+                    if _reward:
+                        logger.info(f'Correct!')
+                    else:
+                        logger.info(f'Wrong! {question} vs {smoke_test_answers[c]}')
+
+                    c += 1
 
                 # Learn from the memories
                 loss = self.agent.learn()
@@ -293,20 +303,20 @@ class DqnInterviewer(InterviewerBase):
                 # Reset the user's rating
                 self.ratings[user, positive_sample] = 1.0
 
-            self.agent.Q_eval.eval()
-            score = self.validate(training, interview_length)
-            if score > best_score:
-                best_agent = pickle.loads(pickle.dumps(self.agent))
-                best_score = score
-                logger.info(f'Found new best agent with validation score {score}')
-            self.agent.Q_eval.train()
-
-            iteration_loss = recent_mean(losses, recency=len(users))
-            if iteration_loss > last_iteration_loss:
-                logger.info(f'Stopping due to increasing loss')
-                return best_agent, best_score
-            else:
-                last_iteration_loss = iteration_loss
+            # self.agent.Q_eval.eval()
+            # score = self.validate(training, interview_length)
+            # if score > best_score:
+            #     best_agent = pickle.loads(pickle.dumps(self.agent))
+            #     best_score = score
+            #     logger.info(f'Found new best agent with validation score {score}')
+            # self.agent.Q_eval.train()
+            #
+            # iteration_loss = recent_mean(losses, recency=len(users))
+            # if iteration_loss > last_iteration_loss:
+            #     logger.info(f'Stopping due to increasing loss')
+            #     return best_agent, best_score
+            # else:
+            #     last_iteration_loss = iteration_loss
 
         return best_agent, best_score
 
@@ -323,7 +333,7 @@ class DqnInterviewer(InterviewerBase):
 
             for q in range(interview_length):
                 # Ask questions, disregard the reward
-                question_idx = self.agent.choose_action(state, [], explore=False, question_number=q)
+                question_idx = self.agent.choose_action(state, [], explore=False)
 
                 # Get the answer
                 answer = self.ratings[user, self.candidates[question_idx]]
@@ -346,7 +356,7 @@ class DqnInterviewer(InterviewerBase):
             entity_idx = self.candidates.index(entity)
             state = update_state(state, entity_idx, answer)
 
-        question_idx = self.agent.choose_action(state, questions, explore=False, question_number=len(answers))
+        question_idx = self.agent.choose_action(state, questions, explore=False)
         questions.append(question_idx)
         return [self.candidates[question_idx]]
 
