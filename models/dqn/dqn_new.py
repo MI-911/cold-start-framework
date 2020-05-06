@@ -196,7 +196,8 @@ class DqnInterviewer(InterviewerBase):
 
         self.agent = DqnAgent(candidates=self.candidates, n_entities=self.n_entities,
                               batch_size=720, alpha=0.01, gamma=1.0, epsilon=1.0,
-                              eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda)
+                              eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda,
+                              interview_length=interview_length)
 
         self.agent.Q_eval.eval()
         score = self.validate(training, interview_length)
@@ -241,7 +242,7 @@ class DqnInterviewer(InterviewerBase):
 
                 for q in range(interview_length):
                     # Find the question to ask
-                    question_idx = self.agent.choose_action(state, [])
+                    question_idx = self.agent.choose_action(state, [], q)
 
                     # Ask the question
                     answer = self.ratings[user, self.candidates[question_idx]]
@@ -276,8 +277,8 @@ class DqnInterviewer(InterviewerBase):
                 # reward = self.meta.validator.score([(training[user].validation, scores)], self.meta)
 
                 # Store the transitions in the agent memory
-                for (state, question, answer, new_state, is_done) in transitions:
-                    self.agent.store_memory(state, question, new_state, reward if is_done else -1.0 if not answer else 0.0, is_done)
+                for q, (state, question, answer, new_state, is_done) in enumerate(transitions):
+                    self.agent.store_memory(state, question, new_state, reward if is_done else -1.0 if not answer else 0.0, is_done, q)
 
                 # Learn from the memories
                 loss = self.agent.learn()
@@ -322,7 +323,7 @@ class DqnInterviewer(InterviewerBase):
 
             for q in range(interview_length):
                 # Ask questions, disregard the reward
-                question_idx = self.agent.choose_action(state, [], explore=False)
+                question_idx = self.agent.choose_action(state, [], explore=False, question_number=q)
 
                 # Get the answer
                 answer = self.ratings[user, self.candidates[question_idx]]
@@ -345,7 +346,7 @@ class DqnInterviewer(InterviewerBase):
             entity_idx = self.candidates.index(entity)
             state = update_state(state, entity_idx, answer)
 
-        question_idx = self.agent.choose_action(state, questions, explore=False)
+        question_idx = self.agent.choose_action(state, questions, explore=False, question_number=len(answers))
         questions.append(question_idx)
         return [self.candidates[question_idx]]
 

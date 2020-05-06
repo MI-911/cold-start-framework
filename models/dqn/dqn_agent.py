@@ -10,7 +10,7 @@ import pickle
 
 class DqnAgent:
     def __init__(self, gamma: float, epsilon: float, alpha: float, n_entities: int, candidates: List[int],
-                 batch_size: int, fc1_dims: int,  max_mem_size: float = 10000, eps_end: float = 0.01, eps_dec: float = 0.996,
+                 batch_size: int, fc1_dims: int, interview_length: int,  max_mem_size: float = 10000, eps_end: float = 0.01, eps_dec: float = 0.996,
                  use_cuda: bool = False):
         """
         Constructs an agent for a DQN learning process
@@ -35,6 +35,7 @@ class DqnAgent:
         self.n_entities = n_entities
         self.batch_size = batch_size
         self.max_mem_size = max_mem_size
+        self.interview_length = interview_length
 
         self.candidates = candidates
         self.action_size = len(self.candidates)
@@ -44,7 +45,7 @@ class DqnAgent:
         # Allocate DQN model
         self.Q_eval = DeepQNetwork(
             state_size=self.state_size, fc1_dims=fc1_dims, fc2_dims=fc1_dims // 2, actions_size=self.action_size,
-            alpha=alpha, use_cuda=use_cuda)
+            alpha=alpha, use_cuda=use_cuda, interview_length=interview_length)
 
         # Allocate a target network to stabilise training
         self.Q_target = self._synchronize()
@@ -55,13 +56,14 @@ class DqnAgent:
         self.new_state_memory = np.zeros((self.max_mem_size, self.state_size), dtype=np.float32)
         self.reward_memory = np.zeros((self.max_mem_size,), dtype=np.float32)
         self.terminal_memory = np.zeros((self.max_mem_size,), dtype=np.uint8)
+        self.question_number_memory = np.zeros((self.max_mem_size,), dtype=np.uint8)
 
         self.mem_counter = 0
 
     def _synchronize(self):
         return pickle.loads(pickle.dumps(self.Q_eval))
 
-    def store_memory(self, state: np.ndarray, action: int, new_state: np.ndarray, reward: float, terminal: bool):
+    def store_memory(self, state: np.ndarray, action: int, new_state: np.ndarray, reward: float, terminal: bool, question_number: int):
         # Override old memories when we reach max_mem_size
         i = self.mem_counter % self.max_mem_size
 
@@ -76,12 +78,14 @@ class DqnAgent:
             o_new_state = self.new_state_memory[i]
             o_reward = self.reward_memory[i]
             o_terminal = self.terminal_memory[i]
+            o_question_number = self.question_number_memory[i]
 
             del o_state
             del o_action
             del o_new_state
             del o_reward
             del o_terminal
+            del o_question_number
 
         # Store the memory
         self.state_memory[i] = state
@@ -89,14 +93,15 @@ class DqnAgent:
         self.new_state_memory[i] = new_state
         self.reward_memory[i] = reward
         self.terminal_memory[i] = terminal
+        self.question_number_memory[i] = question_number
 
         # Increment the counter
         self.mem_counter += 1
 
-    def choose_action(self, state: np.ndarray, asked_about: List, explore=True) -> int:
+    def choose_action(self, state: np.ndarray, asked_about: List, question_number: int, explore=True) -> int:
         # Make the DQN predict action rewards given this state
         with tt.no_grad():
-            predicted_rewards = self.Q_eval(state.reshape((1, state.shape[0])))
+            predicted_rewards = self.Q_eval(state.reshape((1, state.shape[0])), question_number)
 
             if np.random.rand() > self.epsilon or not explore:
                 # Exploit
@@ -121,15 +126,16 @@ class DqnAgent:
         new_state_batch = self.new_state_memory[batch_indices]
         reward_batch = self.reward_memory[batch_indices]
         terminal_batch = self.terminal_memory[batch_indices]
+        question_number_batch = self.question_number_memory[batch_indices]
 
         # Convert action memories to indices so we use them to index directly later
         action_values = np.arange(self.action_size, dtype=np.uint8)
         action_indices = np.dot(action_batch, action_values)
 
         # Predict rewards for the current state and the next one
-        current_predicted_rewards = self.Q_eval(state_batch)
+        current_predicted_rewards = self.Q_eval(state_batch, question_number_batch)
         target_rewards = current_predicted_rewards.clone().cpu().detach().numpy()
-        next_predicted_rewards = self.Q_target(new_state_batch)  # Should come from the target network
+        next_predicted_rewards = self.Q_target(new_state_batch, question_number_batch + 1)  # Should come from the target network
 
         # Index trickery so we can index the in-batch tensors
         batch_index = np.arange(self.batch_size, dtype=np.int32)

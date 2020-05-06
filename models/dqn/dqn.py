@@ -6,23 +6,13 @@ from loguru import logger
 
 
 class DeepQNetwork(nn.Module):
-    def __init__(self, alpha, state_size: int, fc1_dims: int, fc2_dims: int, actions_size: int, use_cuda: bool = True):
+    def __init__(self, alpha, state_size: int, fc1_dims: int, fc2_dims: int, actions_size: int, interview_length: int, use_cuda: bool = True):
         super(DeepQNetwork, self).__init__()
 
-        # Construct sequential layers
-        self.layers = nn.Sequential(
-            nn.Linear(state_size, fc1_dims),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            # nn.Linear(fc1_dims, fc1_dims),
-            # nn.ReLU(),
-            # nn.Dropout(0.5),
-            nn.Linear(fc1_dims, fc2_dims),
-            nn.ReLU(),
-            nn.Dropout(0.5),
-            nn.Linear(fc2_dims, actions_size),
-            nn.Sigmoid()
-        )
+        self.layers = {
+            q: nn.Linear(state_size, fc1_dims)
+            for q in range(interview_length)
+        }
 
         # Optimisers and loss
         self.optimizer = optim.Adam(self.parameters(), lr=alpha)
@@ -34,9 +24,10 @@ class DeepQNetwork(nn.Module):
 
         logger.info(f'Sent DQN model to device: {self.device}')
 
-    def forward(self, state):
+    def forward(self, state, question_number):
         state = tt.tensor(state).to(self.device)
-        return self.layers(state)
+        layer = self.layers[question_number]
+        return ff.relu(layer(state))
 
     def get_loss(self, current_predicted_rewards, target_rewards):
         target_rewards = target_rewards.to(self.device)
