@@ -8,7 +8,7 @@ import pickle
 
 class DqnAgent:
     def __init__(self, gamma: float, epsilon: float, alpha: float, n_entities: int, candidates: List[int],
-                 batch_size: int, fc1_dims: int,  max_mem_size: float = 1000, eps_end: float = 0.01, eps_dec: float = 0.996,
+                 batch_size: int, fc1_dims: int,  max_mem_size: float = 10000, eps_end: float = 0.01, eps_dec: float = 0.996,
                  use_cuda: bool = False):
         """
         Constructs an agent for a DQN learning process
@@ -91,16 +91,19 @@ class DqnAgent:
         # Increment the counter
         self.mem_counter += 1
 
-    def choose_action(self, state: np.ndarray, explore=True) -> int:
+    def choose_action(self, state: np.ndarray, asked_about: List, explore=True) -> int:
         # Make the DQN predict action rewards given this state
-        predicted_rewards = self.Q_eval(state.reshape((1, state.shape[0])))
+        with tt.no_grad():
+            predicted_rewards = self.Q_eval(state.reshape((1, state.shape[0])))
 
-        if np.random.rand() > self.epsilon or not explore:
-            # Exploit
-            return int(tt.argmax(predicted_rewards))
-        else:
-            # Explore
-            return np.random.choice(self.action_space)
+            if np.random.rand() > self.epsilon or not explore:
+                # Exploit
+                # return int(np.argmax([r if i not in asked_about else 0.0 for i, r in enumerate(predicted_rewards[0])]))
+                return int(tt.argmax(predicted_rewards))
+            else:
+                # Explore
+                # return np.random.choice([q for q in self.action_space if q not in asked_about])
+                return np.random.choice(self.action_space)
 
     def learn(self):
         if self.mem_counter < self.batch_size:
@@ -130,7 +133,7 @@ class DqnAgent:
         batch_index = np.arange(self.batch_size, dtype=np.int32)
 
         # Construct the optimal predicted rewards (the "ground truth" labels for every memory)
-        target_update = reward_batch + self.gamma * tt.max(next_predicted_rewards, dim=1)[0].cpu().detach().numpy() * terminal_batch
+        target_update = reward_batch + self.gamma * tt.max(next_predicted_rewards, dim=1)[0].cpu().detach().numpy() * terminal_batch # + ((1.0 / 3) - reward_batch)
         for i in range(len(batch_index)):
             target_rewards[batch_index[i], action_indices[i]] = target_update[i]
 
@@ -138,6 +141,7 @@ class DqnAgent:
         self.Q_eval.zero_grad()
         loss = self.Q_eval.get_loss(current_predicted_rewards, tt.tensor(target_rewards))
         loss.backward()
+        tt.nn.utils.clip_grad_norm_(self.Q_eval.parameters(), 1.0)
         self.Q_eval.optimizer.step()
 
         # Decrease the chance that we will explore random questions in the future

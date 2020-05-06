@@ -13,10 +13,15 @@ class DeepQNetwork(nn.Module):
         self.layers = nn.Sequential(
             nn.Linear(state_size, fc1_dims),
             nn.ReLU(),
-            nn.Dropout(0.25),
+            nn.Dropout(0.5),
+            # nn.Linear(fc1_dims, fc1_dims),
+            # nn.ReLU(),
+            # nn.Dropout(0.5),
             nn.Linear(fc1_dims, fc2_dims),
             nn.ReLU(),
-            nn.Linear(fc2_dims, actions_size)
+            nn.Dropout(0.5),
+            nn.Linear(fc2_dims, actions_size),
+            nn.Sigmoid()
         )
 
         # Optimisers and loss
@@ -36,4 +41,5 @@ class DeepQNetwork(nn.Module):
     def get_loss(self, current_predicted_rewards, target_rewards):
         target_rewards = target_rewards.to(self.device)
         # current_predicted_rewards = tt.tensor(current_predicted_rewards).to(self.device)
+        # return tt.abs(tt.sum(target_rewards - current_predicted_rewards))
         return self.loss(current_predicted_rewards, target_rewards)

@@ -60,7 +60,7 @@ class PageRankRecommender(RecommenderBase):
     def __init__(self, meta: Meta, ask_limit: int):
         super().__init__(meta)
         self.predictions_cache = dict()
-        self.use_caching = True
+        self.use_caching = False
         self.parameters = None
 
         self.entity_indices = set()
@@ -85,9 +85,10 @@ class PageRankRecommender(RecommenderBase):
         will be reused if produced previously.
         """
         def get_scores():
-            return self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
+            scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
+            return {item: scores.get(item, 0) for item in items}
 
-        if not self.use_caching:
+        if not self.use_caching or True:
             return get_scores()
 
         # Get cache key, excluding "don't know" to decrease cache misses
@@ -136,6 +137,11 @@ class PageRankRecommender(RecommenderBase):
 
         can_ask_about = set(can_ask_about)
 
+        self.parameters = {
+            'alpha': 0.1,
+            'importance': {1: 0.95, 0: 0.05, -1: 0.0}
+        }
+
         if not self.parameters:
             parameters = {
                 'alpha': np.arange(0.1, 1, 0.15),
@@ -175,5 +181,6 @@ class PageRankRecommender(RecommenderBase):
             logger.info(f'Found optimal: {self.parameters}')
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
-        return self._scores(self.parameters['alpha'],
+        score = self._scores(self.parameters['alpha'],
                             self.get_node_weights(answers, self.parameters['importance']), items, answers=answers)
+        return score
