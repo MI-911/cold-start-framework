@@ -2,6 +2,8 @@ import torch as tt
 import numpy as np
 from typing import List
 
+from loguru import logger
+
 from models.dqn.dqn import DeepQNetwork
 import pickle
 
@@ -133,22 +135,29 @@ class DqnAgent:
         batch_index = np.arange(self.batch_size, dtype=np.int32)
 
         # Construct the optimal predicted rewards (the "ground truth" labels for every memory)
-        target_update = reward_batch + self.gamma * tt.max(next_predicted_rewards, dim=1)[0].cpu().detach().numpy() * terminal_batch # + ((1.0 / 3) - reward_batch)
+        target_update = reward_batch + self.gamma * tt.max(next_predicted_rewards, dim=1)[0].cpu().detach().numpy() * terminal_batch # + (1.0 - reward_batch)
         for i in range(len(batch_index)):
             target_rewards[batch_index[i], action_indices[i]] = target_update[i]
 
         # Adjust the model
         self.Q_eval.zero_grad()
+        # self.Q_target.zero_grad()
+
         loss = self.Q_eval.get_loss(current_predicted_rewards, tt.tensor(target_rewards))
         loss.backward()
-        tt.nn.utils.clip_grad_norm_(self.Q_eval.parameters(), 1.0)
+        # tt.nn.utils.clip_grad_norm_(self.Q_eval.parameters(), 1.0)
         self.Q_eval.optimizer.step()
 
         # Decrease the chance that we will explore random questions in the future
         self.epsilon = self.epsilon * self.eps_dec if self.epsilon > self.eps_end else self.eps_end
 
+        # Do a soft update
+        tau = 1e-3
+        for target_param, eval_param in zip(self.Q_target.parameters(), self.Q_eval.parameters()):
+            target_param.data.copy_(tau * eval_param.data + (1.0 - tau) * target_param.data)
+
         # Check if we should update the target network
-        if self.mem_counter % 100 == 0:
-            self.Q_target = self._synchronize()
+        # if self.mem_counter % 500 == 0:
+        #     self.Q_target.load_state_dict(self.Q_eval.state_dict())
 
         return loss
