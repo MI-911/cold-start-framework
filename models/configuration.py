@@ -1,4 +1,4 @@
-from models.dqn.dqn_interviewer import DqnInterviewer
+from models.dqn.dqn_new import DqnInterviewer
 from models.dumb.dumb_interviewer import DumbInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.greedy.greedy_interviewer import GreedyInterviewer

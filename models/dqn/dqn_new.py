@@ -167,8 +167,11 @@ class DqnInterviewer(InterviewerBase):
                     continue
 
                 t.set_description(
-                    f'Iteration {iteration} (Ranking Scores: {recent_mean(ranking_scores) : 0.4f}, Loss: {recent_mean(losses) : 0.7f}, '
-                    f'Epsilon: {recent_mean(epsilons) : 0.4f}, avg. interview length: {recent_mean(interview_lengths) : 0.4f})')
+                    f'Iteration {iteration} '
+                    f'(Ranking Scores: {recent_mean(ranking_scores) : 0.4f}, '
+                    f'Loss: {recent_mean(losses) : 0.7f}, '
+                    f'Epsilon: {recent_mean(epsilons) : 0.4f}, '
+                    f'avg. interview length: {recent_mean(interview_lengths) : 0.4f})')
 
                 # Fresh state
                 state = np.zeros((state_size,), dtype=np.float32)
