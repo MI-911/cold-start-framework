@@ -57,7 +57,7 @@ def get_cache_key(answers):
 
 
 class PageRankRecommender(RecommenderBase):
-    def __init__(self, meta: Meta, ask_limit: int):
+    def __init__(self, meta: Meta, ask_limit: int, recommendable_only: bool):
         super().__init__(meta)
         self.predictions_cache = dict()
         self.use_caching = True
@@ -68,6 +68,8 @@ class PageRankRecommender(RecommenderBase):
 
         # How many of the top-k entities we can ask about in validation
         self.ask_limit = ask_limit
+
+        self.recommendable_only = recommendable_only
 
     def disable_cache(self):
         self.use_caching = False
@@ -175,5 +177,8 @@ class PageRankRecommender(RecommenderBase):
             logger.info(f'Found optimal: {self.parameters}')
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
+        if self.recommendable_only:
+            answers = {idx: sentiment for idx, sentiment in answers.items() if idx in self.meta.recommendable_entities}
+
         return self._scores(self.parameters['alpha'],
                             self.get_node_weights(answers, self.parameters['importance']), items, answers=answers)

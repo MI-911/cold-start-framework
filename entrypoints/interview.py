@@ -33,13 +33,17 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
         'use_cuda': models[model_name].get('use_cuda', False)
     }
 
-    recommender = models[model_name].get('recommender', None)
-    if recommender:
-        kwargs['recommender'] = recommender
+    interviewer_kwargs = models[model_name].get('interviewer_kwargs', None)
+    if interviewer_kwargs:
+        kwargs.update(interviewer_kwargs)
 
     recommender_kwargs = models[model_name].get('recommender_kwargs', None)
     if recommender_kwargs:
         kwargs['recommender_kwargs'] = recommender_kwargs
+
+    recommender = models[model_name].get('recommender', None)
+    if recommender:
+        kwargs['recommender'] = recommender
 
     instance = models[model_name]['class'](**kwargs)
     parameters = _get_parameters(model_name, experiment, interview_length)

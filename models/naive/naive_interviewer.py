@@ -7,7 +7,7 @@ from shared.meta import Meta
 
 
 class NaiveInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender=None, use_cuda=False):
+    def __init__(self, meta: Meta, recommender=None, use_cuda=False, recommendable_only=False, recommender_kwargs=None):
         super().__init__(meta, use_cuda)
 
         if not recommender:
@@ -16,7 +16,13 @@ class NaiveInterviewer(InterviewerBase):
         self.entity_variance = None
         self.entity_popularity = None
         self.entity_weight = None
-        self.recommender = recommender(meta)
+        self.recommendable_only = recommendable_only
+
+        kwargs = {'meta': meta}
+        if recommender_kwargs:
+            kwargs.update(recommender_kwargs)
+
+        self.recommender = recommender(**kwargs)
 
     def predict(self, items, answers):
         return self.recommender.predict(items, answers)
@@ -41,6 +47,9 @@ class NaiveInterviewer(InterviewerBase):
         # Aggregate ratings per entity
         for user, data in training.items():
             for idx, sentiment in data.training.items():
+                if self.recommendable_only and idx not in self.meta.recommendable_entities:
+                    continue
+
                 entity_ratings.setdefault(idx, []).append(sentiment)
 
         # Map entities to variance and popularity

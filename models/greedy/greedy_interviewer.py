@@ -6,21 +6,17 @@ from loguru import logger
 from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
-from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
-from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
-from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
-from recommenders.pagerank.pagerank_recommender import PageRankRecommender
-from shared.enums import Metric
 from shared.meta import Meta
 from shared.utility import get_top_entities
 
 
 class GreedyInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False):
+    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, recommendable_only=False):
         super().__init__(meta, use_cuda)
 
         self.questions = None
         self.idx_uri = self.meta.get_idx_uri()
+        self.recommendable_only = recommendable_only
 
         kwargs = {'meta': meta}
         if recommender_kwargs:
@@ -78,7 +74,9 @@ class GreedyInterviewer(InterviewerBase):
 
     def _get_questions(self, training):
         questions = list()
-        entities = get_top_entities(training)[:50]
+
+        limit_entities = self.meta.recommendable_entities if self.recommendable_only else None
+        entities = get_top_entities(training, limit_entities)[:10]
 
         for _ in range(10):
             entity_scores = self._entity_scores(training, entities, questions)
