@@ -76,7 +76,7 @@ class GreedyInterviewer(InterviewerBase):
         questions = list()
 
         limit_entities = self.meta.recommendable_entities if self.recommendable_only else None
-        entities = get_top_entities(training, limit_entities)[:10]
+        entities = get_top_entities(training, limit_entities)[:50]
 
         for _ in range(10):
             entity_scores = self._entity_scores(training, entities, questions)
