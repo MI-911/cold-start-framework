@@ -7,7 +7,7 @@ from shared.meta import Meta
 
 
 class NaiveInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender=None, use_cuda=False):
+    def __init__(self, meta: Meta, recommender=None, use_cuda=False, recommendable_only=False, recommender_kwargs=None):
         super().__init__(meta, use_cuda)
 
         if not recommender:
@@ -16,7 +16,13 @@ class NaiveInterviewer(InterviewerBase):
         self.entity_variance = None
         self.entity_popularity = None
         self.entity_weight = None
-        self.recommender = recommender(meta)
+        self.recommendable_only = recommendable_only
+
+        kwargs = {'meta': meta}
+        if recommender_kwargs:
+            kwargs.update(recommender_kwargs)
+
+        self.recommender = recommender(**kwargs)
 
     def predict(self, items, answers):
         return self.recommender.predict(items, answers)
@@ -26,9 +32,12 @@ class NaiveInterviewer(InterviewerBase):
         valid_items = {k: v for k, v in self.entity_weight.items() if k not in answers.keys()}
         return [item[0] for item in sorted(valid_items.items(), key=operator.itemgetter(1), reverse=True)]
 
+    def get_top_k_popular(self, k):
+        return self.interview(dict(), max_n_questions=k)
+
     @staticmethod
     def _compute_weight(popularity, variance):
-        return np.log2(popularity) * variance
+        return popularity
 
     def warmup(self, training, interview_length=5):
         self.recommender.fit(training)
@@ -38,6 +47,9 @@ class NaiveInterviewer(InterviewerBase):
         # Aggregate ratings per entity
         for user, data in training.items():
             for idx, sentiment in data.training.items():
+                if self.recommendable_only and idx not in self.meta.recommendable_entities:
+                    continue
+
                 entity_ratings.setdefault(idx, []).append(sentiment)
 
         # Map entities to variance and popularity

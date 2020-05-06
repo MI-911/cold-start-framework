@@ -13,6 +13,8 @@ from shared.user import WarmStartUser
 import numpy as np
 from sklearn.neighbors import NearestNeighbors
 
+from shared.utility import hashable_lru
+
 
 class KNNRecommender(RecommenderBase):
     def __init__(self, meta):
@@ -86,11 +88,12 @@ class KNNRecommender(RecommenderBase):
             for params in self._get_param_combinations():
                 logger.debug(f'Trying with parameters: {params}')
                 self._set_params(params)
-                hr = self._multi_fit(training, workers=multiprocessing.cpu_count())
+                hr = self._multi_fit(training, workers=1)
                 if hr > best_hr:
                     logger.debug(f'Found better parameters: {params}, score: {hr}')
                     best_hr = hr
                     best_params = deepcopy(params)
+                self._predict.cache_clear()
 
             self.optimal_params = best_params
 
@@ -100,14 +103,15 @@ class KNNRecommender(RecommenderBase):
         lst = list(training.items())
         chunks = [lst[i::workers] for i in range(workers)]
 
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            futures = []
-            for chunk in chunks:
-                futures.append(executor.submit(self._fit, dict(chunk)))
-
-            wait(futures)
-
-        predictions = [t for future in futures for t in future.result()]
+        # with ProcessPoolExecutor(max_workers=workers) as executor:
+        #     futures = []
+        #     for chunk in chunks:
+        #         futures.append(executor.submit(self._fit, dict(chunk)))
+        #
+        #     wait(futures)
+        #
+        # predictions = [t for future in futures for t in future.result()]
+        predictions = self._fit(training)
         score = self.meta.validator.score(predictions, self.meta)
 
         return score
@@ -118,18 +122,10 @@ class KNNRecommender(RecommenderBase):
             preds = {}
             for item in warm.validation.to_list():
                 preds[item] = self._predict(self.entity_vectors[user], item)
-
             predictions.append((warm.validation, preds))
         return predictions
 
-    def _score_function(self, users, similarities, ratings):
-        if self.user_bias:
-            ratings = ratings - self.user_mean[users]
-
-        score = np.sum(ratings * similarities) / np.sum(similarities)
-
-        return score
-
+    @hashable_lru(maxsize=1024)
     def _predict(self, user_vector, item: int):
         related = np.where(self.entity_vectors[:, item] != 0)[0]
 
@@ -142,6 +138,7 @@ class KNNRecommender(RecommenderBase):
         ratings = [(self.entity_vectors[i][item], sim) for i, sim in top_k]
         return np.einsum('i,i->', *zip(*ratings))
 
+    @hashable_lru()
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         user_ratings = np.zeros((len(self.meta.entities),))
         for itemID, rating in answers.items():

@@ -1,15 +1,13 @@
 import torch as tt
 import numpy as np
-from typing import List, Union
-
-from memory_profiler import profile
+from typing import List
 
 from models.dqn.dqn import DeepQNetwork
 import pickle
 
 
 class DqnAgent:
-    def __init__(self, gamma: float, epsilon: float, alpha: float, candidates: List[int], n_entities: int,
+    def __init__(self, gamma: float, epsilon: float, alpha: float, n_entities: int, candidates: List[int],
                  batch_size: int, fc1_dims: int,  max_mem_size: float = 1000, eps_end: float = 0.01, eps_dec: float = 0.996,
                  use_cuda: bool = False):
         """
@@ -32,12 +30,13 @@ class DqnAgent:
         self.eps_end = eps_end
         self.eps_dec = eps_dec
         self.alpha = alpha
-        self.candidates = candidates
         self.n_entities = n_entities
         self.batch_size = batch_size
         self.max_mem_size = max_mem_size
 
-        self.action_size = n_entities  # One action (question) for every entity
+        self.candidates = candidates
+        self.action_size = len(self.candidates)
+        self.action_space = np.arange(self.action_size)
         self.state_size = self.action_size * 2  # One question and one answer for every entity
 
         # Allocate DQN model
@@ -92,16 +91,16 @@ class DqnAgent:
         # Increment the counter
         self.mem_counter += 1
 
-    def choose_action(self, state: np.ndarray) -> int:
+    def choose_action(self, state: np.ndarray, explore=True) -> int:
         # Make the DQN predict action rewards given this state
         predicted_rewards = self.Q_eval(state.reshape((1, state.shape[0])))
 
-        if np.random.rand() > self.epsilon:
+        if np.random.rand() > self.epsilon or not explore:
             # Exploit
             return int(tt.argmax(predicted_rewards))
         else:
             # Explore
-            return np.random.choice(self.candidates)
+            return np.random.choice(self.action_space)
 
     def learn(self):
         if self.mem_counter < self.batch_size:
@@ -119,7 +118,7 @@ class DqnAgent:
         terminal_batch = self.terminal_memory[batch_indices]
 
         # Convert action memories to indices so we use them to index directly later
-        action_values = np.arange(self.n_entities, dtype=np.uint8)
+        action_values = np.arange(self.action_size, dtype=np.uint8)
         action_indices = np.dot(action_batch, action_values)
 
         # Predict rewards for the current state and the next one
@@ -136,10 +135,10 @@ class DqnAgent:
             target_rewards[batch_index[i], action_indices[i]] = target_update[i]
 
         # Adjust the model
+        self.Q_eval.zero_grad()
         loss = self.Q_eval.get_loss(current_predicted_rewards, tt.tensor(target_rewards))
         loss.backward()
         self.Q_eval.optimizer.step()
-        self.Q_eval.zero_grad()
 
         # Decrease the chance that we will explore random questions in the future
         self.epsilon = self.epsilon * self.eps_dec if self.epsilon > self.eps_end else self.eps_end

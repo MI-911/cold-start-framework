@@ -2,7 +2,7 @@ import os
 from typing import List, Callable, Dict
 
 from experiments.data_loader import DataLoader
-from shared.enums import Sentiment, EntityType, Metric
+from shared.enums import Sentiment, EntityType, Metric, UnseenSampling, SeenSampling
 from shared.validator import Validator
 
 
@@ -16,7 +16,8 @@ def sentiment_to_int(sentiment):
 
 class RankingOptions:
     def __init__(self, num_positive: int, num_negative: int = 0, num_unknown: int = 0, num_unseen: int = 0,
-                 sentiment_utility: Dict[Sentiment, float] = None, default_cutoff: int = 10):
+                 sentiment_utility: Dict[Sentiment, float] = None, default_cutoff: int = 10,
+                 unseen_sampling=UnseenSampling.UNIFORM, seen_sampling=SeenSampling.STANDARD):
         # Note discrepancy between 'unknown' and 'unseen', as 'unknown' is an explicit rating
         self.sentiment_count = {Sentiment.POSITIVE: num_positive, Sentiment.NEGATIVE: num_negative,
                                 Sentiment.UNKNOWN: num_unknown, Sentiment.UNSEEN: num_unseen}
@@ -26,6 +27,10 @@ class RankingOptions:
 
         # Default cutoffs are used in the recommenders' internal optimization
         self.default_cutoff = default_cutoff
+
+        # Sampling strategies
+        self.unseen_sampling = unseen_sampling
+        self.seen_sampling = seen_sampling
 
         # Assert that the default cutoff does not exceed the total amount of samples
         assert self.default_cutoff <= self.get_num_total()
@@ -46,18 +51,20 @@ class CountFilter:
 
 
 class ExperimentOptions:
-    def __init__(self, name: str, split_seeds: List[int], ranking_options: RankingOptions,
-                 count_filters: List[CountFilter] = None, warm_start_ratio: float = 0.75,
-                 include_unknown: bool = False, evaluation_samples: int = 10,
-                 validator: Validator = None):
+    def __init__(self, name: str, seed: int, ranking_options: RankingOptions,
+                 count_filters: List[CountFilter] = None, cold_start_ratio: float = 0.25,
+                 include_unknown: bool = False, evaluation_samples: int = 10, validator: Validator = None,
+                 ratings_file: str = 'ratings.csv', limit_entities: bool = False):
         self.name = name
-        self.split_seeds = split_seeds
+        self.seed = seed
         self.count_filters = count_filters
-        self.warm_start_ratio = warm_start_ratio
+        self.cold_start_ratio = cold_start_ratio
         self.include_unknown = include_unknown
         self.ranking_options = ranking_options
         self.evaluation_samples = evaluation_samples
         self.validator = validator if validator else Validator(metric=Metric.NDCG, cutoff=10)
+        self.ratings_file = ratings_file
+        self.limit_entities = limit_entities
 
 
 class Dataset:

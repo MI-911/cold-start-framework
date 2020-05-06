@@ -11,7 +11,7 @@ from loguru import logger
 
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations
+from shared.utility import get_combinations, hashable_lru
 
 
 def flatten_rating_triples(training: Dict[int, WarmStartUser]):
@@ -21,6 +21,10 @@ def flatten_rating_triples(training: Dict[int, WarmStartUser]):
             training_triples.append((u_idx, entity, rating))
 
     return training_triples
+
+
+def get_cache_id(answers):
+    return str(sorted(answers.items(), key=lambda x: x[0]))
 
 
 def convert_rating(rating):
@@ -39,6 +43,7 @@ class MatrixFactorizationRecommender(RecommenderBase):
         self.meta = meta
         self.optimal_params = None
         self.model = None
+        self.predictions_cache = {}
 
     def fit(self, training: Dict[int, WarmStartUser]) -> None:
         n_users = len(self.meta.users)
@@ -46,7 +51,7 @@ class MatrixFactorizationRecommender(RecommenderBase):
 
         if self.optimal_params is None:
             scores = []
-            parameters = {'k': [1, 2, 5, 10]}
+            parameters = {'k': [1, 2, 5, 10, 20]}
 
             # Find optimal parameters
             for params in get_combinations(parameters):
@@ -84,12 +89,20 @@ class MatrixFactorizationRecommender(RecommenderBase):
             prediction = self.model.predict(u_idx, user.validation.to_list())
             predictions.append((user.validation, prediction))
 
+        self.predict.cache_clear()
+
         return self.meta.validator.score(predictions, self.meta)
 
+    @hashable_lru()
     def predict(self, items, answers):
         # Predict a user as the avg embedding of the items they liked
         u_embedding_items = [e for e, r in answers.items() if r == 1]
-        return self.model.predict_avg_items(u_embedding_items, items)
+
+        cache_id = get_cache_id(answers)
+        if cache_id not in self.predictions_cache:
+            self.predictions_cache[cache_id] = self.model.predict_avg_items(
+                u_embedding_items, [e for e in range(len(self.meta.entities))])
+        return {item: self.predictions_cache[cache_id][item] for item in items}
 
     def get_parameters(self):
         return self.optimal_params

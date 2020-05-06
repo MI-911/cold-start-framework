@@ -1,8 +1,8 @@
 import os
 import pickle
-import random
-from typing import List
+from typing import List, Dict, Set
 
+import numpy as np
 import pandas as pd
 import tqdm
 from loguru import logger
@@ -10,35 +10,64 @@ from pandas import DataFrame
 
 from experiments.experiment import ExperimentOptions, CountFilter, Sentiment, sentiment_to_int, EntityType, \
     RankingOptions
+from shared.enums import UnseenSampling, SeenSampling
 from shared.graph_triple import GraphTriple
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import WarmStartUser, ColdStartUserSet, ColdStartUser
 
 
-def _sample_seen(ratings: DataFrame, sentiment: Sentiment, n_items=1):
-    items = list(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
-    random.shuffle(items)
+def _sample_seen(ratings: DataFrame, sentiment: Sentiment, remove_items: List = None, n_items=1):
+    items = sorted(ratings[(ratings.sentiment == sentiment_to_int(sentiment)) & ratings.isItem].entityIdx.unique())
 
-    return set(items[:n_items])
+    if remove_items:
+        items = [item for item in items if item not in remove_items]
+
+    if not items:
+        return []
+
+    return np.random.choice(items, size=n_items, replace=False)
 
 
-def _sample_unseen(ratings: DataFrame, user_id: int, n_items=100):
+def _choice(lst, count, probabilities):
+    return np.random.choice(lst, size=count, replace=False, p=np.array(probabilities) / np.sum(probabilities))
+
+
+def _get_unseen_weights(item_ratings, unseen_items: List, options: RankingOptions, positive_items: List[int] = None,
+                        alpha=3):
+    if options.unseen_sampling == UnseenSampling.UNIFORM:
+        return [1 for _ in unseen_items]
+
+    entity_weight = dict(zip(item_ratings['entityIdx'], item_ratings['num_ratings']))
+
+    if options.unseen_sampling == UnseenSampling.EQUAL_POPULARITY and positive_items:
+        positive_ratings = np.mean([entity_weight[item] for item in positive_items])
+
+        entity_weight = {e: pow(pow(positive_ratings - w, 2) + 1, -alpha) for e, w in entity_weight.items()}
+
+    return [entity_weight[entity] for entity in unseen_items]
+
+
+def _sample_unseen(ratings: DataFrame, user_id: int, options: RankingOptions, positive_items: List[int] = None):
     item_ratings = ratings[ratings.isItem]
 
     seen_items = set(item_ratings[item_ratings.userId == user_id].entityIdx.unique())
-    unseen_items = list(set(item_ratings.entityIdx.unique()).difference(seen_items))
+    unseen_items = sorted(set(item_ratings.entityIdx.unique()).difference(seen_items))
 
-    random.shuffle(unseen_items)
+    unseen_weights = _get_unseen_weights(item_ratings, unseen_items, options, positive_items)
 
-    return set(unseen_items[:n_items])
+    return _choice(unseen_items, options.sentiment_count.get(Sentiment.UNSEEN, 0), unseen_weights)
 
 
 def _get_ratings_dict(from_ratings):
     return {row.entityIdx: row.sentiment for _, row in from_ratings.iterrows()}
 
 
-def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters: List[CountFilter]):
+def _chunks(lst, ratio):
+    return [set(arr) for arr in np.array_split(lst, int(1 / ratio))]
+
+
+def _get_ratings(ratings_path, include_unknown, cold_start_ratio, count_filters: List[CountFilter]):
     ratings = pd.read_csv(ratings_path)
     if not include_unknown:
         ratings = ratings[ratings.sentiment != 0]
@@ -51,9 +80,11 @@ def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters:
         exit(1)
 
     # Compute ratings per entity
-    # In the future, this could be used for popularity sampling of negative samples
     entity_ratings = ratings[['uri', 'userId']].groupby('uri').count()
     entity_ratings.columns = ['num_ratings']
+
+    # Add number of ratings to ratings, used for entity sampling
+    ratings = ratings.merge(entity_ratings, on='uri')
 
     # Filter users with count filters
     if count_filters:
@@ -79,26 +110,46 @@ def _get_ratings(ratings_path, include_unknown, warm_start_ratio, count_filters:
             ratings = ratings[ratings.userId.isin(df_tmp[count_filter.filter_func(df_tmp.num_ratings)].index)]
 
     # Partition into warm and cold start users
-    users = ratings['userId'].unique()
-    random.shuffle(users)
+    users = sorted(ratings['userId'].unique())
+    np.random.shuffle(users)
 
-    num_warm_start = int(len(users) * warm_start_ratio)
-    warm_start_users = set(users[:num_warm_start])
-    cold_start_users = set(users[num_warm_start:])
+    splits = list()
 
-    assert warm_start_users.isdisjoint(cold_start_users)
+    # Create splits corresponding to 1 / cold_start_ratio
+    for cold_start_users in _chunks(users, cold_start_ratio):
+        warm_start_users = set(users) - set(cold_start_users)
 
-    return ratings, warm_start_users, cold_start_users, users
+        assert warm_start_users.isdisjoint(cold_start_users)
+        assert len(cold_start_users) + len(warm_start_users) == len(users)
+
+        splits.append((warm_start_users, cold_start_users))
+
+    # Assert that no cold start user appears twice
+    for i, (_, cold_users) in enumerate(splits):
+        for j, (_, other_cold_users) in enumerate(splits):
+            if i == j:
+                continue
+
+            assert not cold_users.intersection(other_cold_users)
+
+    return ratings, users, splits
 
 
-def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users, user_idx):
+def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users, user_idx,
+                       short_head_items) -> Dict[int, WarmStartUser]:
     training_data = dict()
 
-    progress = tqdm.tqdm(warm_start_users)
+    progress = tqdm.tqdm(sorted(warm_start_users))
     for user in progress:
         progress.set_description(f'Processing warm-start user {user}')
 
-        u_ratings, ranking = _get_ranking(ratings, user, experiment.ranking_options)
+        u_ratings, ranking = _get_ranking(ratings, user, experiment.ranking_options, short_head_items)
+
+        # Verify that all required samples are present
+        if len(set(ranking.to_list())) != experiment.ranking_options.get_num_total():
+            logger.warning(f'Could not sample all required entities for warm-start user {user}, skipping')
+
+            continue
 
         training_dict = _get_ratings_dict(u_ratings)
 
@@ -110,22 +161,31 @@ def _get_training_data(experiment: ExperimentOptions, ratings, warm_start_users,
     return training_data
 
 
-def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, user_idx, movie_indices):
+def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, user_idx, movie_indices,
+                      short_head_items) -> Dict[int, ColdStartUser]:
     testing_data = dict()
 
-    progress = tqdm.tqdm(cold_start_users)
+    progress = tqdm.tqdm(sorted(cold_start_users))
     for user in progress:
         progress.set_description(f'Processing cold-start user {user}')
 
         # For each positive item, create an answer set with that item left out
         sets = []
         for _ in range(experiment.evaluation_samples):
-            u_ratings, ranking = _get_ranking(ratings, user, experiment.ranking_options)
+            u_ratings, ranking = _get_ranking(ratings, user, experiment.ranking_options, short_head_items)
             answer_dict = _get_ratings_dict(u_ratings)
+
+            # Verify that all required samples are present
+            if len(set(ranking.to_list())) != experiment.ranking_options.get_num_total():
+                logger.warning(f'Could not sample all required entities for cold-start user {user}, skipping')
+
+                continue
 
             # Skip if user cannot provide any movie answers
             # By checking this, we can remove DEs from answer sets without losing users between comparisons
             if not set(answer_dict.keys()).intersection(movie_indices):
+                logger.warning(f'No item answers for cold-start user {user}, skipping')
+
                 continue
 
             sets.append(ColdStartUserSet(answer_dict, ranking))
@@ -135,22 +195,23 @@ def _get_testing_data(experiment: ExperimentOptions, ratings, cold_start_users, 
     return testing_data
 
 
-def _get_ranking(ratings: DataFrame, user_id: int, ranking_options: RankingOptions) -> (DataFrame, Ranking):
+def _get_ranking(ratings: DataFrame, user_id: int, options: RankingOptions, short_head_items) -> (DataFrame, Ranking):
     u_ratings = ratings[ratings.userId == user_id]
 
     # Create ranking instance holding all samples to rank
     ranking = Ranking()
-    for sentiment, n_samples in ranking_options.sentiment_count.items():
+    for sentiment in sorted(options.sentiment_count.keys()):
         if sentiment == Sentiment.UNSEEN:
-            # For unseen items, we require the entire ratings DF to find unrated items
-            samples = _sample_unseen(ratings, user_id, n_samples)
-        else:
-            samples = _sample_seen(u_ratings, sentiment, n_samples)
+            continue
 
-        ranking.sentiment_samples[sentiment] = samples
+        # If sampling the long tail, do not sample items from the short head
+        remove_items = short_head_items if options.seen_sampling == SeenSampling.LONG_TAIL else None
 
-    # Assert that we have sampled all required items (implicit check for cross-sentiment duplicates)
-    assert len(set(ranking.to_list())) == ranking_options.get_num_total()
+        ranking.sentiment_samples[sentiment] = _sample_seen(u_ratings, sentiment, remove_items,
+                                                            options.sentiment_count.get(sentiment, 0))
+
+    # Handle unseen items separately, as it is based on the popularity of the sampled seen items
+    ranking.sentiment_samples[Sentiment.UNSEEN] = _sample_unseen(ratings, user_id, options, ranking.get_seen_samples())
 
     # Return user's ratings without items to rank
     return u_ratings[~u_ratings.entityIdx.isin(ranking.to_list())], ranking
@@ -169,45 +230,83 @@ def _load_triples(triples_path):
 
 
 def partition(experiment: ExperimentOptions, input_directory, output_directory):
-    ratings_path = os.path.join(input_directory, 'ratings.csv')
+    ratings_path = os.path.join(input_directory, experiment.ratings_file)
     entities_path = os.path.join(input_directory, 'entities.csv')
     triples_path = os.path.join(input_directory, 'triples.csv')
 
     entities = _get_entities(entities_path)
+    np.random.seed(experiment.seed)
 
-    for idx, seed in enumerate(experiment.split_seeds):
+    # Load ratings data
+    ratings, users, splits = _get_ratings(ratings_path, experiment.include_unknown, experiment.cold_start_ratio,
+                                          count_filters=experiment.count_filters)
+
+    for idx, (warm_users, cold_users) in enumerate(splits):
         split_name = f'split_{idx}'
         split_output_directory = os.path.join(os.path.join(output_directory, experiment.name), split_name)
 
-        logger.info(f'Partitioning {experiment.name}/{split_name}')
+        logger.info(f'Creating split {experiment.name}/{split_name}')
 
-        partition_seed(experiment, seed, entities, split_output_directory, ratings_path, triples_path)
+        _create_split(experiment, entities, split_output_directory, triples_path, ratings, users, warm_users,
+                      cold_users)
 
 
-def partition_seed(experiment: ExperimentOptions, seed: int, entities, output_directory: str,
-                   ratings_path: str, triples_path: str):
-    random.seed(seed)
+def _get_rated_entities(training_data: Dict[int, WarmStartUser]):
+    rated_entities = set()
 
-    # Load ratings data
-    ratings, warm_users, cold_users, users = _get_ratings(ratings_path, experiment.include_unknown,
-                                                          experiment.warm_start_ratio,
-                                                          count_filters=experiment.count_filters)
+    for _, ratings in training_data.items():
+        for entity, rating in ratings.training.items():
+            rated_entities.add(entity)
+
+    return rated_entities
+
+
+def _get_short_head_items(ratings_df: DataFrame):
+    item_ratings = dict(zip(ratings_df['entityIdx'], ratings_df['num_ratings']))
+    total_ratings = sum(item_ratings.values())
+
+    short_head_items = set()
+    cumulative_ratings = 0
+
+    for item, ratings in sorted(item_ratings.items(), key=lambda x: x[1], reverse=True):
+        short_head_items.add(item)
+        cumulative_ratings += ratings
+
+        if cumulative_ratings >= total_ratings * 0.3:
+            break
+
+    return short_head_items
+
+
+def _create_split(experiment: ExperimentOptions, entities, output_directory: str, triples_path: str, ratings, users,
+                  warm_users, cold_users):
+    # Optionally limit entities to available URIs
+    if experiment.limit_entities:
+        uris = set(ratings.uri.unique())
+        entities = {entity: _ for entity, _ in entities.items() if entity in uris}
 
     # Map users and entities to indices
-    user_idx = {k: v for v, k in enumerate(users)}
-    entity_idx = {k: v for v, k in enumerate(set(entities.keys()))}
+    user_idx = {k: v for v, k in enumerate(sorted(users))}
+    entity_idx = {k: v for v, k in enumerate(sorted(entities.keys()))}
     ratings['entityIdx'] = ratings.uri.transform(entity_idx.get)
 
     # Find movie indices
-    movie_indices = set(ratings[ratings.isItem].entityIdx.unique())
+    movie_ratings = ratings[ratings.isItem]
+    movie_indices = set(movie_ratings.entityIdx.unique())
 
-    # Partition training/testing data from users
-    training_data = _get_training_data(experiment, ratings, warm_users, user_idx)
-    testing_data = _get_testing_data(experiment, ratings, cold_users, user_idx, movie_indices)
+    # Find items in the long tail if specified
+    short_head_items = _get_short_head_items(movie_ratings)
+
+    # Partition training data from users
+    training_data = _get_training_data(experiment, ratings, warm_users, user_idx, short_head_items)
+
+    # Partition testing data, limit to observed entities
+    rated_entities = _get_rated_entities(training_data)
+    testing_data = _get_testing_data(experiment, ratings[ratings.entityIdx.isin(rated_entities)], cold_users, user_idx,
+                                     movie_indices, short_head_items)
 
     logger.info(f'Created {len(training_data)} training entries and {len(testing_data)} testing entries')
 
-    # Write data to disk
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
 

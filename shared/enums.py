@@ -1,4 +1,15 @@
-from enum import Enum
+from enum import Enum, IntEnum
+
+
+class UnseenSampling(Enum):
+    UNIFORM = 1
+    POPULARITY = 2
+    EQUAL_POPULARITY = 3
+
+
+class SeenSampling(Enum):
+    STANDARD = 1
+    LONG_TAIL = 2
 
 
 class EntityType(Enum):
@@ -7,7 +18,7 @@ class EntityType(Enum):
     ANY = 3
 
 
-class Sentiment(Enum):
+class Sentiment(IntEnum):
     NEGATIVE = 1
     UNKNOWN = 2
     POSITIVE = 3
