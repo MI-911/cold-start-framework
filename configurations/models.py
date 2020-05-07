@@ -123,6 +123,10 @@ models = {
         'class': NaiveInterviewer,
         'recommender': MatrixFactorizationRecommender
     },
+    'greedy-mf': {
+        'class': GreedyInterviewer,
+        'recommender': MatrixFactorizationRecommender
+    },
     'dqn-mf': {
         'class': DqnInterviewer,
         'recommender': MatrixFactorizationRecommender,

@@ -93,7 +93,8 @@ class KNNRecommender(RecommenderBase):
                     logger.debug(f'Found better parameters: {params}, score: {hr}')
                     best_hr = hr
                     best_params = deepcopy(params)
-                self._predict.cache_clear()
+
+                self.clear_cache()
 
             self.optimal_params = best_params
 
@@ -128,7 +129,7 @@ class KNNRecommender(RecommenderBase):
         ratings = [(self.entity_vectors[i][item], sim) for i, sim in top_k]
         return np.einsum('i,i->', *zip(*ratings))
 
-    @hashable_lru()
+    @hashable_lru(maxsize=1024)
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         user_ratings = np.zeros((len(self.meta.entities),))
         for itemID, rating in answers.items():
@@ -140,3 +141,6 @@ class KNNRecommender(RecommenderBase):
 
         # A high score means item knn is sure in a positive prediction.
         return score
+
+    def clear_cache(self):
+        self.predict.cache_clear()

@@ -61,6 +61,10 @@ class MatrixFactorizationRecommender(RecommenderBase):
                 score = self._validate(training)
                 scores.append((params, score))
 
+                logger.debug(f'Score for {params}: {score}')
+
+                self.clear_cache()
+
             # Use optimal parameters to train a new model
             optimal_params, _ = list(sorted(scores, key=lambda x: x[1], reverse=True))[0]
             self.optimal_params = optimal_params
@@ -89,11 +93,12 @@ class MatrixFactorizationRecommender(RecommenderBase):
             prediction = self.model.predict(u_idx, user.validation.to_list())
             predictions.append((user.validation, prediction))
 
-        self.predict.cache_clear()
-
         return self.meta.validator.score(predictions, self.meta)
 
-    @hashable_lru()
+    def clear_cache(self):
+        self.predict.cache_clear()
+
+    @hashable_lru(maxsize=1024)
     def predict(self, items, answers):
         # Predict a user as the avg embedding of the items they liked
         u_embedding_items = [e for e, r in answers.items() if r == 1]

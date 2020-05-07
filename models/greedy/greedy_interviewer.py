@@ -87,8 +87,6 @@ class GreedyInterviewer(InterviewerBase):
 
             questions.append(next_question)
 
-            self.recommender.clear_cache()
-
         return questions
 
     def warmup(self, training, interview_length=5):
