@@ -1,18 +1,19 @@
 from typing import List, Dict, Union
 
-from loguru import logger
 import numpy as np
+from loguru import logger
 from tqdm import tqdm
 
 from experiments.metrics import ndcg_at_k
 from models.base_interviewer import InterviewerBase
 from models.ddpg.agent import DDPGAgent
-from models.ddpg.model import Actor
 from models.ddpg.utils import to_tensor
+from models.greedy.greedy_interviewer import GreedyInterviewer
 from recommenders.base_recommender import RecommenderBase
 from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
 from shared.meta import Meta
 from shared.user import WarmStartUser
+from shared.utility import get_top_entities
 
 
 def get_rating_matrix(training, n_users, n_entities):
@@ -112,13 +113,23 @@ class DDPGInterviewer(InterviewerBase):
         self.candidate_embeddings = []
         self.state_size = self.n_candidates * 2
 
-    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
+    def _choose_candidates(self, training, n):
+        greedy_interviewer = GreedyInterviewer(self.meta, self.recommender)
 
-        self.candidates = choose_candidates(training, n=self.n_candidates)
+        # To speed up things, consider only the informativeness of most popular n * 2 entities
+        entity_scores = greedy_interviewer.get_entity_scores(training, get_top_entities(training)[:n * 2], list())
+
+        # Select n most informative entities as candidates
+        return [entity for entity, score in entity_scores[:n]]
+
+    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
+        self.recommender.parameters = {'alpha': 0.85, 'importance': {1: 0.8, 0: 0.2, -1: 0.0}}
+        self.recommender.fit(training)
+        self.candidates = self._choose_candidates(training, self.n_candidates)
+
         self.ratings = get_rating_matrix(training, n_users=self.n_users, n_entities=self.n_entities)
 
         self.embedder.fit(training)
-        self.recommender.fit(training)
         self.agent = DDPGAgent(embedding_size=self.embedder.model.k, state_size=self.state_size)
 
         self.candidate_embeddings = self.embedder.model.M[self.candidates]
