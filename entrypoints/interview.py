@@ -30,91 +30,8 @@ from recommenders.toppop.toppop_recommender import TopPopRecommender
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
-from shared.utility import join_paths, valid_dir
-
-models = {
-    # 'random': {
-    #     'class': DumbInterviewer,
-    #     'recommender': RandomRecommender
-    # },
-    # 'top-pop': {
-    #     'class': DumbInterviewer,
-    #     'recommender': TopPopRecommender
-    # },
-    # 'top-liked': {
-    #     'class': DumbInterviewer,
-    #     'recommender': TopPopRecommender,
-    #     'recommender_kwargs': {
-    #         'likes_only': True
-    #     }
-    # },
-    # 'lrmf': {
-    #     'class': LRMFInterviewer,
-    #     'requires_interview_length': True,
-    #     'use_cuda': False
-    # },
-    # 'naive-ppr-collab': {
-    #     'class': NaiveInterviewer,
-    #     'recommender': CollaborativePageRankRecommender
-    # },
-    # 'naive-ppr-kg': {
-    #     'class': NaiveInterviewer,
-    #     'recommender': KnowledgeGraphPageRankRecommender
-    # },
-    # 'naive-ppr-joint': {
-    #     'class': NaiveInterviewer,
-    #     'recommender': JointPageRankRecommender
-    # },
-    # 'naive-knn': {
-    #   'class': NaiveInterviewer,
-    #   'recommender': KNNRecommender
-    # },
-    # 'dqn-knn': {
-    #     'class': DqnInterviewer,
-    #     'recommender': KNNRecommender,
-    #     'requires_interview_length': True
-    # },
-    # 'naive-mf': {
-    #     'class': NaiveInterviewer,
-    #     'recommender': MatrixFactorizationRecommender
-    # },
-    # 'dqn-mf': {
-    #     'class': DqnInterviewer,
-    #     'recommender': MatrixFactorizationRecommender,
-    #     'requires_interview_length': True,
-    #     'use_cuda': True
-    # },
-    # 'dqn-ppr-kg': {
-    #     'class': DqnInterviewer,
-    #     'recommender': KnowledgeGraphPageRankRecommender,
-    #     'requires_interview_length': True,
-    #     'use_cuda': True
-    # },
-    # 'dqn-ppr-collab': {
-    #     'class': DqnInterviewer,
-    #     'recommender': CollaborativePageRankRecommender,
-    #     'requires_interview_length': True,
-    #     'use_cuda': True
-    # },
-    # 'dqn-ppr-joint': {
-    #     'class': DqnInterviewer,
-    #     'recommender': JointPageRankRecommender,
-    #     'requires_interview_length': True,
-    #     'use_cuda': True
-    # },
-    # 'fmf': {
-    #     'class': FMFInterviewer,
-    #     'requires_interview_length': True,
-    # },
-    # 'melu': {
-    #     'class': MeLUInterviewer,
-    #     'use_cuda': True
-    # }
-    'naive-ddpg': {
-        'class': NaiveInterviewer,
-        'recommender': DDPGDirectRankingRecommender
-    }
-}
+from shared.utility import join_paths, valid_dir, get_popular_items
+from models.configuration import models
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
@@ -249,7 +166,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
     if not requires_interview_length:
         model_instance.warmup(training)
 
-    for num_questions in range(1, max_n_questions + 1, 1):
+    for num_questions in range(3, max_n_questions + 1, 1):
         logger.info(f'Conducting interviews of length {num_questions}...')
 
         if requires_interview_length:

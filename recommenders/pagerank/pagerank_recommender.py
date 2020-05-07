@@ -87,7 +87,8 @@ class PageRankRecommender(RecommenderBase):
         will be reused if produced previously.
         """
         def get_scores():
-            return self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
+            scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
+            return {item: scores.get(item, 0.0) for item in items}
 
         if not self.use_caching:
             return get_scores()
@@ -137,6 +138,11 @@ class PageRankRecommender(RecommenderBase):
             can_ask_about = can_ask_about[:self.ask_limit]
 
         can_ask_about = set(can_ask_about)
+
+        self.parameters = {
+            'alpha': 0.05,
+            'importance': {1: 0.95, 0: 0.05, -1: 0.0}
+        }
 
         if not self.parameters:
             parameters = {
