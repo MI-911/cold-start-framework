@@ -11,7 +11,7 @@ from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations, get_top_entities
+from shared.utility import get_combinations, get_top_entities, hashable_lru
 
 RATING_CATEGORIES = {1, 0, -1}
 
@@ -60,7 +60,6 @@ class PageRankRecommender(RecommenderBase):
     def __init__(self, meta: Meta, ask_limit: int, recommendable_only: bool):
         super().__init__(meta)
         self.predictions_cache = dict()
-        self.use_caching = True
         self.parameters = None
 
         self.entity_indices = set()
@@ -71,34 +70,20 @@ class PageRankRecommender(RecommenderBase):
 
         self.recommendable_only = recommendable_only
 
-    def disable_cache(self):
-        self.use_caching = False
-        self.clear_cache()
-
     def clear_cache(self):
-        self.predictions_cache.clear()
+        self.sparse_graph.scores.cache_clear()
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
 
-    def _scores(self, alpha, node_weights, items, answers=None):
+    def _scores(self, alpha, node_weights, items):
         """
         Produces a ranking of items. If answers is not none, the ranking
         will be reused if produced previously.
         """
-        def get_scores():
-            scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
-            return {item: scores.get(item, 0.0) for item in items}
+        scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
 
-        if not self.use_caching:
-            return get_scores()
-
-        # Get cache key, excluding "don't know" to decrease cache misses
-        cache_key = get_cache_key({e: r for e, r in answers.items() if r})
-        if cache_key not in self.predictions_cache:
-            self.predictions_cache[cache_key] = {entity: score for entity, score in get_scores().items()}
-
-        return {item: self.predictions_cache[cache_key].get(item, 0) for item in items}
+        return {item: scores.get(item, 0) for item in items}
 
     @staticmethod
     def _weight(category, ratings, importance):
@@ -187,4 +172,4 @@ class PageRankRecommender(RecommenderBase):
             answers = {idx: sentiment for idx, sentiment in answers.items() if idx in self.meta.recommendable_entities}
 
         return self._scores(self.parameters['alpha'],
-                            self.get_node_weights(answers, self.parameters['importance']), items, answers=answers)
+                            self.get_node_weights(answers, self.parameters['importance']), items)

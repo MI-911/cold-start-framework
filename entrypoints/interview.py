@@ -13,28 +13,15 @@ from tqdm import tqdm
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
 from models.base_interviewer import InterviewerBase
-from models.dqn.dqn_interviewer import DqnInterviewer
-from models.dumb.dumb_interviewer import DumbInterviewer
-from models.melu.melu_interviewer import MeLUInterviewer
-from models.fmf.fmf_interviewer import FMFInterviewer
-from models.lrmf.lrmf_interviewer import LRMFInterviewer
-from models.naive.naive_interviewer import NaiveInterviewer
-from recommenders.ddpg.ddpg_recommender import DDPGDirectRankingRecommender
-from recommenders.knn.knn_recommender import KNNRecommender
-from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
-from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
-from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
-from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
-from recommenders.random.random_recommender import RandomRecommender
-from recommenders.toppop.toppop_recommender import TopPopRecommender
+from configurations.models import models
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths, valid_dir, get_popular_items
-from models.configuration import models
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
+parser.add_argument('--output', nargs=1, type=valid_dir, help='path to output results')
 parser.add_argument('--include', nargs='*', type=str, choices=models.keys(), help='models to include')
 parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), help='models to exclude')
 parser.add_argument('--experiments', nargs='*', type=str, help='experiments to run')
@@ -70,7 +57,7 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
 
 
 def _get_parameter_path(parameter_base, model_name, interview_length):
-    return os.path.join(parameter_base, f'parameters_{model_name}_{interview_length}q.json')
+    return join_paths(parameter_base, f'parameters_{model_name}_{interview_length}q.json')
 
 
 def _get_parameters(model_name, experiment: Experiment, interview_length):
@@ -197,7 +184,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         yield model_instance, metrics, num_questions, all_answers
 
 
-def _run_split(model_selection: Set[str], split: Split):
+def _run_split(model_selection: Set[str], split: Split, output_path):
     training = split.data_loader.training()
     testing = split.data_loader.testing()
     meta = split.data_loader.meta()
@@ -210,15 +197,15 @@ def _run_split(model_selection: Set[str], split: Split):
                                                                    max_n_questions=10):
             logger.info(f'Writing results, parameters, and answers for {model} on {split.name} with {length} questions')
 
-            _write_answers(model, answers, split)
-            _write_results(model, metrics, split)
+            _write_answers(output_path, model, answers, split)
+            _write_results(output_path, model, metrics, split)
             _write_parameters(model, split.experiment, model_instance, length)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 
 
-def _write_answers(model_name, all_answers: Dict, split: Split):
-    answers_dir = join_paths('results', split.experiment.name, model_name, 'answers')
+def _write_answers(output_path, model_name, all_answers: Dict, split: Split):
+    answers_dir = join_paths(output_path, split.experiment.name, model_name, 'answers')
     os.makedirs(answers_dir, exist_ok=True)
 
     # Map indices to URIs
@@ -233,8 +220,8 @@ def _write_answers(model_name, all_answers: Dict, split: Split):
         json.dump(uri_answers, fp, indent=True)
 
 
-def _write_results(model_name, metrics, split: Split):
-    results_dir = join_paths('results', split.experiment.name, model_name)
+def _write_results(output_path, model_name, metrics, split: Split):
+    results_dir = join_paths(output_path, split.experiment.name, model_name)
     os.makedirs(results_dir, exist_ok=True)
 
     with open(os.path.join(results_dir, f'{split.name}.json'), 'w') as fp:
@@ -264,11 +251,14 @@ def _parse_args():
     if not args.input:
         args.input = ['../data']
 
-    return model_selection, args.input[0], set(args.experiments) if args.experiments else set()
+    if not args.output:
+        args.output = ['../results']
+
+    return model_selection, args.input[0], args.output[0], set(args.experiments) if args.experiments else set()
 
 
 def run():
-    model_selection, input_path, experiments = _parse_args()
+    model_selection, input_path, output_path, experiments = _parse_args()
 
     dataset = Dataset(input_path)
     for experiment in dataset.experiments():
@@ -278,7 +268,7 @@ def run():
             continue
 
         for split in experiment.splits():
-            _run_split(model_selection, split)
+            _run_split(model_selection, split, output_path)
 
 
 if __name__ == '__main__':
