@@ -110,6 +110,10 @@ models = {
       'class': NaiveInterviewer,
       'recommender': KNNRecommender
     },
+    'greedy-knn': {
+        'class': GreedyInterviewer,
+        'recommender': KNNRecommender
+    },
     'dqn-knn': {
         'class': DqnInterviewer,
         'recommender': KNNRecommender,

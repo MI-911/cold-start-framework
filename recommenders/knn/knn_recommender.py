@@ -88,7 +88,7 @@ class KNNRecommender(RecommenderBase):
             for params in self._get_param_combinations():
                 logger.debug(f'Trying with parameters: {params}')
                 self._set_params(params)
-                hr = self._multi_fit(training, workers=1)
+                hr = self._multi_fit(training)
                 if hr > best_hr:
                     logger.debug(f'Found better parameters: {params}, score: {hr}')
                     best_hr = hr
@@ -99,18 +99,7 @@ class KNNRecommender(RecommenderBase):
 
         self._set_params(self.optimal_params)
 
-    def _multi_fit(self, training: Dict[int, WarmStartUser], workers=8):
-        lst = list(training.items())
-        chunks = [lst[i::workers] for i in range(workers)]
-
-        # with ProcessPoolExecutor(max_workers=workers) as executor:
-        #     futures = []
-        #     for chunk in chunks:
-        #         futures.append(executor.submit(self._fit, dict(chunk)))
-        #
-        #     wait(futures)
-        #
-        # predictions = [t for future in futures for t in future.result()]
+    def _multi_fit(self, training: Dict[int, WarmStartUser]):
         predictions = self._fit(training)
         score = self.meta.validator.score(predictions, self.meta)
 
@@ -119,10 +108,11 @@ class KNNRecommender(RecommenderBase):
     def _fit(self, training: Dict[int, WarmStartUser]):
         predictions = []
         for user, warm in training.items():
-            preds = {}
+            user_predictions = {}
             for item in warm.validation.to_list():
-                preds[item] = self._predict(self.entity_vectors[user], item)
-            predictions.append((warm.validation, preds))
+                user_predictions[item] = self._predict(self.entity_vectors[user], item)
+
+            predictions.append((warm.validation, user_predictions))
         return predictions
 
     @hashable_lru(maxsize=1024)

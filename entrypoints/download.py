@@ -59,4 +59,4 @@ if __name__ == '__main__':
     with open(ratings_file, 'w') as fp:
         fp.write(ratings_df.to_csv(index=True))
 
-    triples = download_triples(output_path)
+    download_triples(output_path)
