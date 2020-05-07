@@ -1,3 +1,4 @@
+from models.ddpg.ddpg_interviewer import DDPGInterviewer
 from models.dqn.dqn_interviewer import DqnInterviewer
 from models.dumb.dumb_interviewer import DumbInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
@@ -19,6 +20,10 @@ from recommenders.svd.svd_recommender import SVDRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
 models = {
+    'ddpg': {
+        'class': DDPGInterviewer,
+        'recommender': JointPageRankRecommender
+    },
     'random': {
         'class': DumbInterviewer,
         'recommender': RandomRecommender

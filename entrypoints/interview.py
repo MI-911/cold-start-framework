@@ -18,6 +18,7 @@ from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths, valid_dir, get_popular_items
+from models.configuration import models
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
@@ -153,7 +154,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
     if not requires_interview_length:
         model_instance.warmup(training)
 
-    for num_questions in range(1, max_n_questions + 1, 1):
+    for num_questions in range(3, max_n_questions + 1, 1):
         logger.info(f'Conducting interviews of length {num_questions}...')
 
         if requires_interview_length:
