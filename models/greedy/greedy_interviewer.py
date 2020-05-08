@@ -11,6 +11,14 @@ from shared.meta import Meta
 from shared.utility import get_top_entities
 
 
+def pprint_tree(node, prefix="- ", label=''):
+    print(prefix, label, node.question_name, sep="")
+
+    children = [(text, child) for text, child in [('L: ', node.LIKE), ('D: ', node.DISLIKE), ('U: ', node.UNKNOWN)] if child]
+    for i, (text, child) in enumerate(children):
+        pprint_tree(child, f'  {prefix}', text)
+
+
 class GreedyInterviewer(InterviewerBase):
     def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, recommendable_only=False):
         super().__init__(meta, use_cuda)
@@ -94,12 +102,13 @@ class GreedyInterviewer(InterviewerBase):
         return questions
 
     def warmup(self, training, interview_length=5):
+        self.recommender.parameters = {'alpha': 0.5, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
-        self.questions = self._get_questions(training)
+        # self.questions = self._get_questions(training)
 
-        # Print questions
-        for idx, entity in enumerate(self.questions):
-            logger.info(f'{idx + 1}. {self.get_entity_name(entity)}')
+        node = Node(self).construct(training, get_top_entities(training)[:50])
+        pprint_tree(node)
+        print('test')
 
     def get_parameters(self):
         pass
@@ -108,18 +117,18 @@ class GreedyInterviewer(InterviewerBase):
         pass
 
 
-def remove_users(users, entity, sentiment):
+def filter_users(users, entity, sentiments):
     new_users = dict()
 
     for user, ratings in users.items():
-        if ratings.training.get(entity, 0) != sentiment:
+        if ratings.training.get(entity, 0) in sentiments:
             new_users[user] = ratings
 
     return new_users
 
 
 class Node:
-    def __init__(self, interviewer):
+    def __init__(self, interviewer, entities=None):
         self.LIKE = None
         self.DISLIKE = None
         self.UNKNOWN = None
@@ -128,26 +137,32 @@ class Node:
         self.question_name = 'N/A'
 
         self.interviewer = interviewer
-        self.answers = dict()
+        self.base_questions = entities if entities else list()
 
-    def get_best_split(self, users, entities):
-        pass
+    def select_question(self, users, entities):
+        question_scores = self.interviewer.get_entity_scores(users, entities, self.base_questions)
+
+        return question_scores[0][0]
 
     def construct(self, users, entities, depth=0):
-        # Try splitting on each
-        self.question = self.get_best_split(users, entities[:10])
+        self.question = self.select_question(users, entities)
         self.question_name = self.interviewer.get_entity_name(self.question)
 
         # In the nodes below, do not consider entity split on in this parent node
         entities = [entity for entity in entities if entity != self.question]
 
-        liked_users = remove_users(users, self.question, -1)
-        disliked_users = remove_users(users, self.question, 1)
-        unknown_users = users
+        liked_users = filter_users(users, self.question, [1])
+        disliked_users = filter_users(users, self.question, [-1, 0])
+        unknown_users = filter_users(users, self.question, [0])
 
-        if depth < 4:
-            self.LIKE = Node(self.interviewer).construct(liked_users, entities, depth + 1)
-            self.DISLIKE = Node(self.interviewer).construct(disliked_users, entities, depth + 1)
-            self.UNKNOWN = Node(self.interviewer).construct(unknown_users, entities, depth + 1)
+        base_questions = self.base_questions + [self.question]
+
+        if depth < 6:
+            self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1)
+            self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, depth + 1)
+            self.UNKNOWN = Node(self.interviewer, base_questions).construct(unknown_users, entities, depth + 1)
 
         return self
+
+    def __repr__(self):
+        return self.question_name
