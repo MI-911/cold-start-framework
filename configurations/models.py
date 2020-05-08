@@ -48,11 +48,11 @@ models = {
         'class': GreedyInterviewer,
         'recommender': LinearJointPageRankRecommender
     },
-    'greedy-ppr-collab-joint': {
+    'greedy-ppr-linear-collab': {
         'class': GreedyInterviewer,
         'recommender': LinearCollaborativePageRankRecommender
     },
-    'greedy-ppr-kg-joint': {
+    'greedy-ppr-linear-kg': {
         'class': GreedyInterviewer,
         'recommender': LinearCollaborativePageRankRecommender
     },
