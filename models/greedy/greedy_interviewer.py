@@ -49,6 +49,7 @@ class GreedyInterviewer(InterviewerBase):
         return self.recommender.predict(items, answers)
 
     def interview(self, answers, max_n_questions=5):
+        # Follow decision tree
         # Exclude answers to entities already asked about
         return self.questions
 
@@ -158,9 +159,9 @@ class Node:
         base_questions = self.base_questions + [self.question]
 
         if depth < 6:
-            self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1)
-            self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, depth + 1)
-            self.UNKNOWN = Node(self.interviewer, base_questions).construct(unknown_users, entities, depth + 1)
+            self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1) if liked_users else None
+            self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, depth + 1) if disliked_users else None
+            self.UNKNOWN = Node(self.interviewer, base_questions).construct(unknown_users, entities, depth + 1) if unknown_users else None
 
         return self
 

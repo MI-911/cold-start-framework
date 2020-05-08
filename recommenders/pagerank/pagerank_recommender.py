@@ -166,5 +166,8 @@ class PageRankRecommender(RecommenderBase):
         if self.recommendable_only:
             answers = {idx: sentiment for idx, sentiment in answers.items() if idx in self.meta.recommendable_entities}
 
+        # Remove unknown answers
+        answers = {idx: sentiment for idx, sentiment in answers.items() if sentiment}
+
         return self._scores(self.parameters['alpha'],
                             self.get_node_weights(answers, self.parameters['importance']), items)
