@@ -58,12 +58,15 @@ def csr(train, sentiment_value: Dict[int, float]):
     return csr_matrix((all_ratings, (users, items)))
 
 
-def get_top_entities(training):
+def get_top_entities(training, limit_entities=None):
     entity_ratings = dict()
 
     # Aggregate ratings per entity
     for user, data in training.items():
         for idx, sentiment in data.training.items():
+            if limit_entities and idx not in limit_entities:
+                continue
+
             entity_ratings.setdefault(idx, []).append(sentiment)
 
     return list([item[0] for item in sorted(entity_ratings.items(), key=lambda x: len(x[1]), reverse=True)])

@@ -1,3 +1,4 @@
+from models.ddpg.ddpg_interviewer import DDPGInterviewer
 from models.dqn.dqn_new import DqnInterviewer
 from models.dumb.dumb_interviewer import DumbInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
@@ -19,6 +20,10 @@ from recommenders.svd.svd_recommender import SVDRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
 models = {
+    'ddpg': {
+        'class': DDPGInterviewer,
+        'recommender': JointPageRankRecommender
+    },
     'random': {
         'class': DumbInterviewer,
         'recommender': RandomRecommender
@@ -31,33 +36,42 @@ models = {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
     },
-    'greedy-ppr-kg-limited': {
-        'class': GreedyInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender,
-        'recommender_kwargs': {
-            'ask_limit': 50
-        }
-    },
     'greedy-ppr-collab': {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender
-    },
-    'greedy-ppr-collab-limited': {
-        'class': GreedyInterviewer,
-        'recommender': CollaborativePageRankRecommender,
-        'recommender_kwargs': {
-            'ask_limit': 50
-        }
     },
     'greedy-ppr-joint': {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender
     },
-    'greedy-ppr-joint-limited': {
+    'greedy-ppr-kg-rec': {
+        'class': GreedyInterviewer,
+        'recommender': KnowledgeGraphPageRankRecommender,
+        'interviewer_kwargs': {
+            'recommendable_only': True
+        },
+        'recommender_kwargs': {
+            'recommendable_only': True
+        }
+    },
+    'greedy-ppr-collab-rec': {
+        'class': GreedyInterviewer,
+        'recommender': CollaborativePageRankRecommender,
+        'interviewer_kwargs': {
+            'recommendable_only': True
+        },
+        'recommender_kwargs': {
+            'recommendable_only': True
+        }
+    },
+    'greedy-ppr-joint-rec': {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender,
+        'interviewer_kwargs': {
+            'recommendable_only': True
+        },
         'recommender_kwargs': {
-            'ask_limit': 50
+            'recommendable_only': True
         }
     },
     'lrmf': {
@@ -101,6 +115,10 @@ models = {
       'class': NaiveInterviewer,
       'recommender': KNNRecommender
     },
+    'greedy-knn': {
+        'class': GreedyInterviewer,
+        'recommender': KNNRecommender
+    },
     'dqn-knn': {
         'class': DqnInterviewer,
         'recommender': KNNRecommender,
@@ -108,6 +126,10 @@ models = {
     },
     'naive-mf': {
         'class': NaiveInterviewer,
+        'recommender': MatrixFactorizationRecommender
+    },
+    'greedy-mf': {
+        'class': GreedyInterviewer,
         'recommender': MatrixFactorizationRecommender
     },
     'dqn-mf': {

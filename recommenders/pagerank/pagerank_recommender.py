@@ -11,7 +11,7 @@ from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations, get_top_entities
+from shared.utility import get_combinations, get_top_entities, hashable_lru
 
 RATING_CATEGORIES = {1, 0, -1}
 
@@ -57,10 +57,10 @@ def get_cache_key(answers):
 
 
 class PageRankRecommender(RecommenderBase):
-    def __init__(self, meta: Meta, ask_limit: int):
+    def __init__(self, meta: Meta, ask_limit: int, recommendable_only: bool):
         super().__init__(meta)
         self.predictions_cache = dict()
-        self.use_caching = False
+        self.use_caching = True
         self.parameters = None
 
         self.entity_indices = set()
@@ -69,17 +69,15 @@ class PageRankRecommender(RecommenderBase):
         # How many of the top-k entities we can ask about in validation
         self.ask_limit = ask_limit
 
-    def disable_cache(self):
-        self.use_caching = False
-        self.clear_cache()
+        self.recommendable_only = recommendable_only
 
     def clear_cache(self):
-        self.predictions_cache.clear()
+        self.sparse_graph.scores.cache_clear()
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
 
-    def _scores(self, alpha, node_weights, items, answers=None):
+    def _scores(self, alpha, node_weights, items):
         """
         Produces a ranking of items. If answers is not none, the ranking
         will be reused if produced previously.
@@ -138,7 +136,7 @@ class PageRankRecommender(RecommenderBase):
         can_ask_about = set(can_ask_about)
 
         self.parameters = {
-            'alpha': 0.1,
+            'alpha': 0.05,
             'importance': {1: 0.95, 0: 0.05, -1: 0.0}
         }
 
@@ -181,6 +179,8 @@ class PageRankRecommender(RecommenderBase):
             logger.info(f'Found optimal: {self.parameters}')
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
-        score = self._scores(self.parameters['alpha'],
-                            self.get_node_weights(answers, self.parameters['importance']), items, answers=answers)
-        return score
+        if self.recommendable_only:
+            answers = {idx: sentiment for idx, sentiment in answers.items() if idx in self.meta.recommendable_entities}
+
+        return self._scores(self.parameters['alpha'],
+                            self.get_node_weights(answers, self.parameters['importance']), items)

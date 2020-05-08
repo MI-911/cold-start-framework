@@ -20,3 +20,9 @@ class RecommenderBase:
         Predicts a score for a list of items given a user's answers on items.
         """
         raise NotImplementedError
+
+    def clear_cache(self):
+        """
+        Clears the prediction cache.
+        """
+        raise NotImplementedError

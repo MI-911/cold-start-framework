@@ -6,27 +6,27 @@ from loguru import logger
 from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
-from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
-from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
-from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
-from recommenders.pagerank.pagerank_recommender import PageRankRecommender
-from shared.enums import Metric
+from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
 from shared.utility import get_top_entities
 
 
 class GreedyInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False):
+    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, recommendable_only=False):
         super().__init__(meta, use_cuda)
 
         self.questions = None
         self.idx_uri = self.meta.get_idx_uri()
+        self.recommendable_only = recommendable_only
 
-        kwargs = {'meta': meta}
-        if recommender_kwargs:
-            kwargs.update(recommender_kwargs)
+        if isinstance(recommender, RecommenderBase):
+            self.recommender = recommender
+        else:
+            kwargs = {'meta': meta}
+            if recommender_kwargs:
+                kwargs.update(recommender_kwargs)
 
-        self.recommender = recommender(**kwargs)
+            self.recommender = recommender(**kwargs)
 
     def get_entity_name(self, idx):
         return self._get_entity_property(idx, 'name')
@@ -44,7 +44,7 @@ class GreedyInterviewer(InterviewerBase):
         # Exclude answers to entities already asked about
         return self.questions
 
-    def _entity_scores(self, training, entities: List, existing_entities: List):
+    def get_entity_scores(self, training, entities: List, existing_entities: List):
         entity_scores = list()
         progress = tqdm(entities)
 
@@ -67,7 +67,7 @@ class GreedyInterviewer(InterviewerBase):
         entities = get_top_entities(training)[:100]
 
         label_scores = defaultdict(list)
-        entity_scores = self._entity_scores(training, entities, [])
+        entity_scores = self.get_entity_scores(training, entities, [])
 
         for entity, score in entity_scores:
             primary_label = self.get_entity_labels(entity)[0]
@@ -78,10 +78,12 @@ class GreedyInterviewer(InterviewerBase):
 
     def _get_questions(self, training):
         questions = list()
-        entities = get_top_entities(training)[:50]
+
+        limit_entities = self.meta.recommendable_entities if self.recommendable_only else None
+        entities = get_top_entities(training, limit_entities)[:50]
 
         for _ in range(10):
-            entity_scores = self._entity_scores(training, entities, questions)
+            entity_scores = self.get_entity_scores(training, entities, questions)
             # return [entity for entity, _ in entity_scores if entity]
 
             next_question = entity_scores[0][0]
@@ -89,15 +91,10 @@ class GreedyInterviewer(InterviewerBase):
 
             questions.append(next_question)
 
-            self.recommender.clear_cache()
-
         return questions
 
     def warmup(self, training, interview_length=5):
         self.recommender.fit(training)
-
-        # self.recommender.disable_cache()
-
         self.questions = self._get_questions(training)
 
         # Print questions

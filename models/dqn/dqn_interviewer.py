@@ -6,10 +6,11 @@ import pickle
 from models.base_interviewer import InterviewerBase
 from models.dqn.dqn_agent import DqnAgent
 from models.dqn.dqn_environment import Environment, Rewards
+from models.greedy.greedy_interviewer import GreedyInterviewer
 from recommenders.base_recommender import RecommenderBase
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations
+from shared.utility import get_combinations, get_top_entities
 
 
 def choose_candidates(ratings: Dict[int, WarmStartUser], n=100):
@@ -65,14 +66,23 @@ class DqnInterviewer(InterviewerBase):
         self.n_entities = len(self.meta.entities)
         self.candidates = []
 
+    def _choose_candidates(self, training, n):
+        greedy_interviewer = GreedyInterviewer(self.meta, self.recommender)
+
+        # To speed up things, consider only the informativeness of most popular n * 2 entities
+        entity_scores = greedy_interviewer.get_entity_scores(training, get_top_entities(training)[:n * 2], list())
+
+        # Select n most informative entities as candidates
+        return [entity for entity, score in entity_scores[:n]]
+
     def warmup(self, training: Dict[int, WarmStartUser], interview_length=5):
-        n_candidates = 100
-        self.candidates = choose_candidates(training, n=n_candidates)
+        n_candidates = 20
 
         logger.info(f'DQN warming up environment...')
         self.environment = Environment(
             recommender=self.recommender, reward_metric=Rewards.NDCG, meta=self.meta, state_size=n_candidates)
         self.environment.warmup(training)
+        self.candidates = self._choose_candidates(training, n=n_candidates)
 
         best_agent, best_score, best_params = None, 0, None
 
