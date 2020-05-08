@@ -124,11 +124,6 @@ class PageRankRecommender(RecommenderBase):
 
         can_ask_about = set(can_ask_about)
 
-        self.parameters = {
-            'alpha': 0.05,
-            'importance': {1: 0.95, 0: 0.05, -1: 0.0}
-        }
-
         if not self.parameters:
             parameters = {
                 'alpha': np.arange(0.1, 1, 0.15),
