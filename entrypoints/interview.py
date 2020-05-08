@@ -153,7 +153,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
     if not requires_interview_length:
         model_instance.warmup(training)
 
-    for num_questions in range(3, max_n_questions + 1, 1):
+    for num_questions in range(1, max_n_questions + 1, 1):
         logger.info(f'Conducting interviews of length {num_questions}...')
 
         if requires_interview_length:
@@ -252,7 +252,7 @@ def _parse_args():
         args.input = ['../data']
 
     if not args.output:
-        args.output = ['../results']
+        args.output = ['results']
 
     return model_selection, args.input[0], args.output[0], set(args.experiments) if args.experiments else set()
 
