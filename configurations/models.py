@@ -54,7 +54,7 @@ models = {
     },
     'greedy-ppr-linear-kg': {
         'class': GreedyInterviewer,
-        'recommender': LinearCollaborativePageRankRecommender
+        'recommender': LinearKGPageRankRecommender
     },
     'greedy-ppr-kg-rec': {
         'class': GreedyInterviewer,
