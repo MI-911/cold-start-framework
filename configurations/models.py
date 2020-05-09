@@ -131,6 +131,13 @@ models = {
         'class': GreedyInterviewer,
         'recommender': KNNRecommender
     },
+    'greedy-knn-rec': {
+        'class': GreedyInterviewer,
+        'recommender': KNNRecommender,
+        'interviewer_kwargs': {
+            'recommendable_only': True
+        }
+    },
     'dqn-knn': {
         'class': DqnInterviewer,
         'recommender': KNNRecommender,
