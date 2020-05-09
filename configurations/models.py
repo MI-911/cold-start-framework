@@ -44,6 +44,13 @@ models = {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender
     },
+    'greedy-ppr-joint-adaptive': {
+        'class': GreedyInterviewer,
+        'recommender': JointPageRankRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
+    },
     'greedy-ppr-linear-joint': {
         'class': GreedyInterviewer,
         'recommender': LinearJointPageRankRecommender
