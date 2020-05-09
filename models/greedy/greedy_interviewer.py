@@ -1,4 +1,5 @@
 import json
+import pickle
 from collections import defaultdict
 from typing import List
 
@@ -26,6 +27,7 @@ class GreedyInterviewer(InterviewerBase):
         self.questions = None
         self.idx_uri = self.meta.get_idx_uri()
         self.recommendable_only = recommendable_only
+        self.root = None
 
         if isinstance(recommender, RecommenderBase):
             self.recommender = recommender
@@ -48,8 +50,25 @@ class GreedyInterviewer(InterviewerBase):
     def predict(self, items, answers):
         return self.recommender.predict(items, answers)
 
+    def _traverse(self, answers, node):
+        # Check if node is empty, i.e. nothing to ask about
+        if not node:
+            return []
+
+        # Check if we can answer the current node
+        if node.question in answers:
+            next_nodes = {-1: node.DISLIKE, 0: node.UNKNOWN, 1: node.LIKE}
+
+            return self._traverse(answers, next_nodes.get(answers.get(node.question, 0)))
+
+        # If not, then ask about the current node
+        return [node.question]
+
     def interview(self, answers, max_n_questions=5):
         # Follow decision tree
+        if self.root:
+            return self._traverse(answers, self.root)
+
         # Exclude answers to entities already asked about
         return self.questions
 
@@ -103,13 +122,13 @@ class GreedyInterviewer(InterviewerBase):
         return questions
 
     def warmup(self, training, interview_length=5):
-        self.recommender.parameters = {'alpha': 0.5, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        #self.recommender.parameters = {'alpha': 0.85, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
-        self.questions = self._get_questions(training)
-        return
-        node = Node(self).construct(training, get_top_entities(training)[:50])
-        pprint_tree(node)
-        print('test')
+        # self.questions = self._get_questions(training)
+
+        self.root = Node(self).construct(training, get_top_entities(training)[:50])
+        pprint_tree(self.root)
+        pickle.dump(self.root, open('root.pkl', 'wb'))
 
     def get_parameters(self):
         pass
@@ -148,12 +167,12 @@ class Node:
 
         # Partition user groups for children
         liked_users = filter_users(users, self.question, [1])
-        disliked_users = filter_users(users, self.question, [-1, 0])
+        disliked_users = filter_users(users, self.question, [-1])
         unknown_users = filter_users(users, self.question, [0])
 
         base_questions = self.base_questions + [self.question]
 
-        if depth < 3:
+        if depth < 6:
             self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1) if liked_users else None
             self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, depth + 1) if disliked_users else None
             self.UNKNOWN = Node(self.interviewer, base_questions).construct(unknown_users, entities, depth + 1) if unknown_users else None

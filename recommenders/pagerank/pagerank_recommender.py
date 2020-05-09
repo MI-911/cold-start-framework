@@ -1,6 +1,5 @@
 import operator
 from functools import reduce
-from random import shuffle
 from typing import List, Dict
 
 from loguru import logger
@@ -11,7 +10,7 @@ from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations, get_top_entities, hashable_lru
+from shared.utility import get_combinations, get_top_entities
 
 RATING_CATEGORIES = {1, 0, -1}
 
