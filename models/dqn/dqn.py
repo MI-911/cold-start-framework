@@ -6,16 +6,16 @@ from loguru import logger
 
 
 class DeepQNetwork(nn.Module):
-    def __init__(self, alpha, state_size: int, fc1_dims: int, fc2_dims: int, actions_size: int, use_cuda: bool = True):
+    def __init__(self, alpha, state_size: int, fc1_dims: int, fc2_dims: int, actions_size: int, interview_length: int, use_cuda: bool = True):
         super(DeepQNetwork, self).__init__()
 
-        # Construct sequential layers
         self.layers = nn.Sequential(
             nn.Linear(state_size, fc1_dims),
             nn.ReLU(),
-            nn.Dropout(0.25),
+            nn.Dropout(0.5),
             nn.Linear(fc1_dims, fc2_dims),
             nn.ReLU(),
+            nn.Dropout(0.5),
             nn.Linear(fc2_dims, actions_size)
         )
 
@@ -36,4 +36,5 @@ class DeepQNetwork(nn.Module):
     def get_loss(self, current_predicted_rewards, target_rewards):
         target_rewards = target_rewards.to(self.device)
         # current_predicted_rewards = tt.tensor(current_predicted_rewards).to(self.device)
+        # return tt.abs(tt.sum(target_rewards - current_predicted_rewards))
         return self.loss(current_predicted_rewards, target_rewards)

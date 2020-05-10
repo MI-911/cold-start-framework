@@ -25,7 +25,7 @@ class Actor(nn.Module):
     def forward(self, state):
         x = self.drop_relu(self.input(state))
         x = self.drop_relu(self.fc1(x))
-        x = self.output(x)  # Apply an activation function here? Requires normalization of embeddings
+        x = tt.tanh(self.output(x))  # Apply an activation function here? Requires normalization of embeddings
 
         return tt.tanh(x)
 
@@ -37,7 +37,6 @@ class Critic(nn.Module):
         self.input = nn.Linear(state_size, fc1)
         self.fc1 = nn.Linear(fc1 + action_size, fc2)
         self.output = nn.Linear(fc2, 1)
-
         self.device = tt.device('cuda' if tt.cuda.is_available() else 'cpu')
         self.to(self.device)
 
