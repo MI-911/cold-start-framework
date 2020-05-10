@@ -89,7 +89,7 @@ class MatrixFactorizationRecommender(RecommenderBase):
     def _train(self, users: Dict[int, WarmStartUser], max_iterations=100):
         # Train the model on training samples
         training_triples = flatten_rating_triples(users)
-        for iteration in tqdm(range(10), desc=f'[Training MF]'):
+        for iteration in tqdm(range(max_iterations), desc=f'[Training MF]'):
             random.shuffle(training_triples)
             self.model.train_als(training_triples)
 
