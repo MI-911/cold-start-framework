@@ -1,7 +1,7 @@
 import argparse
 import subprocess
 
-from configurations.configuration import models
+from configurations.models import models
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--include', nargs='*', type=str, choices=models.keys(), help='models to include')
