@@ -13,3 +13,6 @@
 *.json
 
 *.pdf
+*.sigm
+*.out
+*.err

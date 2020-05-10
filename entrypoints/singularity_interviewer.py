@@ -17,4 +17,5 @@ if __name__ == '__main__':
         processes.append(subprocess.Popen(['python3.8', 'interview.py', '--include', model, '--experiment',
                                            *args.experiments], stdout=None, stderr=subprocess.STDOUT))
 
+    print('Waiting for processes')
     [p.wait() for p in processes]

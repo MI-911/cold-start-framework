@@ -46,12 +46,20 @@ fi
 if [ ${#EXPERIMENTS} -eq 0 ];
 then
   ECMD=""
+  NAME=""
 else
   ECMD="--experiments $EXPERIMENTS"
+  NAME=""
+  for experiment in $EXPERIMENTS
+  do
+    NAME="$NAME-$experiment"
+  done
 fi
 
 for model in $MODELS
 do
-  echo "singularity instance start --nv -B ..:/app ../coldstart4.sigm $model interview.py --include $model $ECMD"
-  singularity instance start --nv -B ..:/app ../coldstart.sigm $model interview.py --include $model $ECMD
+  echo "singularity instance start --nv -B ..:/app ../coldstart4.sigm $model$NAME interview.py --include $model $ECMD"
+  singularity instance start --nv -B ..:/app ../coldstart.sigm "$model$NAME" interview.py --include $model $ECMD
+  echo "sleep 1m"
+  sleep 1m
 done
