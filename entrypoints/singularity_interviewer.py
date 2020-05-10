@@ -1,9 +1,7 @@
 import argparse
 import subprocess
 
-from models.configuration import models
-from shared.utility import valid_dir
-
+from configurations.configuration import models
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--include', nargs='*', type=str, choices=models.keys(), help='models to include')

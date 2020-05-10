@@ -4,7 +4,7 @@ import os
 import sys
 import time
 from collections import defaultdict
-from typing import Dict, Set, List
+from typing import Dict, Set
 
 import numpy as np
 from loguru import logger
@@ -13,14 +13,15 @@ from tqdm import tqdm
 from experiments.experiment import Dataset, Split, Experiment
 from experiments.metrics import ndcg_at_k, ser_at_k, coverage, tau_at_k, hr_at_k
 from models.base_interviewer import InterviewerBase
-from models.configuration import models
+from configurations.models import models
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
-from shared.utility import join_paths, valid_dir
+from shared.utility import join_paths, valid_dir, get_popular_items
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
+parser.add_argument('--output', nargs=1, type=valid_dir, help='path to output results')
 parser.add_argument('--include', nargs='*', type=str, choices=models.keys(), help='models to include')
 parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), help='models to exclude')
 parser.add_argument('--experiments', nargs='*', type=str, help='experiments to run')
@@ -33,13 +34,17 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
         'use_cuda': models[model_name].get('use_cuda', False)
     }
 
-    recommender = models[model_name].get('recommender', None)
-    if recommender:
-        kwargs['recommender'] = recommender
+    interviewer_kwargs = models[model_name].get('interviewer_kwargs', None)
+    if interviewer_kwargs:
+        kwargs.update(interviewer_kwargs)
 
     recommender_kwargs = models[model_name].get('recommender_kwargs', None)
     if recommender_kwargs:
         kwargs['recommender_kwargs'] = recommender_kwargs
+
+    recommender = models[model_name].get('recommender', None)
+    if recommender:
+        kwargs['recommender'] = recommender
 
     instance = models[model_name]['class'](**kwargs)
     parameters = _get_parameters(model_name, experiment, interview_length)
@@ -52,7 +57,7 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
 
 
 def _get_parameter_path(parameter_base, model_name, interview_length):
-    return os.path.join(parameter_base, f'parameters_{model_name}_{interview_length}q.json')
+    return join_paths(parameter_base, f'parameters_{model_name}_{interview_length}q.json')
 
 
 def _get_parameters(model_name, experiment: Experiment, interview_length):
@@ -91,23 +96,11 @@ def _produce_ranking(model: InterviewerBase, ranking: Ranking, answers: Dict):
 
         # Sort items to rank by their score
         # Items not present in the item_scores dictionary default to a zero score
-        return list(sorted(to_rank, key=lambda item: item_scores.get(item, 0), reverse=True))
+        return list(sorted(to_rank, key=lambda item: (item_scores.get(item, 0), item), reverse=True))
     except Exception as e:
         logger.error(f'Exception during ranking: {e}')
 
         return list()
-
-
-def _get_popular_recents(recents: List[int], training: Dict[int, WarmStartUser]):
-    recent_counts = {r: 0 for r in recents}
-    for u, data in training.items():
-        for idx, sentiment in data.training.items():
-            if idx in recent_counts and not sentiment == 0:
-                recent_counts[idx] += 1
-
-    return [recent
-            for recent, count
-            in sorted(recent_counts.items(), key=lambda x: x[1], reverse=True)]
 
 
 def _test(testing, model_instance, num_questions, upper_cutoff, meta, popular_items):
@@ -167,25 +160,21 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
             model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
             model_instance.warmup(training, num_questions)
 
-        popular_items = _get_popular_recents(meta.recommendable_entities, training)
+        popular_items = get_popular_items(meta.recommendable_entities, training)
 
         hits, ndcgs, taus, sers, covs, answers = _test(testing, model_instance, num_questions, upper_cutoff, meta,
                                                        popular_items)
 
-        hr = dict()
-        ndcg = dict()
-        tau = dict()
-        ser = dict()
-        cov = dict()
-
+        # Compute metrics at different cutoffs
+        metric = defaultdict(dict)
         for k in range(1, upper_cutoff + 1):
-            hr[k] = np.mean(hits[k])
-            ndcg[k] = np.mean(ndcgs[k])
-            tau[k] = np.mean(taus[k])
-            ser[k] = np.mean(sers[k])
-            cov[k] = coverage(covs[k], meta.recommendable_entities)
+            metric['hr'][k] = np.mean(hits[k])
+            metric['ndcg'][k] = np.mean(ndcgs[k])
+            metric['tau'][k] = np.mean(taus[k])
+            metric['ser'][k] = np.mean(sers[k])
+            metric['cov'][k] = coverage(covs[k], meta.recommendable_entities)
 
-        metrics[num_questions] = {'hr': hr, 'ndcg': ndcg, 'tau': tau, 'ser': ser, 'cov': cov}
+        metrics[num_questions] = metric
         all_answers[num_questions] = answers
 
         logger.info(f'Results for {model_name}:')
@@ -195,7 +184,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         yield model_instance, metrics, num_questions, all_answers
 
 
-def _run_split(model_selection: Set[str], split: Split):
+def _run_split(model_selection: Set[str], split: Split, output_path):
     training = split.data_loader.training()
     testing = split.data_loader.testing()
     meta = split.data_loader.meta()
@@ -208,15 +197,15 @@ def _run_split(model_selection: Set[str], split: Split):
                                                                    max_n_questions=10):
             logger.info(f'Writing results, parameters, and answers for {model} on {split.name} with {length} questions')
 
-            _write_answers(model, answers, split)
-            _write_results(model, metrics, split)
+            _write_answers(output_path, model, answers, split)
+            _write_results(output_path, model, metrics, split)
             _write_parameters(model, split.experiment, model_instance, length)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 
 
-def _write_answers(model_name, all_answers: Dict, split: Split):
-    answers_dir = join_paths('results', split.experiment.name, model_name, 'answers')
+def _write_answers(output_path, model_name, all_answers: Dict, split: Split):
+    answers_dir = join_paths(output_path, split.experiment.name, model_name, 'answers')
     os.makedirs(answers_dir, exist_ok=True)
 
     # Map indices to URIs
@@ -231,8 +220,8 @@ def _write_answers(model_name, all_answers: Dict, split: Split):
         json.dump(uri_answers, fp, indent=True)
 
 
-def _write_results(model_name, metrics, split: Split):
-    results_dir = join_paths('results', split.experiment.name, model_name)
+def _write_results(output_path, model_name, metrics, split: Split):
+    results_dir = join_paths(output_path, split.experiment.name, model_name)
     os.makedirs(results_dir, exist_ok=True)
 
     with open(os.path.join(results_dir, f'{split.name}.json'), 'w') as fp:
@@ -262,11 +251,14 @@ def _parse_args():
     if not args.input:
         args.input = ['../data']
 
-    return model_selection, args.input[0], set(args.experiments) if args.experiments else set()
+    if not args.output:
+        args.output = ['results']
+
+    return model_selection, args.input[0], args.output[0], set(args.experiments) if args.experiments else set()
 
 
 def run():
-    model_selection, input_path, experiments = _parse_args()
+    model_selection, input_path, output_path, experiments = _parse_args()
 
     dataset = Dataset(input_path)
     for experiment in dataset.experiments():
@@ -276,7 +268,7 @@ def run():
             continue
 
         for split in experiment.splits():
-            _run_split(model_selection, split)
+            _run_split(model_selection, split, output_path)
 
 
 if __name__ == '__main__':

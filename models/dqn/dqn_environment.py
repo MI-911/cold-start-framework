@@ -101,8 +101,8 @@ class Environment:
     def select_user(self, user, remove_positive_sample=True):
         self.current_user = user
 
-        if not remove_positive_sample:
-            return
+        # if not remove_positive_sample:
+        #     return
 
         # Choose a random liked entity as the left-out entity
         positive_samples, = np.where(self.ratings[self.current_user] == 1)
@@ -111,16 +111,19 @@ class Environment:
         # Select negative samples
         negative_samples, = np.where(self.ratings[self.current_user] == 0)
         self.to_rate = np.random.choice(negative_samples, 100).tolist() + [self.left_out_item]
+        # self.to_rate = self.top_pop_movies.copy() + [self.left_out_item]
 
         # Erase that rating from the ratings matrix so they can't answer it during interviews
         self.ratings[self.current_user, self.left_out_item] = 0
 
-    def ask(self, user, state_idx, entity_idx):
+    def ask(self, user, state_idx, entity_idx, interview_length, done=False):
         answer = self.ratings[user, entity_idx]
+
+        penalty = 0.0
 
         # Adjust state
         entity_state_idx = state_idx * 2
-        if self.state[entity_state_idx]:
+        if self.state[entity_state_idx] and not done:
             # This question has already been asked, no reward
             return self.state, 0.0
 
@@ -129,33 +132,32 @@ class Environment:
 
         self.answers[entity_idx] = answer
 
-        # Prevent the model just learning to ask towards non-popular items
-        if answer == 0:
-            return self.state, 0.0
+        # Give a reward if we received a usable answer (like/dislike)
+        if not done:
+            # return self.state, penalty
+            return self.state, .5 / interview_length if answer == 0 else 1.0 / interview_length
 
-        # Calculate reward
-        reward = self._reward()
-        return self.state, reward
+        else:
+            # Rank the entities and calculate reward
+            reward = self._reward()
 
-    def _reward_with_caching(self):
-        answers_str = str(sorted(self.answers.items(), key=lambda x: x[0]))
-        if answers_str not in self.predictions_cache:
-            self.predictions_cache[answers_str] = self.recommender.predict(self.all_entities, self.answers)
+            # We are done with the interview
+            # If the interviewer asked the same questions (i.e. we don't have many answers as we have questions)
+            # we shouldn't reward it!
+            if len(self.answers) < interview_length:
+                return self.state, 0.0
 
-        scores = {e: s for e, s in self.predictions_cache[answers_str].items() if e in self.to_rate}
-        ranked = [e for e, s in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
-        self.left_out_item = np.random.choice(positive_samples)
-        metric_score = self._compute_metric(ranked, self.left_out_item)
-        return metric_score
+            return self.state, reward
 
     def rank(self, items):
         return self.recommender.predict(items, self.answers)
 
     def _reward(self):
-        unseen_items, = np.where(self.ratings[self.current_user] == 0)
-        negative_samples = random.sample(list(unseen_items), 100)
+        # unseen_items, = np.where(self.ratings[self.current_user] == 0)
+        # negative_samples = random.sample(list(unseen_items), 100)
 
-        scores = self.recommender.predict(negative_samples + [self.left_out_item], self.answers)
+        scores = self.recommender.predict(self.to_rate, self.answers)
+        # scores = self.recommender.predict(self.to_rate, {})
         ranked = [e for e, s in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
 
         metric_score = self._compute_metric(ranked, self.left_out_item)
@@ -166,7 +168,7 @@ class Environment:
         relevance = [1 if r == left_out else 0 for r in rankings]
 
         metric_handlers = {
-            Rewards.NDCG: ndcg_at_k(relevance, k=k),
+            Rewards.NDCG: ndcg_at_k(relevance, k=k),  # Default choice
             Rewards.HIT: sum(relevance[:k]),
             Rewards.SERENDIPITY: ser_at_k(zip(rankings, relevance), self.top_pop_movies, k=k)
         }

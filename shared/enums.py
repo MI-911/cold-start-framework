@@ -1,6 +1,17 @@
 from enum import Enum, IntEnum
 
 
+class UnseenSampling(Enum):
+    UNIFORM = 1
+    POPULARITY = 2
+    EQUAL_POPULARITY = 3
+
+
+class SeenSampling(Enum):
+    STANDARD = 1
+    LONG_TAIL = 2
+
+
 class EntityType(Enum):
     RECOMMENDABLE = 1
     DESCRIPTIVE = 2

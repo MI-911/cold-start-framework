@@ -1,6 +1,5 @@
 import operator
 from functools import reduce
-from random import shuffle
 from typing import List, Dict
 
 from loguru import logger
@@ -57,7 +56,7 @@ def get_cache_key(answers):
 
 
 class PageRankRecommender(RecommenderBase):
-    def __init__(self, meta: Meta, ask_limit: int):
+    def __init__(self, meta: Meta, ask_limit: int, recommendable_only: bool):
         super().__init__(meta)
         self.predictions_cache = dict()
         self.use_caching = True
@@ -69,25 +68,24 @@ class PageRankRecommender(RecommenderBase):
         # How many of the top-k entities we can ask about in validation
         self.ask_limit = ask_limit
 
-    def disable_cache(self):
-        self.use_caching = False
-        self.clear_cache()
+        self.recommendable_only = recommendable_only
 
     def clear_cache(self):
-        self.predictions_cache.clear()
+        self.sparse_graph.scores.cache_clear()
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
 
-    def _scores(self, alpha, node_weights, items, answers=None):
+    def _scores(self, alpha, node_weights, items):
         """
         Produces a ranking of items. If answers is not none, the ranking
         will be reused if produced previously.
         """
         def get_scores():
-            return self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
+            scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
+            return {item: scores.get(item, 0) for item in items}
 
-        if not self.use_caching:
+        if not self.use_caching or True:
             return get_scores()
 
         # Get cache key, excluding "don't know" to decrease cache misses
@@ -175,5 +173,11 @@ class PageRankRecommender(RecommenderBase):
             logger.info(f'Found optimal: {self.parameters}')
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
+        if self.recommendable_only:
+            answers = {idx: sentiment for idx, sentiment in answers.items() if idx in self.meta.recommendable_entities}
+
+        # Remove unknown answers
+        answers = {idx: sentiment for idx, sentiment in answers.items() if sentiment}
+
         return self._scores(self.parameters['alpha'],
-                            self.get_node_weights(answers, self.parameters['importance']), items, answers=answers)
+                            self.get_node_weights(answers, self.parameters['importance']), items)

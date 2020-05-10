@@ -10,13 +10,12 @@ class LinearCollaborativePageRankRecommender(LinearPageRankRecommender):
 
     def construct_graph(self, training: Dict[int, WarmStartUser]) -> List[GraphWrapper]:
         # Get sentiments and entities
-        sentiments = []
+        sentiments = set()
         for _, user in training.items():
             for entity, sentiment in user.training.items():
-                sentiments.append(sentiment)
+                sentiments.add(sentiment)
 
         # Create graphs
-        sentiments = set(sentiments)
         graphs = []
         for sentiment in sentiments:
             graphs.append(GraphWrapper(training, sentiment))

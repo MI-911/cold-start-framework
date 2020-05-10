@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Union
 
 from tqdm import tqdm
 
@@ -11,7 +11,7 @@ from loguru import logger
 
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations
+from shared.utility import get_combinations, hashable_lru
 
 
 def flatten_rating_triples(training: Dict[int, WarmStartUser]):
@@ -38,12 +38,15 @@ def convert_rating(rating):
 
 
 class MatrixFactorizationRecommender(RecommenderBase):
-    def __init__(self, meta: Meta, use_cuda=False):
+    def __init__(self, meta: Meta, use_cuda=False, normalize_embeddings=False):
         super(MatrixFactorizationRecommender, self).__init__(meta)
         self.meta = meta
         self.optimal_params = None
-        self.model = None
+        self.model: Union[MatrixFactorisation, None] = None
         self.predictions_cache = {}
+
+        self.normalize = normalize_embeddings
+        self.n_iterations = 100
 
     def fit(self, training: Dict[int, WarmStartUser]) -> None:
         n_users = len(self.meta.users)
@@ -57,9 +60,13 @@ class MatrixFactorizationRecommender(RecommenderBase):
             for params in get_combinations(parameters):
                 logger.info(f'Grid searching MF with params: {params}')
                 self.model = MatrixFactorisation(n_users, n_entities, params['k'])
-                self._train(training, max_iterations=100)
+                self._train(training, max_iterations=self.n_iterations)
                 score = self._validate(training)
                 scores.append((params, score))
+
+                logger.debug(f'Score for {params}: {score}')
+
+                self.clear_cache()
 
             # Use optimal parameters to train a new model
             optimal_params, _ = list(sorted(scores, key=lambda x: x[1], reverse=True))[0]
@@ -67,13 +74,17 @@ class MatrixFactorizationRecommender(RecommenderBase):
 
             logger.info(f'Found best params for MF: {self.optimal_params}')
             self.model = MatrixFactorisation(n_users, n_entities, self.optimal_params['k'])
-            self._train(training, max_iterations=100)
+            self._train(training, max_iterations=self.n_iterations)
 
         else:
             # Reuse optimal parameters
             logger.info(f'Reusing best params for MF: {self.optimal_params}')
             self.model = MatrixFactorisation(n_users, n_entities, self.optimal_params['k'])
-            self._train(training, max_iterations=100)
+            self._train(training, max_iterations=self.n_iterations)
+
+        if self.normalize:
+            self.model.M /= np.max(self.model.M)
+            self.model.U /= np.max(self.model.U)
 
     def _train(self, users: Dict[int, WarmStartUser], max_iterations=100):
         # Train the model on training samples
@@ -91,6 +102,10 @@ class MatrixFactorizationRecommender(RecommenderBase):
 
         return self.meta.validator.score(predictions, self.meta)
 
+    def clear_cache(self):
+        self.predict.cache_clear()
+
+    @hashable_lru(maxsize=1024)
     def predict(self, items, answers):
         # Predict a user as the avg embedding of the items they liked
         u_embedding_items = [e for e, r in answers.items() if r == 1]

@@ -1,4 +1,5 @@
-from models.dqn.dqn_interviewer import DqnInterviewer
+from models.ddpg.ddpg_interviewer import DDPGInterviewer
+from models.dqn.dqn_new import DqnInterviewer
 from models.dumb.dumb_interviewer import DumbInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.greedy.greedy_interviewer import GreedyInterviewer
@@ -19,6 +20,31 @@ from recommenders.svd.svd_recommender import SVDRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
 models = {
+    'ddpg-ppr-joint': {
+        'class': DDPGInterviewer,
+        'recommender': JointPageRankRecommender,
+        'requires_interview_length': True
+    },
+    'ddpg-ppr-collab': {
+        'class': DDPGInterviewer,
+        'recommender': CollaborativePageRankRecommender,
+        'requires_interview_length': True
+    },
+    'ddpg-ppr-kg': {
+        'class': DDPGInterviewer,
+        'recommender': KnowledgeGraphPageRankRecommender,
+        'requires_interview_length': True
+    },
+    'ddpg-mf': {
+        'class': DDPGInterviewer,
+        'recommender': MatrixFactorizationRecommender,
+        'requires_interview_length': True
+    },
+    'ddpg-knn': {
+        'class': DDPGInterviewer,
+        'recommender': KNNRecommender,
+        'requires_interview_length': True
+    },
     'random': {
         'class': DumbInterviewer,
         'recommender': RandomRecommender
@@ -31,33 +57,61 @@ models = {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
     },
-    'greedy-ppr-kg-more-limited': {
-        'class': GreedyInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender,
-        'recommender_kwargs': {
-            'ask_limit': 15
-        }
-    },
     'greedy-ppr-collab': {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender
-    },
-    'greedy-ppr-collab-more-limited': {
-        'class': GreedyInterviewer,
-        'recommender': CollaborativePageRankRecommender,
-        'recommender_kwargs': {
-            'ask_limit': 15
-        }
     },
     'greedy-ppr-joint': {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender
     },
-    'greedy-ppr-joint-more-limited': {
+    'greedy-ppr-joint-adaptive': {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
+    },
+    'greedy-ppr-linear-joint': {
+        'class': GreedyInterviewer,
+        'recommender': LinearJointPageRankRecommender
+    },
+    'greedy-ppr-linear-collab': {
+        'class': GreedyInterviewer,
+        'recommender': LinearCollaborativePageRankRecommender
+    },
+    'greedy-ppr-linear-kg': {
+        'class': GreedyInterviewer,
+        'recommender': LinearKGPageRankRecommender
+    },
+    'greedy-ppr-kg-rec': {
+        'class': GreedyInterviewer,
+        'recommender': KnowledgeGraphPageRankRecommender,
+        'interviewer_kwargs': {
+            'recommendable_only': True
+        },
         'recommender_kwargs': {
-            'ask_limit': 15
+            'recommendable_only': True
+        }
+    },
+    'greedy-ppr-collab-rec': {
+        'class': GreedyInterviewer,
+        'recommender': CollaborativePageRankRecommender,
+        'interviewer_kwargs': {
+            'recommendable_only': True
+        },
+        'recommender_kwargs': {
+            'recommendable_only': True
+        }
+    },
+    'greedy-ppr-joint-rec': {
+        'class': GreedyInterviewer,
+        'recommender': JointPageRankRecommender,
+        'interviewer_kwargs': {
+            'recommendable_only': True
+        },
+        'recommender_kwargs': {
+            'recommendable_only': True
         }
     },
     'lrmf': {
@@ -101,6 +155,17 @@ models = {
       'class': NaiveInterviewer,
       'recommender': KNNRecommender
     },
+    'greedy-knn': {
+        'class': GreedyInterviewer,
+        'recommender': KNNRecommender
+    },
+    'greedy-knn-rec': {
+        'class': GreedyInterviewer,
+        'recommender': KNNRecommender,
+        'interviewer_kwargs': {
+            'recommendable_only': True
+        }
+    },
     'dqn-knn': {
         'class': DqnInterviewer,
         'recommender': KNNRecommender,
@@ -108,6 +173,10 @@ models = {
     },
     'naive-mf': {
         'class': NaiveInterviewer,
+        'recommender': MatrixFactorizationRecommender
+    },
+    'greedy-mf': {
+        'class': GreedyInterviewer,
         'recommender': MatrixFactorizationRecommender
     },
     'dqn-mf': {
