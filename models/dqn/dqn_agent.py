@@ -2,13 +2,15 @@ import torch as tt
 import numpy as np
 from typing import List
 
+from loguru import logger
+
 from models.dqn.dqn import DeepQNetwork
 import pickle
 
 
 class DqnAgent:
     def __init__(self, gamma: float, epsilon: float, alpha: float, n_entities: int, candidates: List[int],
-                 batch_size: int, fc1_dims: int,  max_mem_size: float = 1000, eps_end: float = 0.01, eps_dec: float = 0.996,
+                 batch_size: int, fc1_dims: int, interview_length: int,  max_mem_size: float = 10000, eps_end: float = 0.01, eps_dec: float = 0.996,
                  use_cuda: bool = False):
         """
         Constructs an agent for a DQN learning process
@@ -33,6 +35,7 @@ class DqnAgent:
         self.n_entities = n_entities
         self.batch_size = batch_size
         self.max_mem_size = max_mem_size
+        self.interview_length = interview_length
 
         self.candidates = candidates
         self.action_size = len(self.candidates)
@@ -42,7 +45,7 @@ class DqnAgent:
         # Allocate DQN model
         self.Q_eval = DeepQNetwork(
             state_size=self.state_size, fc1_dims=fc1_dims, fc2_dims=fc1_dims // 2, actions_size=self.action_size,
-            alpha=alpha, use_cuda=use_cuda)
+            alpha=alpha, use_cuda=use_cuda, interview_length=interview_length)
 
         # Allocate a target network to stabilise training
         self.Q_target = self._synchronize()
@@ -91,16 +94,19 @@ class DqnAgent:
         # Increment the counter
         self.mem_counter += 1
 
-    def choose_action(self, state: np.ndarray, explore=True) -> int:
+    def choose_action(self, state: np.ndarray, asked_about: List, explore=True) -> int:
         # Make the DQN predict action rewards given this state
-        predicted_rewards = self.Q_eval(state.reshape((1, state.shape[0])))
+        with tt.no_grad():
+            predicted_rewards = self.Q_eval(state.reshape((1, state.shape[0])))
 
-        if np.random.rand() > self.epsilon or not explore:
-            # Exploit
-            return int(tt.argmax(predicted_rewards))
-        else:
-            # Explore
-            return np.random.choice(self.action_space)
+            if np.random.rand() > self.epsilon or not explore:
+                # Exploit
+                # return int(np.argmax([r if i not in asked_about else 0.0 for i, r in enumerate(predicted_rewards[0])]))
+                return int(tt.argmax(predicted_rewards))
+            else:
+                # Explore
+                # return np.random.choice([q for q in self.action_space if q not in asked_about])
+                return np.random.choice(self.action_space)
 
     def learn(self):
         if self.mem_counter < self.batch_size:
@@ -136,15 +142,23 @@ class DqnAgent:
 
         # Adjust the model
         self.Q_eval.zero_grad()
+        # self.Q_target.zero_grad()
+
         loss = self.Q_eval.get_loss(current_predicted_rewards, tt.tensor(target_rewards))
         loss.backward()
+        # tt.nn.utils.clip_grad_norm_(self.Q_eval.parameters(), 1.0)
         self.Q_eval.optimizer.step()
 
         # Decrease the chance that we will explore random questions in the future
         self.epsilon = self.epsilon * self.eps_dec if self.epsilon > self.eps_end else self.eps_end
 
+        # Do a soft update
+        tau = 1e-3
+        for target_param, eval_param in zip(self.Q_target.parameters(), self.Q_eval.parameters()):
+            target_param.data.copy_(tau * eval_param.data + (1.0 - tau) * target_param.data)
+
         # Check if we should update the target network
-        if self.mem_counter % 100 == 0:
-            self.Q_target = self._synchronize()
+        # if self.mem_counter % 500 == 0:
+        #     self.Q_target.load_state_dict(self.Q_eval.state_dict())
 
         return loss
