@@ -6,11 +6,12 @@ import pickle
 from models.base_interviewer import InterviewerBase
 from models.dqn.dqn_agent import DqnAgent
 from models.dqn.dqn_environment import Environment, Rewards
+from models.greedy.greedy_interviewer import GreedyInterviewer
 from recommenders.base_recommender import RecommenderBase
 from shared.enums import Sentiment
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations
+from shared.utility import get_combinations, get_top_entities
 from experiments.metrics import ndcg_at_k
 
 
@@ -105,20 +106,27 @@ class DqnInterviewer(InterviewerBase):
         self.candidates = []
         self.ratings: np.ndarray = np.zeros((1,))
 
-    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5):
-        n_candidates = 100
+    def _choose_candidates(self, training, n):
+        greedy_interviewer = GreedyInterviewer(self.meta, self.recommender)
 
-        self.candidates = choose_candidates(training, n=n_candidates)
+        # To speed up things, consider only the informativeness of most popular n * 2 entities
+        entity_scores = greedy_interviewer.get_entity_scores(training, get_top_entities(training)[:n * 2], list())
+
+        # Select n most informative entities as candidates
+        return [entity for entity, score in entity_scores[:n]]
+
+    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5):
+        n_candidates = 20
+
         self.ratings = get_rating_matrix(training, self.n_users, self.n_entities)
         self.recommender.fit(training)
+        self.candidates = self._choose_candidates(training, n=n_candidates)
 
         # NOTE: Test PPR with uniform LOO sampling on training items
-        # self.test_naive(training)
-        self.test_ppr(training)
 
         best_agent, best_score, best_params = None, 0, None
 
-        self.params = {'fc1_dims': 512}
+        self.params = {'fc1_dims': 512}  # Don't tune hyper params, we don't have time
 
         if not self.params:
             for params in get_combinations({'fc1_dims': [128, 256, 512]}):
@@ -187,15 +195,16 @@ class DqnInterviewer(InterviewerBase):
         losses = []
         epsilons = []
         ranking_scores = []
+        corrects = []
         interview_lengths = []
         interview_answers = {
             1: [], 0: [], -1: []
         }
 
-        n_iterations = 50
+        n_iterations = 20
 
         self.agent = DqnAgent(candidates=self.candidates, n_entities=self.n_entities,
-                              batch_size=720, alpha=0.01, gamma=1.0, epsilon=1.0,
+                              batch_size=720, alpha=0.0001, gamma=1.0, epsilon=1.0,
                               eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda,
                               interview_length=interview_length)
 
@@ -224,7 +233,7 @@ class DqnInterviewer(InterviewerBase):
                     f'Loss: {recent_mean(losses) : 0.7f}, '
                     f'Epsilon: {recent_mean(epsilons) : 0.4f}, '
                     f'avg. interview length: {recent_mean(interview_lengths) : 0.4f}) '
-                    f'Answers: Like: {recent_mean(interview_answers[1]) : 0.3f}, Dislike: {recent_mean(interview_answers[-1]) : 0.3f}, Dunno: {recent_mean(interview_answers[0]) : 0.3f}')
+                    f'Like: {recent_mean(interview_answers[1]) : 0.3f}, Dislike: {recent_mean(interview_answers[-1]) : 0.3f}, Dunno: {recent_mean(interview_answers[0]) : 0.3f}')
 
                 # Fresh state
                 state = np.zeros((state_size,), dtype=np.float32)
@@ -233,7 +242,7 @@ class DqnInterviewer(InterviewerBase):
                 # Pick a positive sample and negative samples
                 positive_sample = np.random.choice(positive_ratings)
                 np.random.shuffle(negative_ratings)
-                negative_samples = negative_ratings[:100].tolist()
+                negative_samples = negative_ratings[:10].tolist()
                 # negative_samples = self.candidates
                 to_rate = negative_samples + [positive_sample]
                 self.ratings[user, positive_sample] = 0.0
@@ -242,7 +251,7 @@ class DqnInterviewer(InterviewerBase):
 
                 for q in range(interview_length):
                     # Find the question to ask
-                    question_idx = self.agent.choose_action(state, [], q)
+                    question_idx = self.agent.choose_action(state, [])
 
                     # Ask the question
                     answer = self.ratings[user, self.candidates[question_idx]]
@@ -277,18 +286,9 @@ class DqnInterviewer(InterviewerBase):
                 # reward = self.meta.validator.score([(training[user].validation, scores)], self.meta)
 
                 # Store the transitions in the agent memory
-                c = 0
-                smoke_test_answers = [1, 2, 3]
                 for state, question, answer, new_state, is_done in transitions:
-                    _reward = 1.0 if question == smoke_test_answers[c] else 0.0
+                    _reward = reward * 100 if is_done else reward / interview_length
                     self.agent.store_memory(state, question, new_state, _reward, is_done)
-
-                    if _reward:
-                        logger.info(f'Correct!')
-                    else:
-                        logger.info(f'Wrong! {question} vs {smoke_test_answers[c]}')
-
-                    c += 1
 
                 # Learn from the memories
                 loss = self.agent.learn()
@@ -303,14 +303,14 @@ class DqnInterviewer(InterviewerBase):
                 # Reset the user's rating
                 self.ratings[user, positive_sample] = 1.0
 
-            # self.agent.Q_eval.eval()
-            # score = self.validate(training, interview_length)
-            # if score > best_score:
-            #     best_agent = pickle.loads(pickle.dumps(self.agent))
-            #     best_score = score
-            #     logger.info(f'Found new best agent with validation score {score}')
-            # self.agent.Q_eval.train()
-            #
+            self.agent.Q_eval.eval()
+            score = self.validate(training, interview_length)
+            if score > best_score:
+                best_agent = pickle.loads(pickle.dumps(self.agent))
+                best_score = score
+                logger.info(f'Found new best agent with validation score {score}')
+            self.agent.Q_eval.train()
+
             # iteration_loss = recent_mean(losses, recency=len(users))
             # if iteration_loss > last_iteration_loss:
             #     logger.info(f'Stopping due to increasing loss')

@@ -20,9 +20,30 @@ from recommenders.svd.svd_recommender import SVDRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
 models = {
-    'ddpg': {
+    'ddpg-ppr-joint': {
         'class': DDPGInterviewer,
-        'recommender': JointPageRankRecommender
+        'recommender': JointPageRankRecommender,
+        'requires_interview_length': True
+    },
+    'ddpg-ppr-collab': {
+        'class': DDPGInterviewer,
+        'recommender': CollaborativePageRankRecommender,
+        'requires_interview_length': True
+    },
+    'ddpg-ppr-kg': {
+        'class': DDPGInterviewer,
+        'recommender': KnowledgeGraphPageRankRecommender,
+        'requires_interview_length': True
+    },
+    'ddpg-mf': {
+        'class': DDPGInterviewer,
+        'recommender': MatrixFactorizationRecommender,
+        'requires_interview_length': True
+    },
+    'ddpg-knn': {
+        'class': DDPGInterviewer,
+        'recommender': KNNRecommender,
+        'requires_interview_length': True
     },
     'random': {
         'class': DumbInterviewer,

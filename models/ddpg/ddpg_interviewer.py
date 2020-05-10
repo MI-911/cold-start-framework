@@ -1,3 +1,4 @@
+import pickle
 from typing import List, Dict, Union
 
 import numpy as np
@@ -91,7 +92,7 @@ def sample_for_user(user, ratings, recommendable_entities):
 
     positive_sample = np.random.choice(positive_samples)
     np.random.shuffle(negative_samples)
-    negative_samples = negative_samples[:100]
+    negative_samples = negative_samples[:10]
 
     to_rate = negative_samples + [positive_sample]
     return to_rate, positive_sample
@@ -109,7 +110,7 @@ class DDPGInterviewer(InterviewerBase):
 
         self.n_users = len(self.meta.users)
         self.n_entities = len(self.meta.entities)
-        self.n_candidates = 100
+        self.n_candidates = 20
         self.candidate_embeddings = []
         self.state_size = self.n_candidates * 2
 
@@ -123,12 +124,13 @@ class DDPGInterviewer(InterviewerBase):
         return [entity for entity, score in entity_scores[:n]]
 
     def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
-        self.recommender.parameters = {'alpha': 0.85, 'importance': {1: 0.8, 0: 0.2, -1: 0.0}}
         self.recommender.fit(training)
         self.candidates = self._choose_candidates(training, self.n_candidates)
 
         self.ratings = get_rating_matrix(training, n_users=self.n_users, n_entities=self.n_entities)
 
+        self.embedder.optimal_params = {'k': 5}
+        self.embedder.n_iterations = 10
         self.embedder.fit(training)
         self.agent = DDPGAgent(embedding_size=self.embedder.model.k, state_size=self.state_size)
 
@@ -139,9 +141,11 @@ class DDPGInterviewer(InterviewerBase):
         epsilons = []
         rewards = []
 
+        best_score, best_agent = 0, None
+
         steps_taken = 0
 
-        for iteration in range(50):
+        for iteration in range(20):
             warmup_steps = 2000
 
             t = tqdm(training.items())
@@ -197,7 +201,7 @@ class DDPGInterviewer(InterviewerBase):
 
                 # Memorise the transitions with rewards
                 for state, action, answer, new_state, is_done in transitions:
-                    r = reward * 100 if is_done else 0.0 if not answer else 1.0
+                    r = reward * 100 if is_done else reward / interview_length
                     self.agent.memory.store(state, action, new_state, r, is_done)
 
                 rewards.append(reward)
@@ -213,7 +217,12 @@ class DDPGInterviewer(InterviewerBase):
                 logger.info(
                     f'Validation ({self.meta.validator.metric}@{self.meta.validator.cutoff}): {validation_score}')
 
-        input()
+                if validation_score > best_score:
+                    best_score = validation_score
+                    best_agent = pickle.loads(pickle.dumps(self.agent))
+                    logger.info(f'Found new best DDPG model: {validation_score}')
+
+        self.agent = best_agent
 
     def validate(self, training: Dict[int, WarmStartUser], interview_length: int):
         self.agent.eval()
@@ -246,10 +255,18 @@ class DDPGInterviewer(InterviewerBase):
         return self.meta.validator.score(predictions, self.meta)
 
     def interview(self, answers: Dict, max_n_questions=5) -> List[int]:
-        pass
+        state = np.zeros((self.state_size,))
+        for entity, answer in answers.items():
+            entity_state_idx = self.candidates.index(entity)
+            state = update_state(state, entity_state_idx, answer)
+
+        action = self.agent.choose_action(state, decay_epsilon=False, add_noise=False)
+        candidate = get_best_candidate(action, self.candidate_embeddings, self.agent.critic, state)
+        question = self.candidates[candidate]
+        return [question]
 
     def predict(self, items: List[int], answers: Dict) -> Dict[int, float]:
-        pass
+        return self.recommender.predict(items, answers)
 
     def get_parameters(self):
         pass

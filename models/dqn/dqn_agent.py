@@ -136,7 +136,7 @@ class DqnAgent:
         batch_index = np.arange(self.batch_size, dtype=np.int32)
 
         # Construct the optimal predicted rewards (the "ground truth" labels for every memory)
-        target_update = reward_batch + self.gamma * tt.max(next_predicted_rewards, dim=1)[0].cpu().detach().numpy() * terminal_batch + (1.0 - reward_batch)
+        target_update = reward_batch + self.gamma * tt.max(next_predicted_rewards, dim=1)[0].cpu().detach().numpy() * terminal_batch
         for i in range(len(batch_index)):
             target_rewards[batch_index[i], action_indices[i]] = target_update[i]
 

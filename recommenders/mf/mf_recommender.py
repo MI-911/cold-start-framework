@@ -46,12 +46,11 @@ class MatrixFactorizationRecommender(RecommenderBase):
         self.predictions_cache = {}
 
         self.normalize = normalize_embeddings
+        self.n_iterations = 100
 
     def fit(self, training: Dict[int, WarmStartUser]) -> None:
         n_users = len(self.meta.users)
         n_entities = len(self.meta.entities)
-
-        self.optimal_params = {'k': 5}
 
         if self.optimal_params is None:
             scores = []
@@ -61,7 +60,7 @@ class MatrixFactorizationRecommender(RecommenderBase):
             for params in get_combinations(parameters):
                 logger.info(f'Grid searching MF with params: {params}')
                 self.model = MatrixFactorisation(n_users, n_entities, params['k'])
-                self._train(training, max_iterations=100)
+                self._train(training, max_iterations=self.n_iterations)
                 score = self._validate(training)
                 scores.append((params, score))
 
@@ -75,23 +74,22 @@ class MatrixFactorizationRecommender(RecommenderBase):
 
             logger.info(f'Found best params for MF: {self.optimal_params}')
             self.model = MatrixFactorisation(n_users, n_entities, self.optimal_params['k'])
-            self._train(training, max_iterations=100)
+            self._train(training, max_iterations=self.n_iterations)
 
         else:
             # Reuse optimal parameters
             logger.info(f'Reusing best params for MF: {self.optimal_params}')
             self.model = MatrixFactorisation(n_users, n_entities, self.optimal_params['k'])
-            self._train(training, max_iterations=100)
+            self._train(training, max_iterations=self.n_iterations)
 
         if self.normalize:
-            max = np.max(self.model.M)
             self.model.M /= np.max(self.model.M)
             self.model.U /= np.max(self.model.U)
 
     def _train(self, users: Dict[int, WarmStartUser], max_iterations=100):
         # Train the model on training samples
         training_triples = flatten_rating_triples(users)
-        for iteration in tqdm(range(10), desc=f'[Training MF]'):
+        for iteration in tqdm(range(max_iterations), desc=f'[Training MF]'):
             random.shuffle(training_triples)
             self.model.train_als(training_triples)
 
