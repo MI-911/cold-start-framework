@@ -1,5 +1,6 @@
 import os
 import pickle
+from math import ceil
 from typing import List, Dict, Set
 
 import numpy as np
@@ -263,19 +264,9 @@ def _get_rated_entities(training_data: Dict[int, WarmStartUser]):
 
 def _get_short_head_items(ratings_df: DataFrame):
     item_ratings = dict(zip(ratings_df['entityIdx'], ratings_df['num_ratings']))
-    total_ratings = sum(item_ratings.values())
+    popular_items = [entity for entity, ratings in sorted(item_ratings.items(), key=lambda pair: pair[1], reverse=True)]
 
-    short_head_items = set()
-    cumulative_ratings = 0
-
-    for item, ratings in sorted(item_ratings.items(), key=lambda x: x[1], reverse=True):
-        short_head_items.add(item)
-        cumulative_ratings += ratings
-
-        if cumulative_ratings >= total_ratings * 0.3:
-            break
-
-    return short_head_items
+    return popular_items[:ceil(0.02 * len(popular_items))]
 
 
 def _create_split(experiment: ExperimentOptions, entities, output_directory: str, triples_path: str, ratings, users,
@@ -296,6 +287,7 @@ def _create_split(experiment: ExperimentOptions, entities, output_directory: str
 
     # Find items in the long tail if specified
     short_head_items = _get_short_head_items(movie_ratings)
+    logger.debug(f'Short head items: {len(short_head_items)}/{len(movie_indices)}')
 
     # Partition training data from users
     training_data = _get_training_data(experiment, ratings, warm_users, user_idx, short_head_items)
