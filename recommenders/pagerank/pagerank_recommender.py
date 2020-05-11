@@ -129,6 +129,9 @@ class PageRankRecommender(RecommenderBase):
         self.sparse_graph = SparseGraph(self.construct_graph(training))
 
         can_ask_about = get_top_entities(training)
+        if self.recommendable_only:
+            can_ask_about = [item for item in can_ask_about if item in self.meta.recommendable_entities]
+
         if self.ask_limit:
             can_ask_about = can_ask_about[:self.ask_limit]
 

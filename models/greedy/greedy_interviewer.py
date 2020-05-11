@@ -1,6 +1,7 @@
 import json
 import pickle
 from collections import defaultdict
+from math import ceil
 from typing import List
 
 from loguru import logger
@@ -8,6 +9,7 @@ from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
 from recommenders.base_recommender import RecommenderBase
+from shared.enums import Metric
 from shared.meta import Meta
 from shared.utility import get_top_entities
 
@@ -74,7 +76,7 @@ class GreedyInterviewer(InterviewerBase):
         # Exclude answers to entities already asked about
         return self.questions
 
-    def get_entity_scores(self, training, entities: List, existing_entities: List):
+    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None):
         entity_scores = list()
         progress = tqdm(entities)
 
@@ -86,7 +88,7 @@ class GreedyInterviewer(InterviewerBase):
                 prediction = self.predict(ratings.validation.to_list(), answers)
                 user_validation.append((ratings.validation, prediction))
 
-            score = self.meta.validator.score(user_validation, self.meta)
+            score = self.meta.validator.score(user_validation, self.meta, metric=metric)
             entity_scores.append((entity, score))
 
             progress.set_description(f'{self.get_entity_name(entity)}: {score}')
@@ -94,38 +96,45 @@ class GreedyInterviewer(InterviewerBase):
         return list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
 
     def _get_label_scores(self, training):
-        entities = get_top_entities(training)[:10]
+        entities = get_top_entities(training)[:200]
 
         label_scores = defaultdict(list)
-        entity_scores = self.get_entity_scores(training, entities, [])
+        entity_scores = self.get_entity_scores(training, entities, [], metric=Metric.COV)
 
         for entity, score in entity_scores:
             primary_label = self.get_entity_labels(entity)[0]
 
             label_scores[primary_label].append((entities.index(entity) + 1, score))
 
-        json.dump(label_scores, open('label_scores.json', 'w'))
+        json.dump(label_scores, open('label_cov.json', 'w'))
 
     def _get_questions(self, training):
         questions = list()
 
         limit_entities = self.meta.recommendable_entities if self.recommendable_only else None
-        entities = get_top_entities(training, limit_entities)[:50]
+        entities = get_top_entities(training, limit_entities)[:100]
 
-        for _ in range(10):
-            entity_scores = self.get_entity_scores(training, entities, questions)
+        for question in range(10):
+            entity_scores = self.get_entity_scores(training, entities, questions, metric=Metric.COV)
             # return [entity for entity, _ in entity_scores if entity]
 
-            next_question = entity_scores[0][0]
-            entities = [entity for entity, _ in entity_scores if entity != next_question]
-
+            #next_question = entity_scores[0][0]
+            top_entities = [entity for entity, score in entity_scores[:ceil(len(entity_scores) * 0.05)]]
+            next_question = self.get_entity_scores(training, top_entities, questions, metric=Metric.HR)[0][0]
             questions.append(next_question)
+
+            logger.debug(f'Question {question + 1}: {self.get_entity_name(next_question)}')
+
+            entities = [entity for entity, _ in entity_scores if entity != next_question]
 
         return questions
 
     def warmup(self, training, interview_length=5):
-        #self.recommender.parameters = {'alpha': 0.25, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        self.recommender.parameters = {'alpha': 0.1, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
+
+        self._get_label_scores(training)
+        return
 
         if self.adaptive:
             logger.debug('Constructing adaptive interview')

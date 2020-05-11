@@ -3,7 +3,7 @@ import json
 import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    benchmark_data = {1 / int(k): v for k, v in json.load(open('particles_benchmark.json', 'r')).items()}
+    benchmark_data = {int(k): v for k, v in json.load(open('particles_benchmark.json', 'r')).items()}
 
     particles = sorted(benchmark_data.keys(), reverse=True)
     hits = [benchmark_data[n]['hr'] for n in particles]
@@ -12,7 +12,7 @@ if __name__ == '__main__':
     color = 'tab:red'
     fig, ax1 = plt.subplots()
     plt.xscale('log')
-    ax1.set_xlabel('Tau')
+    ax1.set_xlabel('Number of particles')
     ax1.set_ylabel('HR@10', color=color)
     ax1.plot(particles, hits, color=color)
     ax1.tick_params(axis='y', labelcolor=color)
@@ -20,7 +20,7 @@ if __name__ == '__main__':
     ax2 = ax1.twinx()
 
     color = 'tab:blue'
-    ax2.set_ylabel('Time (s)', color=color)
+    ax2.set_ylabel('Execution time (s)', color=color)
     ax2.plot(particles, times, color=color)
     ax2.tick_params(axis='y', labelcolor=color)
     plt.grid()

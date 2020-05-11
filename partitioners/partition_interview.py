@@ -35,7 +35,7 @@ def _choice(lst, count, probabilities):
 
 
 def _get_unseen_weights(item_ratings, unseen_items: List, options: RankingOptions, positive_items: List[int] = None,
-                        alpha=3):
+                        alpha=2.5):
     if options.unseen_sampling == UnseenSampling.UNIFORM:
         return [1 for _ in unseen_items]
 
@@ -44,7 +44,7 @@ def _get_unseen_weights(item_ratings, unseen_items: List, options: RankingOption
     if options.unseen_sampling == UnseenSampling.EQUAL_POPULARITY and positive_items:
         positive_ratings = np.mean([entity_weight[item] for item in positive_items])
 
-        entity_weight = {e: pow(pow(positive_ratings - w, 2) + 1, -alpha) for e, w in entity_weight.items()}
+        entity_weight = {e: pow(abs(w - positive_ratings) + 1, -alpha) for e, w in entity_weight.items()}
 
     return [entity_weight[entity] for entity in unseen_items]
 

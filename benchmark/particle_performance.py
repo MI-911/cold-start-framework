@@ -64,8 +64,8 @@ def run_filtering(num_particles, cutoff, source_uris, rank):
 
 
 def benchmark_particles():
-    training = pickle.load(open('../data/default/split_0/training.pkl', 'rb'))
-    meta = pickle.load(open('../data/default/split_0/meta.pkl', 'rb'))
+    training = pickle.load(open('../debug/data/default_uniform/split_0/training.pkl', 'rb'))
+    meta = pickle.load(open('../debug/data/default_uniform/split_0/meta.pkl', 'rb'))
 
     idx_uri = meta.get_idx_uri()
     cutoff = 10
@@ -86,8 +86,8 @@ def benchmark_particles():
                 continue
 
             start_time = time.time()
-            #ranked_list = run_ppr(0.85, cutoff, liked_uris, uris_to_rank)
-            ranked_list = run_filtering(particles, cutoff, liked_uris, uris_to_rank)
+            ranked_list = run_ppr(0.85, cutoff, liked_uris, uris_to_rank)
+            #ranked_list = run_filtering(particles, cutoff, liked_uris, uris_to_rank)
             time_taken.append(time.time() - start_time)
 
             ranked_list = [meta.uri_idx[uri] for uri in ranked_list]

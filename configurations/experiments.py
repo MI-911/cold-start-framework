@@ -1,5 +1,7 @@
+from copy import deepcopy
+
 from experiments.experiment import ExperimentOptions, CountFilter, RankingOptions
-from shared.enums import Sentiment, Metric, EntityType, UnseenSampling
+from shared.enums import Sentiment, Metric, EntityType, UnseenSampling, SeenSampling
 from shared.validator import Validator
 
 separation = ExperimentOptions(name='separation', seed=123, count_filters=[
@@ -24,5 +26,13 @@ movielens = ExperimentOptions(name='movielens', seed=123, count_filters=[
     ], ranking_options=RankingOptions(num_positive=1, num_unseen=100), include_unknown=False, evaluation_samples=1,
                               ratings_file='movielens.csv')
 
-experiments = [default, separation]
+default_equal_probability = deepcopy(default)
+default_equal_probability.name = 'default_equal_probability'
+default_equal_probability.ranking_options.unseen_sampling = UnseenSampling.EQUAL_POPULARITY
+
+default_long_tail = deepcopy(default)
+default_long_tail.name = 'default_long_tail'
+default_long_tail.ranking_options.seen_sampling = SeenSampling.LONG_TAIL
+
+experiments = [default, separation, default_equal_probability, default_long_tail]
 experiment_names = [experiment.name for experiment in experiments]
