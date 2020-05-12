@@ -3,6 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as ff
 
 
+def hinge_loss(first, second):
+    return (tt.relu(2 - (first - second)) ** 2).sum()
+
+
 class MonteCarloNet(nn.Module):
     def __init__(self, input_dims, hidden_dims):
         super(MonteCarloNet, self).__init__()

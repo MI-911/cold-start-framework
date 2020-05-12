@@ -5,7 +5,7 @@ from typing import List, Dict, Union
 from loguru import logger
 
 from models.base_interviewer import InterviewerBase
-from models.mcnet.mcnet_model import MonteCarloNet
+from models.mcnet.mcnet_model import MonteCarloNet, hinge_loss
 from shared.meta import Meta
 from shared.user import WarmStartUser
 import numpy as np
@@ -30,7 +30,33 @@ class MonteCarloNetInterviewer(InterviewerBase):
         self.idx_uri_map = self.meta.get_idx_uri()
         self.log_popularities = np.zeros((self.n_entities,))
 
-    def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
+    def warmup_pairwise(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
+        R = get_rating_matrix(training, self.n_users, self.n_entities)
+
+        for e, entity_rating_vector in enumerate(R.T):
+            ratings, = np.where(entity_rating_vector != 0)
+            n_ratings = len(ratings)
+            self.log_popularities[e] = np.log(n_ratings) if n_ratings else 0.0
+
+        self.model = MonteCarloNet(self.n_entities, hidden_dims=512)
+
+        loss_fnc = hinge_loss
+        optimizer = tt.optim.Adam(self.model.parameters(), lr=0.001)
+        best_model, best_score = None, 0
+
+        for epoch in range(10):
+            epoch_loss = tt.tensor(0.0).to(self.model.device)
+            for user_ratings_vector in R:
+                # Pick, at random, one positive and one negative sample from the
+                # user's ratings.
+                # Construct the user vector from the remaining.
+                # Pass the user vector through the network and receive scores
+                # for all items. Calculate hinge loss (or pairwise ranking loss)
+                # for the positive and negative sample we drew before.
+                # Back propagate and repeat.
+                pass
+
+    def warmup_rmse(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
         R = get_rating_matrix(training, self.n_users, self.n_entities)
 
         for e, entity_rating_vector in enumerate(R.T):
