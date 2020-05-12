@@ -4,6 +4,7 @@ from models.dumb.dumb_interviewer import DumbInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
 from models.greedy.greedy_interviewer import GreedyInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
+from models.mcnet.mcnet_interviewer import MonteCarloNetInterviewer
 from models.melu.melu_interviewer import MeLUInterviewer
 from models.naive.naive_interviewer import NaiveInterviewer
 from recommenders.knn.knn_recommender import KNNRecommender
@@ -20,6 +21,9 @@ from recommenders.svd.svd_recommender import SVDRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
 models = {
+    'mcnet': {
+        'class': MonteCarloNetInterviewer,
+    },
     'ddpg-ppr-joint': {
         'class': DDPGInterviewer,
         'recommender': JointPageRankRecommender,
