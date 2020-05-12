@@ -27,7 +27,7 @@ movielens = ExperimentOptions(name='movielens', seed=123, count_filters=[
                               ratings_file='movielens.csv')
 
 default_equal_probability = deepcopy(default)
-default_equal_probability.name = 'default_equal_probability'
+default_equal_probability.name = 'default_equal_popularity'
 default_equal_probability.ranking_options.unseen_sampling = UnseenSampling.EQUAL_POPULARITY
 
 default_long_tail = deepcopy(default)
