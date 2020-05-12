@@ -94,7 +94,7 @@ class GreedyInterviewer(InterviewerBase):
         return list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
 
     def _get_label_scores(self, training):
-        entities = get_top_entities(training)[:200]
+        entities = self.meta.get_question_candidates(training, limit=200)
 
         label_scores = defaultdict(list)
         entity_scores = self.get_entity_scores(training, entities, [], metric=Metric.COV)
@@ -110,9 +110,9 @@ class GreedyInterviewer(InterviewerBase):
         questions = list()
 
         entities = self.meta.get_question_candidates(training, limit=100)
-
+        self.meta.id
         for question in range(10):
-            entity_scores = self.get_entity_scores(training, entities, questions, metric=Metric.HR)
+            entity_scores = self.get_entity_scores(training, entities, questions)
             # return [entity for entity, _ in entity_scores if entity]
 
             next_question = entity_scores[0][0]
@@ -127,13 +127,14 @@ class GreedyInterviewer(InterviewerBase):
         return questions
 
     def warmup(self, training, interview_length=5):
-        self.recommender.parameters = {'alpha': 0.1, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        #self.recommender.parameters = {'alpha': 0.1, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        self.meta.validator.metric = Metric.HR
         self.recommender.fit(training)
 
         if self.adaptive:
             logger.debug('Constructing adaptive interview')
 
-            self.root = Node(self).construct(training, get_top_entities(training)[:50])
+            self.root = Node(self).construct(training, self.meta.get_question_candidates(training, limit=100))
             pprint_tree(self.root)
         else:
             logger.debug('Constructing fixed-question interview')
@@ -176,16 +177,18 @@ class Node:
         entities = [entity for entity in entities if entity != self.question]
 
         # Partition user groups for children
-        liked_users = filter_users(users, self.question, [0, 1])
+        liked_users = filter_users(users, self.question, [1])
         disliked_users = filter_users(users, self.question, [0, -1])
         unknown_users = filter_users(users, self.question, [0])
 
         base_questions = self.base_questions + [self.question]
 
-        if depth < 5:
-            self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1) if liked_users else None
-            self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, depth + 1) if disliked_users else None
-            self.UNKNOWN = Node(self.interviewer, base_questions).construct(unknown_users, entities, depth + 1) if unknown_users else None
+        min_users = 5
+
+        if depth < 4:
+            self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1) if len(liked_users) >= min_users else None
+            self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, depth + 1) if len(disliked_users) >= min_users else None
+            self.UNKNOWN = Node(self.interviewer, base_questions).construct(unknown_users, entities, depth + 1) if len(unknown_users) >= min_users else None
 
         return self
 

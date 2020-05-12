@@ -17,7 +17,7 @@ from configurations.models import models
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
-from shared.utility import join_paths, valid_dir, get_popular_items
+from shared.utility import join_paths, valid_dir
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
@@ -159,7 +159,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
             model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
             model_instance.warmup(training, num_questions)
 
-        popular_items = get_popular_items(meta.recommendable_entities, training)
+        popular_items = meta.get_question_candidates(training, recommendable_only=True)
 
         hits, ndcgs, taus, sers, covs, answers = _test(testing, model_instance, num_questions, upper_cutoff, meta,
                                                        popular_items)

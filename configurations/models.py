@@ -60,6 +60,13 @@ models = {
         #     'ask_limit': 100
         # }
     },
+    'greedy-ppr-kg-adaptive': {
+        'class': GreedyInterviewer,
+        'recommender': KnowledgeGraphPageRankRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
+    },
     'greedy-ppr-collab': {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender

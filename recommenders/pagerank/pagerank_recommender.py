@@ -2,15 +2,16 @@ import operator
 from functools import reduce
 from typing import List, Dict
 
-from loguru import logger
 import networkx as nx
 import numpy as np
+from loguru import logger
 from tqdm import tqdm
+
 from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations, get_top_entities
+from shared.utility import get_combinations
 
 RATING_CATEGORIES = {1, 0, -1}
 
@@ -58,8 +59,6 @@ def get_cache_key(answers):
 class PageRankRecommender(RecommenderBase):
     def __init__(self, meta: Meta, ask_limit: int):
         super().__init__(meta)
-        self.predictions_cache = dict()
-        self.use_caching = True
         self.parameters = None
 
         self.entity_indices = set()
@@ -75,23 +74,9 @@ class PageRankRecommender(RecommenderBase):
         raise NotImplementedError()
 
     def _scores(self, alpha, node_weights, items):
-        """
-        Produces a ranking of items. If answers is not none, the ranking
-        will be reused if produced previously.
-        """
-        def get_scores():
-            scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
-            return {item: scores.get(item, 0) for item in items}
+        scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
 
-        if not self.use_caching or True:
-            return get_scores()
-
-        # Get cache key, excluding "don't know" to decrease cache misses
-        cache_key = get_cache_key({e: r for e, r in answers.items() if r})
-        if cache_key not in self.predictions_cache:
-            self.predictions_cache[cache_key] = {entity: score for entity, score in get_scores().items()}
-
-        return {item: self.predictions_cache[cache_key].get(item, 0) for item in items}
+        return {item: scores.get(item, 0) for item in items}
 
     @staticmethod
     def _weight(category, ratings, importance):
