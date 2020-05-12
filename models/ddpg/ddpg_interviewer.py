@@ -125,7 +125,7 @@ class DDPGInterviewer(InterviewerBase):
 
     def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
         self.recommender.fit(training)
-        self.candidates = self._choose_candidates(training, self.n_candidates)
+        self.candidates = self.meta.get_question_candidates(training, limit=self.n_candidates)
 
         self.ratings = get_rating_matrix(training, n_users=self.n_users, n_entities=self.n_entities)
 
