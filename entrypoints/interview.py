@@ -26,6 +26,7 @@ parser.add_argument('--include', nargs='*', type=str, choices=models.keys(), hel
 parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), help='models to exclude')
 parser.add_argument('--experiments', nargs='*', type=str, help='experiments to run')
 parser.add_argument('--debug', action='store_true', help='enable debug mode')
+parser.add_argument('--recommendable', action='store_true', help='only recommendable candidates', default=False)
 
 
 def _instantiate_model(model_name, experiment: Experiment, meta, interview_length=-1):
@@ -144,8 +145,6 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
                testing: Dict[int, ColdStartUser], max_n_questions, upper_cutoff=50):
     model_instance, requires_interview_length = _instantiate_model(model_name, experiment, meta)
 
-    logger.info(f'Running model {model_name}')
-
     # Keep track of metrics and answers at different interview lengths
     metrics = defaultdict(dict)
     all_answers = dict()
@@ -184,22 +183,25 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         yield model_instance, metrics, num_questions, all_answers
 
 
-def _run_split(model_selection: Set[str], split: Split, output_path):
+def _run_split(model_selection: Set[str], split: Split, output_path, recommendable_only):
     training = split.data_loader.training()
     testing = split.data_loader.testing()
-    meta = split.data_loader.meta()
+    meta = split.data_loader.meta(recommendable_only)
 
     for model in model_selection:
+        # If recommendable only, then append flag to model alias
+        model_alias = f'{model}-rec' if recommendable_only else model
+
+        logger.info(f'Running {model_alias} on {split}')
         start_time = time.time()
-        logger.info(f'Running {model} on {split}')
 
         for model_instance, metrics, length, answers in _run_model(model, split.experiment, meta, training, testing,
                                                                    max_n_questions=10):
-            logger.info(f'Writing results, parameters, and answers for {model} on {split.name} with {length} questions')
+            logger.info(f'Saving results, parameters, answers for {model_alias}/{split.name} with {length} questions')
 
-            _write_answers(output_path, model, answers, split)
-            _write_results(output_path, model, metrics, split)
-            _write_parameters(model, split.experiment, model_instance, length)
+            _write_answers(output_path, model_alias, answers, split)
+            _write_results(output_path, model_alias, metrics, split)
+            _write_parameters(model_alias, split.experiment, model_instance, length)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
 
@@ -254,11 +256,12 @@ def _parse_args():
     if not args.output:
         args.output = ['results']
 
-    return model_selection, args.input[0], args.output[0], set(args.experiments) if args.experiments else set()
+    return model_selection, args.input[0], args.output[0], set(
+        args.experiments) if args.experiments else set(), args.recommendable
 
 
 def run():
-    model_selection, input_path, output_path, experiments = _parse_args()
+    model_selection, input_path, output_path, experiments, recommendable_only = _parse_args()
 
     dataset = Dataset(input_path)
     for experiment in dataset.experiments():
@@ -268,7 +271,7 @@ def run():
             continue
 
         for split in experiment.splits():
-            _run_split(model_selection, split, output_path)
+            _run_split(model_selection, split, output_path, recommendable_only)
 
 
 if __name__ == '__main__':

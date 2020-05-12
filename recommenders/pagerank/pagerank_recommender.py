@@ -56,7 +56,7 @@ def get_cache_key(answers):
 
 
 class PageRankRecommender(RecommenderBase):
-    def __init__(self, meta: Meta, ask_limit: int, recommendable_only: bool):
+    def __init__(self, meta: Meta, ask_limit: int):
         super().__init__(meta)
         self.predictions_cache = dict()
         self.use_caching = True
@@ -67,8 +67,6 @@ class PageRankRecommender(RecommenderBase):
 
         # How many of the top-k entities we can ask about in validation
         self.ask_limit = ask_limit
-
-        self.recommendable_only = recommendable_only
 
     def clear_cache(self):
         self.sparse_graph.scores.cache_clear()
@@ -128,14 +126,7 @@ class PageRankRecommender(RecommenderBase):
 
         self.sparse_graph = SparseGraph(self.construct_graph(training))
 
-        can_ask_about = get_top_entities(training)
-        if self.recommendable_only:
-            can_ask_about = [item for item in can_ask_about if item in self.meta.recommendable_entities]
-
-        if self.ask_limit:
-            can_ask_about = can_ask_about[:self.ask_limit]
-
-        can_ask_about = set(can_ask_about)
+        can_ask_about = set(self.meta.get_question_candidates(training, limit=self.ask_limit))
 
         if not self.parameters:
             parameters = {
@@ -176,9 +167,6 @@ class PageRankRecommender(RecommenderBase):
             logger.info(f'Found optimal: {self.parameters}')
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
-        if self.recommendable_only:
-            answers = {idx: sentiment for idx, sentiment in answers.items() if idx in self.meta.recommendable_entities}
-
         # Remove unknown answers
         answers = {idx: sentiment for idx, sentiment in answers.items() if sentiment}
 

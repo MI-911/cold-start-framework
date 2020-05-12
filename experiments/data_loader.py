@@ -20,5 +20,8 @@ class DataLoader:
     def testing(self) -> Dict[int, ColdStartUser]:
         return self._load('testing.pkl')
 
-    def meta(self) -> Meta:
-        return self._load('meta.pkl')
+    def meta(self, recommendable_only: bool = False) -> Meta:
+        meta = self._load('meta.pkl')
+        meta.recommendable_only = recommendable_only
+
+        return meta

@@ -23,13 +23,11 @@ def pprint_tree(node, prefix="- ", label=''):
 
 
 class GreedyInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, recommendable_only=False,
-                 adaptive=False):
+    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, adaptive=False):
         super().__init__(meta, use_cuda)
 
         self.questions = None
         self.idx_uri = self.meta.get_idx_uri()
-        self.recommendable_only = recommendable_only
         self.adaptive = adaptive
         self.root = None
 
@@ -111,16 +109,15 @@ class GreedyInterviewer(InterviewerBase):
     def _get_questions(self, training):
         questions = list()
 
-        limit_entities = self.meta.recommendable_entities if self.recommendable_only else None
-        entities = get_top_entities(training, limit_entities)[:100]
+        entities = self.meta.get_question_candidates(training, limit=100)
 
         for question in range(10):
-            entity_scores = self.get_entity_scores(training, entities, questions, metric=Metric.COV)
+            entity_scores = self.get_entity_scores(training, entities, questions, metric=Metric.HR)
             # return [entity for entity, _ in entity_scores if entity]
 
-            #next_question = entity_scores[0][0]
-            top_entities = [entity for entity, score in entity_scores[:ceil(len(entity_scores) * 0.05)]]
-            next_question = self.get_entity_scores(training, top_entities, questions, metric=Metric.HR)[0][0]
+            next_question = entity_scores[0][0]
+            # top_entities = [entity for entity, score in entity_scores[:ceil(len(entity_scores) * 0.05)]]
+            # next_question = self.get_entity_scores(training, top_entities, questions, metric=Metric.HR)[0][0]
             questions.append(next_question)
 
             logger.debug(f'Question {question + 1}: {self.get_entity_name(next_question)}')
@@ -132,9 +129,6 @@ class GreedyInterviewer(InterviewerBase):
     def warmup(self, training, interview_length=5):
         self.recommender.parameters = {'alpha': 0.1, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
-
-        self._get_label_scores(training)
-        return
 
         if self.adaptive:
             logger.debug('Constructing adaptive interview')
