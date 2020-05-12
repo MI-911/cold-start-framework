@@ -120,7 +120,7 @@ class DqnInterviewer(InterviewerBase):
 
         self.ratings = get_rating_matrix(training, self.n_users, self.n_entities)
         self.recommender.fit(training)
-        self.candidates = self._choose_candidates(training, n=n_candidates)
+        self.candidates = self.meta.get_question_candidates(training, limit=100)
 
         # NOTE: Test PPR with uniform LOO sampling on training items
 
