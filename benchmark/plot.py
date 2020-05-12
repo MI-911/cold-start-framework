@@ -1,9 +1,10 @@
 import json
 
 import matplotlib.pyplot as plt
-
+import pyplot_themes as themes
+#themes.theme_dark()
 if __name__ == '__main__':
-    benchmark_data = {int(k): v for k, v in json.load(open('particles_benchmark.json', 'r')).items()}
+    benchmark_data = {int(k): v for k, v in json.load(open('ppr_benchmark.json', 'r')).items()}
 
     particles = sorted(benchmark_data.keys(), reverse=True)
     hits = [benchmark_data[n]['hr'] for n in particles]
@@ -27,5 +28,6 @@ if __name__ == '__main__':
 
     fig.tight_layout()
 
+    plt.title('Particle filtering performance')
     plt.savefig('pf_experiment.pdf', bbox_inches='tight')
     plt.show()

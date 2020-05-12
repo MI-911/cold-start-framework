@@ -10,6 +10,7 @@ from neo4j import GraphDatabase
 from loguru import logger
 
 num_particles = [10, 25, 50, 75, 100, 200, 500, 1000]
+alphas = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]
 
 _uri = environ.get('BOLT_URI', 'bolt://localhost:7778')
 driver = GraphDatabase.driver(_uri, auth=("neo4j", "root123"))
@@ -78,7 +79,6 @@ def benchmark_particles():
         for user, data in tqdm.tqdm(training.items()):
             liked_uris = [idx_uri[idx] for idx, rating in data.training.items() if rating == 1]
             uris_to_rank = [idx_uri[idx] for idx in data.validation.to_list()]
-            shuffle(uris_to_rank)
 
             assert not set(liked_uris).intersection(set(uris_to_rank))
 
@@ -86,8 +86,8 @@ def benchmark_particles():
                 continue
 
             start_time = time.time()
-            ranked_list = run_ppr(0.85, cutoff, liked_uris, uris_to_rank)
-            #ranked_list = run_filtering(particles, cutoff, liked_uris, uris_to_rank)
+            #ranked_list = run_ppr(particles, cutoff, liked_uris, uris_to_rank)
+            ranked_list = run_filtering(particles, cutoff, liked_uris, uris_to_rank)
             time_taken.append(time.time() - start_time)
 
             ranked_list = [meta.uri_idx[uri] for uri in ranked_list]
@@ -102,7 +102,7 @@ def benchmark_particles():
 
         logger.info(results[particles])
 
-        json.dump(results, open('particles_benchmark.json', 'w'))
+        json.dump(results, open('ppr_benchmark.json', 'w'))
 
 
 if __name__ == '__main__':
