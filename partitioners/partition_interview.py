@@ -35,7 +35,7 @@ def _choice(lst, count, probabilities):
 
 
 def _get_unseen_weights(item_ratings, unseen_items: List, options: RankingOptions, positive_items: List[int] = None,
-                        alpha=2.5):
+                        alpha=10):
     if options.unseen_sampling == UnseenSampling.UNIFORM:
         return [1 for _ in unseen_items]
 

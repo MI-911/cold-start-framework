@@ -36,6 +36,7 @@ def download_ratings(path):
     logger.info('Downloading ratings')
 
     ratings = os.path.join(path, 'ratings.csv')
+    # ratings?versions=100k,100k-newer,100k-fix,thesis-ppr&final=yes
     urlretrieve(f'{BASE_URL}/ratings?versions=100k,100k-newer,100k-fix,thesis-ppr&final=yes', ratings)
 
     return ratings
