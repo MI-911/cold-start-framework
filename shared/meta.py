@@ -37,6 +37,8 @@ class Meta:
         recommendable_only = self.recommendable_only if recommendable_only is None else recommendable_only
         if recommendable_only:
             candidates = [entity for entity in candidates if entity in self.recommendable_entities]
+        else:
+            candidates = [entity for entity in candidates if entity not in self.recommendable_entities]
 
         if limit:
             candidates = candidates[:limit]

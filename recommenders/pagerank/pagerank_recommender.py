@@ -117,8 +117,8 @@ class PageRankRecommender(RecommenderBase):
             parameters = {
                 'alpha': np.arange(0.1, 1, 0.1),
                 'importance': [
-                    {1: 0.95, 0: 0.05, -1: 0.0},
-                    {1: 0.85, 0: 0.15, -1: 0.0},
+                    {1: 0.99, 0: 0.01, -1: 0.0},
+                    {1: 0.9, 0: 0.1, -1: 0.0},
                     {1: 1/3, 0: 1/3, -1: 1/3}
                 ]
             }
