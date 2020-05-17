@@ -26,7 +26,7 @@ class GraphWrapper:
 
 
 def _get_parameters():
-    params = {'alphas': np.arange(0.1, 1, 0.1), 'weights': np.arange(-3, 3, 0.25)}
+    params = {'alphas': np.arange(0.1, 1, 0.15), 'weights': np.arange(-2, 2, 0.25)}
 
     return params
 
