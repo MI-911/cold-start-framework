@@ -75,7 +75,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 25
+            'ask_limit': 100
         }
     },
     'greedy-ppr-joint-adaptive': {
@@ -89,7 +89,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': LinearJointPageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 25
+            'ask_limit': 100
         }
     },
     'greedy-ppr-linear-collab': {
