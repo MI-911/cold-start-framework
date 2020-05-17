@@ -114,7 +114,7 @@ class PageRankRecommender(RecommenderBase):
                 'importance': [
                     {1: 0.95, 0: 0.05, -1: 0.0},
                     {1: 0.80, 0: 0.20, -1: 0.0},
-                    {1: 1/3, 0: 1/3, -1: 1/3}
+                    {1: 0.70, 0: 0.30, -1: 0.0},
                 ]
             }
 
@@ -137,13 +137,14 @@ class PageRankRecommender(RecommenderBase):
                 score = self.meta.validator.score(predictions, self.meta)
                 results.append((combination, score))
 
-                logger.info(f'Score: {score}')
+                logger.info(f'Score: {score:.4f}')
 
                 self.clear_cache()
 
-            self.parameters = sorted(results, key=operator.itemgetter(1), reverse=True)[0][0]
+            best_pair = sorted(results, key=operator.itemgetter(1), reverse=True)[0]
+            self.parameters = best_pair[0]
 
-            logger.info(f'Found optimal: {self.parameters}')
+            logger.info(f'Found optimal ({best_pair[1]:.4f}): {self.parameters}')
 
     @hashable_lru(maxsize=1024)
     def _get_scores(self, answers):
