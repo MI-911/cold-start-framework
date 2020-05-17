@@ -99,7 +99,3 @@ def hashable_lru(maxsize=None):
         return lru_decorator
 
     return inner_lru
-
-
-def get_popular_items(items: List[int], training: Dict[int, WarmStartUser]):
-    return [entity for entity in get_top_entities(training) if entity in items]

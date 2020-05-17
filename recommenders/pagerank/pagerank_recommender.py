@@ -2,15 +2,16 @@ import operator
 from functools import reduce
 from typing import List, Dict
 
-from loguru import logger
 import networkx as nx
 import numpy as np
+from loguru import logger
 from tqdm import tqdm
+
 from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations, get_top_entities
+from shared.utility import get_combinations
 
 RATING_CATEGORIES = {1, 0, -1}
 
@@ -56,10 +57,8 @@ def get_cache_key(answers):
 
 
 class PageRankRecommender(RecommenderBase):
-    def __init__(self, meta: Meta, ask_limit: int, recommendable_only: bool):
+    def __init__(self, meta: Meta, ask_limit: int):
         super().__init__(meta)
-        self.predictions_cache = dict()
-        self.use_caching = True
         self.parameters = None
 
         self.entity_indices = set()
@@ -68,8 +67,6 @@ class PageRankRecommender(RecommenderBase):
         # How many of the top-k entities we can ask about in validation
         self.ask_limit = ask_limit
 
-        self.recommendable_only = recommendable_only
-
     def clear_cache(self):
         self.sparse_graph.scores.cache_clear()
 
@@ -77,23 +74,9 @@ class PageRankRecommender(RecommenderBase):
         raise NotImplementedError()
 
     def _scores(self, alpha, node_weights, items):
-        """
-        Produces a ranking of items. If answers is not none, the ranking
-        will be reused if produced previously.
-        """
-        def get_scores():
-            scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
-            return {item: scores.get(item, 0) for item in items}
+        scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
 
-        if not self.use_caching or True:
-            return get_scores()
-
-        # Get cache key, excluding "don't know" to decrease cache misses
-        cache_key = get_cache_key({e: r for e, r in answers.items() if r})
-        if cache_key not in self.predictions_cache:
-            self.predictions_cache[cache_key] = {entity: score for entity, score in get_scores().items()}
-
-        return {item: self.predictions_cache[cache_key].get(item, 0) for item in items}
+        return {item: scores.get(item, 0) for item in items}
 
     @staticmethod
     def _weight(category, ratings, importance):
@@ -128,20 +111,15 @@ class PageRankRecommender(RecommenderBase):
 
         self.sparse_graph = SparseGraph(self.construct_graph(training))
 
-        can_ask_about = get_top_entities(training)
-        if self.ask_limit:
-            can_ask_about = can_ask_about[:self.ask_limit]
-
-        can_ask_about = set(can_ask_about)
+        can_ask_about = set(self.meta.get_question_candidates(training, limit=self.ask_limit))
 
         if not self.parameters:
             parameters = {
-                'alpha': np.arange(0.1, 1, 0.15),
+                'alpha': np.arange(0.1, 1, 0.1),
                 'importance': [
                     {1: 0.95, 0: 0.05, -1: 0.0},
                     {1: 0.80, 0: 0.20, -1: 0.0},
-                    {1: 1/3, 0: 1/3, -1: 1/3},
-                    {1: 0.45, 0: 0.10, -1: 0.45}
+                    {1: 1/3, 0: 1/3, -1: 1/3}
                 ]
             }
 
@@ -173,9 +151,6 @@ class PageRankRecommender(RecommenderBase):
             logger.info(f'Found optimal: {self.parameters}')
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
-        if self.recommendable_only:
-            answers = {idx: sentiment for idx, sentiment in answers.items() if idx in self.meta.recommendable_entities}
-
         # Remove unknown answers
         answers = {idx: sentiment for idx, sentiment in answers.items() if sentiment}
 

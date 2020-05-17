@@ -1,6 +1,7 @@
 import json
 import pickle
 from collections import defaultdict
+from math import ceil
 from typing import List
 
 from loguru import logger
@@ -8,6 +9,7 @@ from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
 from recommenders.base_recommender import RecommenderBase
+from shared.enums import Metric
 from shared.meta import Meta
 from shared.utility import get_top_entities
 
@@ -21,13 +23,11 @@ def pprint_tree(node, prefix="- ", label=''):
 
 
 class GreedyInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, recommendable_only=False,
-                 adaptive=False):
+    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, adaptive=False):
         super().__init__(meta, use_cuda)
 
         self.questions = None
         self.idx_uri = self.meta.get_idx_uri()
-        self.recommendable_only = recommendable_only
         self.adaptive = adaptive
         self.root = None
 
@@ -74,7 +74,7 @@ class GreedyInterviewer(InterviewerBase):
         # Exclude answers to entities already asked about
         return self.questions
 
-    def get_entity_scores(self, training, entities: List, existing_entities: List):
+    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None):
         entity_scores = list()
         progress = tqdm(entities)
 
@@ -86,7 +86,7 @@ class GreedyInterviewer(InterviewerBase):
                 prediction = self.predict(ratings.validation.to_list(), answers)
                 user_validation.append((ratings.validation, prediction))
 
-            score = self.meta.validator.score(user_validation, self.meta)
+            score = self.meta.validator.score(user_validation, self.meta, metric=metric)
             entity_scores.append((entity, score))
 
             progress.set_description(f'{self.get_entity_name(entity)}: {score}')
@@ -94,43 +94,45 @@ class GreedyInterviewer(InterviewerBase):
         return list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
 
     def _get_label_scores(self, training):
-        entities = get_top_entities(training)[:10]
+        entities = self.meta.get_question_candidates(training, limit=200)
 
         label_scores = defaultdict(list)
-        entity_scores = self.get_entity_scores(training, entities, [])
+        entity_scores = self.get_entity_scores(training, entities, [], metric=Metric.COV)
 
         for entity, score in entity_scores:
             primary_label = self.get_entity_labels(entity)[0]
 
             label_scores[primary_label].append((entities.index(entity) + 1, score))
 
-        json.dump(label_scores, open('label_scores.json', 'w'))
+        json.dump(label_scores, open('label_cov.json', 'w'))
 
     def _get_questions(self, training):
         questions = list()
 
-        limit_entities = self.meta.recommendable_entities if self.recommendable_only else None
-        entities = get_top_entities(training, limit_entities)[:50]
-
-        for _ in range(10):
+        entities = self.meta.get_question_candidates(training, limit=100)
+        for question in range(10):
             entity_scores = self.get_entity_scores(training, entities, questions)
             # return [entity for entity, _ in entity_scores if entity]
 
             next_question = entity_scores[0][0]
-            entities = [entity for entity, _ in entity_scores if entity != next_question]
-
+            # top_entities = [entity for entity, score in entity_scores[:ceil(len(entity_scores) * 0.05)]]
+            # next_question = self.get_entity_scores(training, top_entities, questions, metric=Metric.HR)[0][0]
             questions.append(next_question)
+
+            logger.debug(f'Question {question + 1}: {self.get_entity_name(next_question)}')
+
+            entities = [entity for entity, _ in entity_scores if entity != next_question]
 
         return questions
 
     def warmup(self, training, interview_length=5):
-        #self.recommender.parameters = {'alpha': 0.25, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        #self.recommender.parameters = {'alpha': 0.3, 'importance': {1: 0.85, 0: 0.15, -1: 0.0}}
         self.recommender.fit(training)
 
         if self.adaptive:
             logger.debug('Constructing adaptive interview')
 
-            self.root = Node(self).construct(training, get_top_entities(training)[:50])
+            self.root = Node(self).construct(training, self.meta.get_question_candidates(training, limit=50))
             pprint_tree(self.root)
         else:
             logger.debug('Constructing fixed-question interview')
@@ -160,6 +162,7 @@ class Node:
         self.DISLIKE = None
         self.UNKNOWN = None
         self.question = None
+        self.users = []
 
     def select_question(self, users, entities):
         question_scores = self.interviewer.get_entity_scores(users, entities, self.base_questions)
@@ -173,16 +176,22 @@ class Node:
         entities = [entity for entity in entities if entity != self.question]
 
         # Partition user groups for children
-        liked_users = filter_users(users, self.question, [0, 1])
+        liked_users = filter_users(users, self.question, [1, 0])
         disliked_users = filter_users(users, self.question, [0, -1])
-        unknown_users = filter_users(users, self.question, [0])
+        unknown_users = filter_users(users, self.question, [0, 1, -1])
 
         base_questions = self.base_questions + [self.question]
 
-        if depth < 5:
-            self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1) if liked_users else None
-            self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, depth + 1) if disliked_users else None
-            self.UNKNOWN = Node(self.interviewer, base_questions).construct(unknown_users, entities, depth + 1) if unknown_users else None
+        min_users = 10
+        if depth < 4:
+            if len(liked_users) >= min_users:
+                self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1)
+
+            if len(disliked_users) >= min_users:
+                self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, depth + 1)
+
+            if len(unknown_users) >= min_users:
+                self.UNKNOWN = Node(self.interviewer, base_questions).construct(unknown_users, entities, depth + 1)
 
         return self
 

@@ -1,11 +1,8 @@
-import multiprocessing
 from collections import defaultdict
-from concurrent.futures._base import wait
-from concurrent.futures.process import ProcessPoolExecutor
-from concurrent.futures.thread import ThreadPoolExecutor
 from copy import deepcopy
 from typing import Dict, List
 
+import numpy as np
 from loguru import logger
 from networkx import Graph
 
@@ -14,8 +11,6 @@ from recommenders.pagerank.pagerank_recommender import construct_collaborative_g
     construct_knowledge_graph
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.user import WarmStartUser
-
-import numpy as np
 
 
 class GraphWrapper:
@@ -31,7 +26,7 @@ class GraphWrapper:
 
 
 def _get_parameters():
-    params = {'alphas': np.arange(0.1, 1, 0.15), 'weights': np.arange(-2, 2, 0.25)}
+    params = {'alphas': np.arange(0.1, 1, 0.1), 'weights': np.arange(-3, 3, 0.25)}
 
     return params
 
@@ -40,7 +35,7 @@ class LinearPageRankRecommender(RecommenderBase):
     def clear_cache(self):
         pass
 
-    def __init__(self, meta):
+    def __init__(self, meta, ask_limit: int):
         RecommenderBase.__init__(self, meta)
 
         # Entities
@@ -53,6 +48,9 @@ class LinearPageRankRecommender(RecommenderBase):
 
         self.optimal_params = None
 
+        self.ask_limit = ask_limit
+        self.can_ask_about = None
+
     def construct_graph(self, training: Dict[int, WarmStartUser]) -> List[GraphWrapper]:
         raise NotImplementedError()
 
@@ -60,7 +58,7 @@ class LinearPageRankRecommender(RecommenderBase):
         rated_entities = []
 
         for entity_idx, sentiment in answers.items():
-            if sentiment == rating_type:
+            if sentiment == rating_type and entity_idx in self.can_ask_about:
                 rated_entities.append(entity_idx)
 
         unrated_entities = self.entity_indices.difference(rated_entities)
@@ -123,6 +121,8 @@ class LinearPageRankRecommender(RecommenderBase):
         self.weights = parameters['weights']
 
     def fit(self, training: Dict[int, WarmStartUser]):
+        self.can_ask_about = set(self.meta.get_question_candidates(training, limit=self.ask_limit))
+
         # Get sentiments and entities
         sentiments = []
         for _, user in training.items():

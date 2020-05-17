@@ -18,7 +18,7 @@ class SparseGraph:
 
         self.M = Q * self.M
 
-    @hashable_lru(maxsize=4096)
+    @hashable_lru(maxsize=1024)
     def scores(self, alpha=0.85, personalization=None, max_iterations=100, tol=1.0e-6):
         # Initialize with equal PageRank to each node
         x = scipy.repeat(1.0 / self.N, self.N)
