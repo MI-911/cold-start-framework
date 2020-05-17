@@ -33,7 +33,7 @@ def _get_parameters():
 
 class LinearPageRankRecommender(RecommenderBase):
     def clear_cache(self):
-        pass
+        raise NotImplementedError()
 
     def __init__(self, meta, ask_limit: int):
         RecommenderBase.__init__(self, meta)
@@ -69,11 +69,6 @@ class LinearPageRankRecommender(RecommenderBase):
 
         # Assign weight to each node depending on their rating
         return {idx: weight for sentiment, weight in weights.items() for idx in ratings[sentiment]}
-
-    def _scores(self, node_weights, items, graph: SparseGraph):
-        scores = graph.scores(alpha=self.alpha, personalization=node_weights)
-        
-        return {item: scores.get(item, 0) for item in items}
 
     def _optimize_weights(self, predictions, weights, num_graphs):
         best_score = 0
@@ -168,6 +163,11 @@ class LinearPageRankRecommender(RecommenderBase):
             predictions.append((idx, user.validation, scores))
 
         return predictions
+
+    def _scores(self, node_weights, items, graph: SparseGraph):
+        scores = graph.scores(alpha=self.alpha, personalization=node_weights)
+
+        return {item: scores.get(item, 0) for item in items}
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         predictions = defaultdict(int)

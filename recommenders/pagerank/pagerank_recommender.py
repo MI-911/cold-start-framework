@@ -11,7 +11,7 @@ from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations
+from shared.utility import get_combinations, hashable_lru
 
 RATING_CATEGORIES = {1, 0, -1}
 
@@ -68,15 +68,10 @@ class PageRankRecommender(RecommenderBase):
         self.ask_limit = ask_limit
 
     def clear_cache(self):
-        self.sparse_graph.scores.cache_clear()
+        self._get_scores.cache_clear()
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
-
-    def _scores(self, alpha, node_weights, items):
-        scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
-
-        return {item: scores.get(item, 0) for item in items}
 
     @staticmethod
     def _weight(category, ratings, importance):
@@ -150,9 +145,17 @@ class PageRankRecommender(RecommenderBase):
 
             logger.info(f'Found optimal: {self.parameters}')
 
+    @hashable_lru(maxsize=1024)
+    def _get_scores(self, answers):
+        return self.sparse_graph.scores(alpha=self.parameters['alpha'],
+                                        personalization=self.get_node_weights(answers, self.parameters['importance']))
+
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         # Remove unknown answers
         answers = {idx: sentiment for idx, sentiment in answers.items() if sentiment}
 
-        return self._scores(self.parameters['alpha'],
-                            self.get_node_weights(answers, self.parameters['importance']), items)
+        # Get scores for all entities
+        all_scores = self._get_scores(answers)
+
+        # Return only requested item scores
+        return {item: all_scores.get(item, 0) for item in items}
