@@ -18,6 +18,6 @@ class LinearCollaborativePageRankRecommender(LinearPageRankRecommender):
         # Create graphs
         graphs = []
         for sentiment in sentiments:
-            graphs.append(GraphWrapper(training, sentiment))
+            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit))
 
         return graphs

@@ -4,7 +4,7 @@ from recommenders.pagerank.linear_pagerank_recommender import LinearPageRankReco
 from shared.user import WarmStartUser
 
 
-class LinearJointPageRankRecommender(LinearPageRankRecommender):
+class LinearCombinedPageRankRecommender(LinearPageRankRecommender):
     def __init__(self, meta, ask_limit: int = None):
         super().__init__(meta, ask_limit)
 
@@ -15,9 +15,13 @@ class LinearJointPageRankRecommender(LinearPageRankRecommender):
             for entity, sentiment in user.training.items():
                 sentiments.add(sentiment)
 
-        # Create graphs
+        # Create graphs for collaborative
         graphs = []
         for sentiment in sentiments:
-            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit, use_meta=True))
+            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit))
+
+        # Create graphs for kg
+        for sentiment in sentiments:
+            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit, only_kg=True))
 
         return graphs
