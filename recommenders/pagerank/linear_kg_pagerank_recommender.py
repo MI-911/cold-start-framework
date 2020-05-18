@@ -19,6 +19,6 @@ class LinearKGPageRankRecommender(LinearPageRankRecommender):
         # Create graphs
         graphs = []
         for sentiment in sentiments:
-            graphs.append(GraphWrapper(training, sentiment, meta=self.meta, only_kg=True))
+            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit, only_kg=True))
 
         return graphs

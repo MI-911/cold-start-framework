@@ -12,6 +12,7 @@ from recommenders.pagerank.collaborative_pagerank_recommender import Collaborati
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
 from recommenders.pagerank.linear_collaborative_pagerank_recommender import LinearCollaborativePageRankRecommender
+from recommenders.pagerank.linear_combined_pagerank_recommender import LinearCombinedPageRankRecommender
 from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointPageRankRecommender
 from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
@@ -142,6 +143,10 @@ models = {
     'naive-ppr-linear-kg': {
         'class': NaiveInterviewer,
         'recommender': LinearKGPageRankRecommender
+    },
+    'naive-ppr-linear-combined': {
+        'class': NaiveInterviewer,
+        'recommender': LinearCombinedPageRankRecommender
     },
     'naive-knn': {
       'class': NaiveInterviewer,
