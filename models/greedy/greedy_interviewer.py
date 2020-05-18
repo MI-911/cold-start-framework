@@ -97,14 +97,14 @@ class GreedyInterviewer(InterviewerBase):
         entities = self.meta.get_question_candidates(training, limit=200)
 
         label_scores = defaultdict(list)
-        entity_scores = self.get_entity_scores(training, entities, [], metric=Metric.COV)
+        entity_scores = self.get_entity_scores(training, entities, [], metric=Metric.NDCG)
 
         for entity, score in entity_scores:
             primary_label = self.get_entity_labels(entity)[0]
 
             label_scores[primary_label].append((entities.index(entity) + 1, score))
 
-        json.dump(label_scores, open('label_cov.json', 'w'))
+        json.dump(label_scores, open('label_ndcg_joint.json', 'w'))
 
     def _get_questions(self, training):
         questions = list()
@@ -126,8 +126,15 @@ class GreedyInterviewer(InterviewerBase):
         return questions
 
     def warmup(self, training, interview_length=5):
-        #self.recommender.parameters = {'alpha': 0.3, 'importance': {1: 0.85, 0: 0.15, -1: 0.0}}
+        entities = self.meta.get_question_candidates(training, limit=5)
+        for idx, entity in enumerate(entities):
+            logger.info(f'{1 + idx}. {self.get_entity_name(entity)}')
+
+        # self.recommender.parameters = {'alpha': 0.1, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
+
+        #self._get_label_scores(training)
+        #return
 
         if self.adaptive:
             logger.debug('Constructing adaptive interview')
@@ -176,14 +183,14 @@ class Node:
         entities = [entity for entity in entities if entity != self.question]
 
         # Partition user groups for children
-        liked_users = filter_users(users, self.question, [1, 0])
+        liked_users = filter_users(users, self.question, [1])
         disliked_users = filter_users(users, self.question, [0, -1])
-        unknown_users = filter_users(users, self.question, [0, 1, -1])
+        unknown_users = filter_users(users, self.question, [0])
 
         base_questions = self.base_questions + [self.question]
 
         min_users = 10
-        if depth < 4:
+        if depth < 5:
             if len(liked_users) >= min_users:
                 self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1)
 
