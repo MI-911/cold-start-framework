@@ -123,12 +123,13 @@ class PageRankRecommender(RecommenderBase):
             results = list()
 
             for combination in combinations:
-                logger.debug(f'Trying {combination}')
-
                 self.parameters = combination
 
+                progress = tqdm(training.items())
+                progress.set_description(str(combination))
+
                 predictions = list()
-                for _, user in tqdm(training.items()):
+                for _, user in progress:
                     user_answers = {idx: rating for idx, rating in user.training.items() if idx in can_ask_about}
                     prediction = self.predict(user.validation.to_list(), user_answers)
 
