@@ -81,7 +81,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': JointPageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 50
+            'ask_limit': 20
         }
     },
     'greedy-adaptive-ppr-joint': {
