@@ -30,22 +30,25 @@ class GraphWrapper:
         self.can_ask_about = set(self.meta.get_question_candidates(training, limit=ask_limit))
         self.alpha = None
 
-    @hashable_lru()
     def get_score(self, answers, items):
+        scores = self._all_scores(answers)
+
+        return {item: scores.get(item, 0) for item in items}
+
+    @hashable_lru(maxsize=1024)
+    def _all_scores(self, answers):
         node_weights = self._get_node_weights(answers)
-        return self._scores(node_weights, items)
+
+        return self.graph.scores(alpha=self.alpha, personalization=node_weights)
 
     def clear_cache(self):
-        self.get_score.cache_clear()
-        self._get_node_weights_cashed.cache_clear()
-        self._scores.cache_clear()
+        self._all_scores.cache_clear()
 
     def _get_node_weights(self, answers):
         answers = {k: v for k, v in answers.items() if v == self.rating_type and k in self.can_ask_about}
-        return self._get_node_weights_cashed(answers)
+        return self._get_node_weights_cached(answers)
 
-    @hashable_lru()
-    def _get_node_weights_cashed(self, answers):
+    def _get_node_weights_cached(self, answers):
         rated_entities = list(answers.keys())
 
         unrated_entities = self.entity_indices.difference(rated_entities)
@@ -56,12 +59,6 @@ class GraphWrapper:
 
         # Assign weight to each node depending on their rating
         return {idx: weight for sentiment, weight in weights.items() for idx in ratings[sentiment]}
-
-    @hashable_lru()
-    def _scores(self, node_weights, items):
-        scores = self.graph.scores(alpha=self.alpha, personalization=node_weights)
-
-        return {item: scores.get(item, 0) for item in items}
 
 
 def _get_parameters():
@@ -88,7 +85,7 @@ class LinearPageRankRecommender(RecommenderBase):
 
         self.optimal_params = None
 
-        self.ask_limit = ask_limit
+        self.ask_limit = 20
         self.can_ask_about = None
 
     def construct_graph(self, training: Dict[int, WarmStartUser]) -> List[GraphWrapper]:
@@ -144,8 +141,7 @@ class LinearPageRankRecommender(RecommenderBase):
         else:
             options = []
             for weight in weights:
-                o = self._get_weight_options(weights, num_graphs - 1)
-                for option in o:
+                for option in self._get_weight_options(weights, num_graphs - 1):
                     if isinstance(option, tuple):
                         options.append((weight, *option))
                     else:

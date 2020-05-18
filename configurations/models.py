@@ -144,7 +144,11 @@ models = {
         'class': NaiveInterviewer,
         'recommender': LinearKGPageRankRecommender
     },
-    'naive-ppr-linear-combined': {
+    'naive-ppr-linear': {
+        'class': NaiveInterviewer,
+        'recommender': LinearCombinedPageRankRecommender
+    },
+    'greedy-ppr-linear': {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
