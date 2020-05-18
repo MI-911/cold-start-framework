@@ -38,6 +38,7 @@ class GraphWrapper:
     def clear_cache(self):
         self.get_score.cache_clear()
         self._get_node_weights_cashed.cache_clear()
+        self._scores.cache_clear()
 
     def _get_node_weights(self, answers):
         answers = {k: v for k, v in answers.items() if v == self.rating_type and k in self.can_ask_about}
@@ -71,7 +72,8 @@ def _get_parameters():
 
 class LinearPageRankRecommender(RecommenderBase):
     def clear_cache(self):
-        raise NotImplementedError
+        for graph in self.graphs:
+            graph.clear_cache()
 
     def __init__(self, meta, ask_limit: int):
         RecommenderBase.__init__(self, meta)
@@ -93,10 +95,6 @@ class LinearPageRankRecommender(RecommenderBase):
         raise NotImplementedError()
 
     def _optimize_weights(self, predictions, weights, num_graphs):
-        best_score = 0
-        best_predictions = {}
-        
-        best_weights = 0
         weight_ops = self._get_weight_options(weights, num_graphs)
         num_preds = len(predictions)
         num_users = len(predictions[0])
@@ -124,7 +122,9 @@ class LinearPageRankRecommender(RecommenderBase):
 
         validations = np.array([val for _, val in sorted(user_val_map.items(), key=lambda x: x[0])])
 
-        for weights in tqdm(weight_ops):
+        scores = np.zeros((len(weight_ops)))
+
+        for i, weights in tqdm(enumerate(weight_ops), total=len(weight_ops)):
             linear_preds = np.zeros((num_users, num_items), dtype=np.float)
             for preds_index, weight in enumerate(weights):
                 linear_preds += data_score[preds_index] * weight
@@ -132,14 +132,11 @@ class LinearPageRankRecommender(RecommenderBase):
             linear_preds = list(zip(validations, [{**dict(zip(entities, preds))}
                                                      for entities, preds in zip(user_entities_map, linear_preds)]))
 
-            score = self.meta.validator.score(linear_preds, self.meta)
+            scores[i] = self.meta.validator.score(linear_preds, self.meta)
 
-            # if score > best_score:
-            #     best_score = score
-            #     best_weights = weights
-            #     best_predictions = deepcopy(linear_preds)
+        arg = np.argmax(scores)
 
-        return best_predictions, best_weights
+        return scores[arg], weight_ops[arg]
 
     def _get_weight_options(self, weights, num_graphs):
         if num_graphs <= 1:
@@ -188,11 +185,9 @@ class LinearPageRankRecommender(RecommenderBase):
                     graph.alpha = alpha
 
                 preds = self._fit_graphs(training)
-                preds, weights = self._optimize_weights(preds, parameters['weights'], len(self.graphs))
+                score, weights = self._optimize_weights(preds, parameters['weights'], len(self.graphs))
                 logger.debug(f'Best weights with rating for alpha {alpha}: '
                              f'{[(weight, graph.rating_type) for weight, graph in zip(weights, self.graphs)]}')
-
-                score = self.meta.validator.score(preds, self.meta)
 
                 # Clear cache
                 self.clear_cache()
@@ -222,8 +217,7 @@ class LinearPageRankRecommender(RecommenderBase):
         predictions = defaultdict(int)
 
         for weight, graph in zip(self.weights, self.graphs):
-            node_weights = self._get_node_weights(answers, graph.rating_type)
-            scores = self._scores(node_weights, items, graph.graph)
+            scores = graph.get_score(answers, items)
 
             for item, score in scores.items():
                 predictions[item] += score * weight

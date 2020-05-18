@@ -5,10 +5,6 @@ from shared.user import WarmStartUser
 
 
 class LinearCombinedPageRankRecommender(LinearPageRankRecommender):
-    def clear_cache(self):
-        for graph in self.graphs:
-            graph.clear_cache()
-
     def __init__(self, meta, ask_limit: int = None):
         super().__init__(meta, ask_limit)
 
