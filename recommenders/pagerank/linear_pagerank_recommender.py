@@ -1,4 +1,5 @@
 from collections import defaultdict
+from concurrent.futures._base import wait
 from concurrent.futures.process import ProcessPoolExecutor
 from concurrent.futures.thread import ThreadPoolExecutor
 from copy import deepcopy
@@ -121,7 +122,7 @@ class LinearPageRankRecommender(RecommenderBase):
 
         validations = np.array([val for _, val in sorted(user_val_map.items(), key=lambda x: x[0])])
 
-        workers = 8
+        workers = 6
         chunks = [weight_ops[w::workers] for w in range(workers)]
 
         futures = []
@@ -130,10 +131,19 @@ class LinearPageRankRecommender(RecommenderBase):
                 futures.append(e.submit(self._weight_score, num_users, num_items, chunk,
                                         data_score, validations, user_entities_map))
 
-        scores = np.array([f for future in futures for f in future.result()])
-        arg = np.argmax(scores)
+        wait(futures)
 
-        return scores[arg], weight_ops[arg]
+        scores = np.array([future.result() for future in futures])
+        x, y = 0, 0
+        best = 0
+        for i, score in enumerate(scores):
+            arg = np.argmax(score)
+            current = score[arg]
+            if current > best:
+                x = i
+                y = arg
+
+        return scores[x][y], chunks[x][y]
 
     def _weight_score(self, num_users, num_items, weight_ops, data_score, validations, user_entities_map):
         scores = np.zeros((len(weight_ops)))
