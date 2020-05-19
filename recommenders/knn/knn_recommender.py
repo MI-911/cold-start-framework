@@ -35,8 +35,9 @@ class KNNRecommender(RecommenderBase):
         self.k = 5
         self.metric = None
 
-    def _cosine_similarity(self, user_vectors, user_k, eps=1e-8):
-        user_sim_vec = self.entity_vectors[user_k]
+    @hashable_lru()
+    def _cosine_similarity(self, user_vectors, eps=1e-8):
+        user_sim_vec = self.entity_vectors
         top = np.einsum('i,ji->j', user_vectors, user_sim_vec)
         samples_norm = np.sqrt(np.sum(user_vectors ** 2, axis=0))
         entity_norm = np.sqrt(np.sum(user_sim_vec ** 2, axis=1))
@@ -51,9 +52,9 @@ class KNNRecommender(RecommenderBase):
     @staticmethod
     def _get_param_combinations():
         params = []
-        for k in [5, 10, 15, 20]:
-            for m in ['cosine', 'pearson']:
-                    params.append({'k': k, 'metric': m})
+        for k in [20]:#5, 10, 15, 20]:
+            for m in ['cosine']:#, 'pearson']:
+                params.append({'k': k, 'metric': m})
         return params
 
     def _set_params(self, params: Dict):
@@ -88,7 +89,7 @@ class KNNRecommender(RecommenderBase):
             for params in self._get_param_combinations():
                 logger.debug(f'Trying with parameters: {params}')
                 self._set_params(params)
-                hr = self._multi_fit(training)
+                hr = self._fit(training)
                 if hr > best_hr:
                     logger.debug(f'Found better parameters: {params}, score: {hr}')
                     best_hr = hr
@@ -100,36 +101,28 @@ class KNNRecommender(RecommenderBase):
 
         self._set_params(self.optimal_params)
 
-    def _multi_fit(self, training: Dict[int, WarmStartUser]):
-        predictions = self._fit(training)
-        score = self.meta.validator.score(predictions, self.meta)
-
-        return score
-
     def _fit(self, training: Dict[int, WarmStartUser]):
         predictions = []
         for user, warm in training.items():
-            user_predictions = {}
-            for item in warm.validation.to_list():
-                user_predictions[item] = self._predict(self.entity_vectors[user], item)
+            user_predictions = self.predict(warm.validation.to_list(), warm.training)
 
             predictions.append((warm.validation, user_predictions))
-        return predictions
+
+        return self.meta.validator.score(predictions, self.meta)
 
     @hashable_lru(maxsize=1024)
     def _predict(self, user_vector, item: int):
-        related = np.where(self.entity_vectors[:, item] != 0)[0]
+        related = np.argwhere(self.entity_vectors[:, item] != 0).flatten()
 
         if related.size == 0:
             return 0
 
-        cs = self._cosine_similarity(user_vector, related)
+        cs = self._cosine_similarity(user_vector)[related]
 
         top_k = sorted([(r, s) for r, s in zip(related, cs)], key=lambda x: x[1], reverse=True)[:self.k]
         ratings = [(self.entity_vectors[i][item], sim) for i, sim in top_k]
         return np.einsum('i,i->', *zip(*ratings))
 
-    @hashable_lru(maxsize=1024)
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         user_ratings = np.zeros((len(self.meta.entities),))
         for itemID, rating in answers.items():
@@ -143,4 +136,5 @@ class KNNRecommender(RecommenderBase):
         return score
 
     def clear_cache(self):
-        self.predict.cache_clear()
+        self._cosine_similarity.cache_clear()
+        self._predict.cache_clear()
