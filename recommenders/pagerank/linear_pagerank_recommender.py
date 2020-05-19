@@ -1,4 +1,6 @@
 from collections import defaultdict
+from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures.thread import ThreadPoolExecutor
 from copy import deepcopy
 from typing import Dict, List
 
@@ -85,7 +87,7 @@ class LinearPageRankRecommender(RecommenderBase):
 
         self.optimal_params = None
 
-        self.ask_limit = 20
+        self.ask_limit = ask_limit
         self.can_ask_about = None
 
     def construct_graph(self, training: Dict[int, WarmStartUser]) -> List[GraphWrapper]:
@@ -119,21 +121,33 @@ class LinearPageRankRecommender(RecommenderBase):
 
         validations = np.array([val for _, val in sorted(user_val_map.items(), key=lambda x: x[0])])
 
-        scores = np.zeros((len(weight_ops)))
+        workers = 8
+        chunks = [weight_ops[w::workers] for w in range(workers)]
 
+        futures = []
+        with ProcessPoolExecutor(max_workers=workers) as e:
+            for chunk in chunks:
+                futures.append(e.submit(self._weight_score, num_users, num_items, chunk,
+                                        data_score, validations, user_entities_map))
+
+        scores = np.array([f for future in futures for f in future.result()])
+        arg = np.argmax(scores)
+
+        return scores[arg], weight_ops[arg]
+
+    def _weight_score(self, num_users, num_items, weight_ops, data_score, validations, user_entities_map):
+        scores = np.zeros((len(weight_ops)))
         for i, weights in tqdm(enumerate(weight_ops), total=len(weight_ops)):
             linear_preds = np.zeros((num_users, num_items), dtype=np.float)
             for preds_index, weight in enumerate(weights):
                 linear_preds += data_score[preds_index] * weight
 
             linear_preds = list(zip(validations, [{**dict(zip(entities, preds))}
-                                                     for entities, preds in zip(user_entities_map, linear_preds)]))
+                                                  for entities, preds in zip(user_entities_map, linear_preds)]))
 
             scores[i] = self.meta.validator.score(linear_preds, self.meta)
 
-        arg = np.argmax(scores)
-
-        return scores[arg], weight_ops[arg]
+        return scores
 
     def _get_weight_options(self, weights, num_graphs):
         if num_graphs <= 1:
