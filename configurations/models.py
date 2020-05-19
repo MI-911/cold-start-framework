@@ -58,7 +58,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 50
+            'ask_limit': 20
         }
     },
     'greedy-adaptive-ppr-kg': {
@@ -75,7 +75,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender,
         'recommender_kwargs': {
-            'ask_limit': 50
+            'ask_limit': 20
         }
     },
     'greedy-ppr-joint': {
@@ -144,7 +144,11 @@ models = {
         'class': NaiveInterviewer,
         'recommender': LinearKGPageRankRecommender
     },
-    'naive-ppr-linear-combined': {
+    'naive-ppr-linear': {
+        'class': NaiveInterviewer,
+        'recommender': LinearCombinedPageRankRecommender
+    },
+    'greedy-ppr-linear': {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
