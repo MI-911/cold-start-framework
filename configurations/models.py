@@ -112,39 +112,39 @@ models = {
         'requires_interview_length': True,
         'use_cuda': False
     },
-    'naive-pf': {
+    'pop-pf': {
         'class': NaiveInterviewer,
         'recommender': ParticleFilteringRecommender
     },
-    'naive-svd': {
+    'pop-svd': {
         'class': NaiveInterviewer,
         'recommender': SVDRecommender
     },
-    'naive-ppr-collab': {
+    'pop-ppr-collab': {
         'class': NaiveInterviewer,
         'recommender': CollaborativePageRankRecommender
     },
-    'naive-ppr-kg': {
+    'pop-ppr-kg': {
         'class': NaiveInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
     },
-    'naive-ppr-joint': {
+    'pop-ppr-joint': {
         'class': NaiveInterviewer,
         'recommender': JointPageRankRecommender
     },
-    'naive-ppr-linear-collab': {
+    'pop-ppr-linear-collab': {
         'class': NaiveInterviewer,
         'recommender': LinearCollaborativePageRankRecommender
     },
-    'naive-ppr-linear-joint': {
+    'pop-ppr-linear-joint': {
         'class': NaiveInterviewer,
         'recommender': LinearJointPageRankRecommender
     },
-    'naive-ppr-linear-kg': {
+    'pop-ppr-linear-kg': {
         'class': NaiveInterviewer,
         'recommender': LinearKGPageRankRecommender
     },
-    'naive-ppr-linear': {
+    'pop-ppr-linear': {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
@@ -152,7 +152,7 @@ models = {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
-    'naive-knn': {
+    'pop-knn': {
       'class': NaiveInterviewer,
       'recommender': KNNRecommender
     },
@@ -165,7 +165,7 @@ models = {
         'recommender': KNNRecommender,
         'requires_interview_length': True
     },
-    'naive-mf': {
+    'pop-mf': {
         'class': NaiveInterviewer,
         'recommender': MatrixFactorizationRecommender
     },
