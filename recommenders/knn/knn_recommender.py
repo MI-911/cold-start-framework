@@ -52,8 +52,8 @@ class KNNRecommender(RecommenderBase):
     @staticmethod
     def _get_param_combinations():
         params = []
-        for k in [5, 10, 15, 20]:
-            for m in ['cosine', 'pearson']:
+        for k in [5]:#, 10, 15, 20]:
+            for m in ['cosine']:#, 'pearson']:
                 params.append({'k': k, 'metric': m})
         return params
 
@@ -110,27 +110,27 @@ class KNNRecommender(RecommenderBase):
 
         return self.meta.validator.score(predictions, self.meta)
 
-    @hashable_lru(maxsize=1024)
-    def _predict(self, user_vector, item: int):
+    @hashable_lru(maxsize=65536)
+    def _predict(self, answers, item: int):
+        user_vector = np.zeros((len(self.meta.entities),))
+        user_vector[list(answers.keys())] = list(answers.values())
         related = np.argwhere(self.entity_vectors[:, item] != 0).flatten()
 
         if related.size == 0:
             return 0
 
-        cs = self._cosine_similarity(user_vector)[related]
+        cs = self._cosine_similarity(user_vector)
 
         top_k = sorted([(r, s) for r, s in zip(related, cs)], key=lambda x: x[1], reverse=True)[:self.k]
         ratings = [(self.entity_vectors[i][item], sim) for i, sim in top_k]
         return np.einsum('i,i->', *zip(*ratings))
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
-        user_ratings = np.zeros((len(self.meta.entities),))
-        for itemID, rating in answers.items():
-            user_ratings[itemID] = rating
+        answers = {k: v for k, v in answers.items() if v != 0}
 
         score = {}
         for item in items:
-            score[item] = self._predict(user_ratings, item)
+            score[item] = self._predict(answers, item)
 
         # A high score means item knn is sure in a positive prediction.
         return score
