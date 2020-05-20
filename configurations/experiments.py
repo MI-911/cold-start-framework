@@ -4,7 +4,7 @@ from experiments.experiment import ExperimentOptions, CountFilter, RankingOption
 from shared.enums import Sentiment, Metric, EntityType, UnseenSampling, SeenSampling
 from shared.validator import Validator
 
-separation = ExperimentOptions(name='separation', seed=42, count_filters=[
+separation = ExperimentOptions(name='160k_separation', seed=42, count_filters=[
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE),
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.NEGATIVE),
         CountFilter(lambda count: count >= 5, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.ANY),
@@ -13,7 +13,7 @@ separation = ExperimentOptions(name='separation', seed=42, count_filters=[
                                   sentiment_utility={Sentiment.POSITIVE: 1, Sentiment.UNKNOWN: 0.5}),
                                validator=Validator(metric=Metric.TAU, cutoff=3), include_unknown=True)
 
-default = ExperimentOptions(name='default_uniform', seed=42, count_filters=[
+default = ExperimentOptions(name='160k_uniform', seed=42, count_filters=[
         CountFilter(lambda count: count >= 5, entity_type=EntityType.DESCRIPTIVE, sentiment=Sentiment.ANY),
         CountFilter(lambda count: count >= 5, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.ANY),
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE)
@@ -26,7 +26,7 @@ movielens = ExperimentOptions(name='movielens', seed=42, count_filters=[
                               ratings_file='movielens.csv')
 
 default_equal_probability = deepcopy(default)
-default_equal_probability.name = 'default_equal_popularity'
+default_equal_probability.name = '160k_equal'
 default_equal_probability.ranking_options.unseen_sampling = UnseenSampling.EQUAL_POPULARITY
 
 default_long_tail = deepcopy(default)

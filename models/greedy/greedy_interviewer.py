@@ -23,13 +23,15 @@ def pprint_tree(node, prefix="- ", label=''):
 
 
 class GreedyInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, adaptive=False):
+    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, adaptive=False,
+                 cov_fraction=None):
         super().__init__(meta, use_cuda)
 
         self.questions = None
         self.idx_uri = self.meta.get_idx_uri()
         self.adaptive = adaptive
         self.root = None
+        self.cov_fraction = cov_fraction
 
         if isinstance(recommender, RecommenderBase):
             self.recommender = recommender
@@ -109,19 +111,26 @@ class GreedyInterviewer(InterviewerBase):
     def _get_questions(self, training):
         questions = list()
 
-        entities = self.meta.get_question_candidates(training, limit=100)
+        entities = self.meta.get_question_candidates(training, limit=50)
         for question in range(10):
             entity_scores = self.get_entity_scores(training, entities, questions)
             # return [entity for entity, _ in entity_scores if entity]
 
+            if self.cov_fraction:
+                top_entities = [entity for entity, score in entity_scores]
+                top_entities = top_entities[:max(1, ceil(len(top_entities) * self.cov_fraction))]
+
+                entity_scores = self.get_entity_scores(training, top_entities, questions, metric=Metric.COV)
+
             next_question = entity_scores[0][0]
+
             # top_entities = [entity for entity, score in entity_scores[:ceil(len(entity_scores) * 0.05)]]
             # next_question = self.get_entity_scores(training, top_entities, questions, metric=Metric.HR)[0][0]
             questions.append(next_question)
 
             logger.debug(f'Question {question + 1}: {self.get_entity_name(next_question)}')
 
-            entities = [entity for entity, _ in entity_scores if entity != next_question]
+            entities = [entity for entity in entities if entity != next_question]
 
         return questions
 

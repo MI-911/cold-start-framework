@@ -114,7 +114,6 @@ class PageRankRecommender(RecommenderBase):
                 'importance': [
                     {1: 0.95, 0: 0.05, -1: 0.0},
                     {1: 0.80, 0: 0.20, -1: 0.0},
-                    {1: 0.70, 0: 0.30, -1: 0.0},
                 ]
             }
 
