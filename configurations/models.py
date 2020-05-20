@@ -2,10 +2,12 @@ from models.ddpg.ddpg_interviewer import DDPGInterviewer
 from models.dqn.dqn_new import DqnInterviewer
 from models.dumb.dumb_interviewer import DumbInterviewer
 from models.fmf.fmf_interviewer import FMFInterviewer
+from models.gcqn.gcqn_interviewer import GcqnInterviewer
 from models.greedy.greedy_interviewer import GreedyInterviewer
 from models.lrmf.lrmf_interviewer import LRMFInterviewer
 from models.melu.melu_interviewer import MeLUInterviewer
 from models.naive.naive_interviewer import NaiveInterviewer
+from recommenders.gcn.gcn_recommender import GCNRecommender
 from recommenders.knn.knn_recommender import KNNRecommender
 from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
@@ -20,6 +22,10 @@ from recommenders.svd.svd_recommender import SVDRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
 models = {
+    'naive-gcn': {
+        'class': NaiveInterviewer,
+        'recommender': GCNRecommender,
+    },
     'ddpg-ppr-joint': {
         'class': DDPGInterviewer,
         'recommender': JointPageRankRecommender,
