@@ -52,8 +52,8 @@ class KNNRecommender(RecommenderBase):
     @staticmethod
     def _get_param_combinations():
         params = []
-        for k in [5]:#, 10, 15, 20]:
-            for m in ['cosine']:#, 'pearson']:
+        for k in [5, 10, 15, 20]:
+            for m in ['cosine', 'pearson']:
                 params.append({'k': k, 'metric': m})
         return params
 
