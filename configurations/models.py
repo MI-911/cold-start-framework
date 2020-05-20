@@ -15,6 +15,7 @@ from recommenders.pagerank.linear_collaborative_pagerank_recommender import Line
 from recommenders.pagerank.linear_combined_pagerank_recommender import LinearCombinedPageRankRecommender
 from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointPageRankRecommender
 from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
+from recommenders.pagerank.pair_linear_combined_pagerank_recommender import PairLinearCombinedPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
 from recommenders.remote.particle_filtering_recommender import ParticleFilteringRecommender
 from recommenders.svd.svd_recommender import SVDRecommender
@@ -147,6 +148,10 @@ models = {
     'pop-ppr-linear': {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
+    },
+    'pop-ppr-pair-linear': {
+        'class': NaiveInterviewer,
+        'recommender': PairLinearCombinedPageRankRecommender
     },
     'greedy-ppr-linear': {
         'class': NaiveInterviewer,
