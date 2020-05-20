@@ -74,7 +74,7 @@ def hashable_lru(maxsize=None):
         def deserialize(value):
             try:
                 return pickle.loads(value)
-            except Exception:
+            except TypeError:
                 return value
 
         def func_with_serialized_params(*args, **kwargs):
