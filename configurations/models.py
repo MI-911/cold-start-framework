@@ -56,7 +56,10 @@ models = {
     },
     'greedy-ppr-kg': {
         'class': GreedyInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender
+        'recommender': KnowledgeGraphPageRankRecommender,
+        'recommender_kwargs': {
+            'ask_limit': 10
+        }
     },
     'greedy-adaptive-ppr-kg': {
         'class': GreedyInterviewer,
@@ -67,14 +70,17 @@ models = {
     },
     'greedy-ppr-collab': {
         'class': GreedyInterviewer,
-        'recommender': CollaborativePageRankRecommender
+        'recommender': CollaborativePageRankRecommender,
+        'recommender_kwargs': {
+            'ask_limit': 10
+        }
     },
     'greedy-ppr-joint': {
         'class': GreedyInterviewer,
-        'recommender': JointPageRankRecommender#,
-        #'recommender_kwargs': {
-        #    'ask_limit': 20
-        #}
+        'recommender': JointPageRankRecommender,
+        'recommender_kwargs': {
+            'ask_limit': 10
+        }
     },
     'greedy-adaptive-ppr-joint': {
         'class': GreedyInterviewer,
