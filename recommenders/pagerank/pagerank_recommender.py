@@ -108,6 +108,11 @@ class PageRankRecommender(RecommenderBase):
 
         can_ask_about = set(self.meta.get_question_candidates(training, limit=self.ask_limit))
 
+        self.parameters = {
+            'alpha': 0.1,
+            'importance': {1: 0.95, 0: 0.05, -1: 0.0}
+        }
+
         if not self.parameters:
             parameters = {
                 'alpha': np.arange(0.1, 1, 0.1),

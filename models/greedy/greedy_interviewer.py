@@ -12,6 +12,33 @@ from recommenders.base_recommender import RecommenderBase
 from shared.enums import Metric
 from shared.meta import Meta
 from shared.utility import get_top_entities
+import numpy as np
+import networkx as nx
+import matplotlib.pyplot as plt
+from networkx.drawing.nx_agraph import graphviz_layout
+
+
+def pprint_tree_as_graph(graph, node, depth, max_depth):
+    node_labels = []
+    node_labels.append((node, node.n_users()))
+
+    if depth == max_depth:
+        return graph, [], node_labels
+
+    edge_labels = []
+
+    graph.add_node(node)
+
+    for symbol, child in [('L', node.LIKE), ('U', node.UNKNOWN), ('D', node.DISLIKE)]:
+
+        if child:
+            graph.add_edge(node, child)
+            edge_labels.append(((node, child), symbol))
+            graph, new_edge_labels, new_node_labels = pprint_tree_as_graph(graph, child, depth + 1, max_depth)
+            edge_labels += new_edge_labels
+            node_labels += new_node_labels
+
+    return graph, edge_labels, node_labels
 
 
 def pprint_tree(node, prefix="- ", label=''):
@@ -140,7 +167,28 @@ class GreedyInterviewer(InterviewerBase):
             logger.debug('Constructing adaptive interview')
 
             self.root = Node(self).construct(training, self.meta.get_question_candidates(training, limit=50))
-            pprint_tree(self.root)
+            graph = nx.DiGraph()
+            print(f'Constructing tree graph...')
+            graph, edge_labels, node_labels = pprint_tree_as_graph(graph, self.root, 0, 4)
+            edge_labels = {edge: label for edge, label in edge_labels}
+            node_labels = {node: label for node, label in node_labels}
+
+            with open('dec_tree_graph.pickle', 'wb') as fp:
+                pickle.dump({
+                    'graph': graph,
+                    'edge_labels': edge_labels,
+                    'node_labels': node_labels
+                }, fp)
+
+            print(f'Calculating positions of {graph.number_of_nodes()} nodes...')
+            pos = graphviz_layout(graph)
+            print(f'Drawing...')
+            nx.draw(graph, pos=pos, with_labels=False, node_size=600, node_color='lightgrey', node_labels=node_labels)
+            nx.draw_networkx_edge_labels(graph, pos, edge_labels=edge_labels)
+            nx.draw_networkx_labels(graph, pos, labels=node_labels)
+            print(f'Showing...')
+            plt.savefig('dec_tree_graph.pdf')
+            plt.show()
         else:
             logger.debug('Constructing fixed-question interview')
 
@@ -160,16 +208,26 @@ def filter_users(users, entity: int, sentiments: List[int]):
     return {user: ratings for user, ratings in users.items() if ratings.training.get(entity, 0) in sentiments}
 
 
+def construct_rating_matrix(users, meta):
+    ratings = np.zeros((len(meta.users), len(meta.entities)))
+    for user, data in users.items():
+        for entity, rating in data.training.items():
+            ratings[user, entity] = rating
+
+    return ratings
+
+
 class Node:
     def __init__(self, interviewer, entities=None):
         self.interviewer = interviewer
+        self.meta = self.interviewer.meta
         self.base_questions = entities if entities else list()
 
         self.LIKE = None
         self.DISLIKE = None
         self.UNKNOWN = None
         self.question = None
-        self.users = []
+        self.users = {}
 
     def select_question(self, users, entities):
         question_scores = self.interviewer.get_entity_scores(users, entities, self.base_questions)
@@ -177,19 +235,22 @@ class Node:
         return question_scores[0][0]
 
     def construct(self, users, entities, depth=0):
+        self.users = users
         self.question = self.select_question(users, entities)
+        # most_popular_entities = self.meta.get_question_candidates(users, limit=100)
+        # self.question = most_popular_entities[0]
 
         # In the nodes below, do not consider entity split on in this parent node
         entities = [entity for entity in entities if entity != self.question]
 
         # Partition user groups for children
         liked_users = filter_users(users, self.question, [1])
-        disliked_users = filter_users(users, self.question, [0, -1])
+        disliked_users = filter_users(users, self.question, [-1])
         unknown_users = filter_users(users, self.question, [0])
 
         base_questions = self.base_questions + [self.question]
 
-        min_users = 10
+        min_users = 1
         if depth < 5:
             if len(liked_users) >= min_users:
                 self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1)
@@ -202,5 +263,20 @@ class Node:
 
         return self
 
+    def get_num_co_ratings(self):
+        ratings = construct_rating_matrix(self.users, self.meta)
+        n_co_ratings = 0
+        for u in self.users:
+            for v in self.users:
+                u_rated, = np.where(ratings[u] != 0)
+                v_rated, = np.where(ratings[v] != 0)
+                n_co_ratings += len(set(u_rated).intersection(set(v_rated)))
+
+        return n_co_ratings
+
+    def n_users(self):
+        return len(self.users)
+
     def __repr__(self):
-        return self.interviewer.get_entity_name(self.question)
+        n_users = len(self.users)
+        return f'{self.interviewer.get_entity_name(self.question)} ({n_users} users, {self.base_questions})'
