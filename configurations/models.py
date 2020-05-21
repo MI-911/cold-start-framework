@@ -69,12 +69,9 @@ models = {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender
     },
-    'greedy-ppr-joint-top50-cov5': {
+    'greedy-ppr-joint': {
         'class': GreedyInterviewer,
-        'recommender': JointPageRankRecommender,
-        'interviewer_kwargs': {
-            'cov_fraction': 0.05
-        }
+        'recommender': JointPageRankRecommender
     },
     'greedy-adaptive-ppr-joint': {
         'class': GreedyInterviewer,

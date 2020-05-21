@@ -111,7 +111,7 @@ class GreedyInterviewer(InterviewerBase):
     def _get_questions(self, training):
         questions = list()
 
-        entities = self.meta.get_question_candidates(training, limit=50)
+        entities = self.meta.get_question_candidates(training, limit=100)
         for question in range(10):
             entity_scores = self.get_entity_scores(training, entities, questions)
             # return [entity for entity, _ in entity_scores if entity]
