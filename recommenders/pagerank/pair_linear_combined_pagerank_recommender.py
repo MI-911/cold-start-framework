@@ -1,11 +1,12 @@
 from typing import Dict, List
 
-from recommenders.pagerank.pair_linear_pagerank_recommender import PairLinearPageRankRecommender, GraphWrapper
+from recommenders.pagerank.linear_pagerank_recommender import GraphWrapper
+from recommenders.pagerank.pair_linear_pagerank_recommender import PairLinearPageRankRecommender
 from shared.user import WarmStartUser
 
 
 class PairLinearCombinedPageRankRecommender(PairLinearPageRankRecommender):
-    def __init__(self, meta, ask_limit: int = None):
+    def __init__(self, meta, ask_limit: int):
         super().__init__(meta, ask_limit)
 
     def construct_graph(self, training: Dict[int, WarmStartUser]) -> List[GraphWrapper]:

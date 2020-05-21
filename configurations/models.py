@@ -151,7 +151,10 @@ models = {
     },
     'pop-ppr-pair-linear': {
         'class': NaiveInterviewer,
-        'recommender': PairLinearCombinedPageRankRecommender
+        'recommender': PairLinearCombinedPageRankRecommender,
+        'recommender_kwargs': {
+            'ask_limit': 10
+        }
     },
     'greedy-ppr-linear': {
         'class': NaiveInterviewer,

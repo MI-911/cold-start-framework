@@ -14,6 +14,7 @@ import torch as tt
 from tqdm import tqdm
 
 from recommenders.base_recommender import RecommenderBase
+from recommenders.pagerank.linear_pagerank_recommender import GraphWrapper
 from recommenders.pagerank.pagerank_recommender import construct_collaborative_graph, \
     construct_knowledge_graph
 from recommenders.pagerank.sparse_graph import SparseGraph
@@ -22,55 +23,11 @@ from shared.ranking import Ranking
 from shared.user import WarmStartUser
 from shared.utility import hashable_lru
 
-
-class GraphWrapper:
-    def __init__(self, training, rating, meta, ask_limit, only_kg=False, use_meta=False):
-        if only_kg:
-            self.graph = SparseGraph(construct_knowledge_graph(meta))
-        elif not use_meta:
-            self.graph = SparseGraph(construct_collaborative_graph(Graph(), training, rating))
-        else:
-            self.graph = SparseGraph(construct_collaborative_graph(construct_knowledge_graph(meta), training, rating))
-
-        self.rating_type = rating
-        self.meta = meta
-        self.entity_indices = {idx for _, warm in training.items() for idx, _ in warm.training.items()}
-        self.can_ask_about = set(self.meta.get_question_candidates(training, limit=ask_limit))
-        self.alpha = None
-
-    def get_score(self, answers, items):
-        scores = self._all_scores(answers)
-
-        return {item: scores.get(item, 0) for item in items}
-
-    @hashable_lru(maxsize=1024)
-    def _all_scores(self, answers):
-        node_weights = self._get_node_weights(answers)
-
-        return self.graph.scores(alpha=self.alpha, personalization=node_weights)
-
-    def clear_cache(self):
-        self._all_scores.cache_clear()
-
-    def _get_node_weights(self, answers):
-        answers = {k: v for k, v in answers.items() if v == self.rating_type and k in self.can_ask_about}
-        return self._get_node_weights_cached(answers)
-
-    def _get_node_weights_cached(self, answers):
-        rated_entities = list(answers.keys())
-
-        unrated_entities = self.entity_indices.difference(rated_entities)
-
-        # Change if needed
-        ratings = {1: rated_entities, 0: unrated_entities}
-        weights = {1: 1.0, 0: 0. if len(rated_entities) > 0 else 1.}
-
-        # Assign weight to each node depending on their rating
-        return {idx: weight for sentiment, weight in weights.items() for idx in ratings[sentiment]}
-
-
 def _get_parameters():
-    params = {'alphas': np.arange(0.1, 1, 0.15), 'weights': np.arange(-2, 2, 0.5)}
+    params = []
+
+    for alpha in [0.7]:#np.arange(0.1, 1, 0.15):
+        params.append({'alpha': alpha})
 
     return params
 
@@ -78,12 +35,15 @@ def _get_parameters():
 class PairwiseLinear(nn.Module):
     def __init__(self, num_graphs):
         super().__init__()
-        self.weights = nn.Linear(num_graphs, num_graphs, bias=False)
+        self.weights = nn.Linear(num_graphs, 1, bias=True)
+        # self.weights = nn.Parameter(tt.rand(1, num_graphs), requires_grad=True)
 
     def forward(self, scores):
+        # x = tt.mul(self.weights, scores)
         x = self.weights(scores)
-        x = tt.sum(x, dim=1)
+        # x = tt.sum(x, dim=1)
         return x
+        # return tt.sigmoid(x)
 
 
 class PairLinearPageRankRecommender(RecommenderBase):
@@ -107,34 +67,41 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.ask_limit = ask_limit
         self.can_ask_about = None
         self.model = None
-        self.optimizer = None
-        self.loss_func = nn.MarginRankingLoss(margin=1.0)
+        self.positive_optimizer = None
+        self.negative_optimizer = None
+        self.positive_loss_func = nn.MSELoss()
+        self.negative_loss_func = nn.MarginRankingLoss(margin=.001)
         self.batch_size = 64
 
     def construct_graph(self, training: Dict[int, WarmStartUser]) -> List[GraphWrapper]:
         raise NotImplementedError()
 
     def _optimize_weights(self, batches, predictions, epochs=100) -> List[Tuple[Ranking, Dict[int, float]]]:
-        target = tt.ones(self.batch_size, dtype=tt.float)
-        t = tqdm(range(epochs), total=epochs)
-        for epoch in t:
+        for epoch in range(epochs):
             running_loss = tt.tensor(0.)
             count = tt.tensor(0.)
             shuffle(batches)
 
-            for pos, neg in batches:
-                self.optimizer.zero_grad()
+            t = tqdm(batches)
+            for pos, neg, target in t:
+                self.positive_optimizer.zero_grad()
+                self.negative_optimizer.zero_grad()
                 pos_val = self.model(pos)
                 neg_val = self.model(neg)
 
-                loss = self.loss_func(pos_val, neg_val, target)
-                loss.backward()
-                self.optimizer.step()
+                if tt.any(target.bool()):
+                    loss = self.negative_loss_func(pos_val, neg_val, target)
+                    loss.backward()
+                    self.negative_optimizer.step()
+                else:
+                    loss = self.positive_loss_func(pos_val, neg_val)
+                    loss.backward()
+                    self.positive_optimizer.step()
 
                 with tt.no_grad():
                     running_loss += loss
                     count += tt.tensor(1.)
-                    t.set_description(f'Loss: {running_loss / count:.4f}')
+                    t.set_description(f'[Epoch {epoch}] Loss: {running_loss / count:.16f}')
 
         preds = []
         with tt.no_grad():
@@ -148,7 +115,8 @@ class PairLinearPageRankRecommender(RecommenderBase):
     def _set_parameters(self, parameters):
         self.alpha = parameters['alpha']
         self.model = PairwiseLinear(len(self.graphs))
-        self.optimizer = tt.optim.Adam(self.model.parameters())
+        self.positive_optimizer = tt.optim.Adam(self.model.parameters())
+        self.negative_optimizer = tt.optim.Adam(self.model.parameters())
 
         for graph in self.graphs:
             graph.alpha = self.alpha
@@ -157,23 +125,65 @@ class PairLinearPageRankRecommender(RecommenderBase):
     def get_score(scores, entity):
         return [score[entity] for score in scores]
 
-    def _get_batches(self, preds):
-        data = []
+    def _get_batches(self, preds, training):
+        positive_data = []
+        negative_data = []
         for idx, val, scores in preds:
-            pos_samples = val.sentiment_samples[Sentiment.POSITIVE]
-            neg_samples = [sample for sample in val.to_list() if sample not in pos_samples]
-            for pos_sample in pos_samples:
-                for neg_sample in neg_samples:
+            # user = training[idx].validation.sentiment_samples[Sentiment.UNSEEN]
+            # extra = {entity: 0 for entity in user}
+            for sample_one, rating_one in val.items():
+                for sample_two, rating_two in val.items():
+                    if sample_one == sample_two:
+                        continue
 
-                    data.append([self.get_score(scores, pos_sample), self.get_score(scores, neg_sample)])
+                    if rating_one == rating_two:
+                        # continue
+                        positive_data.append([self.get_score(scores, sample_one),
+                                              self.get_score(scores, sample_two),
+                                              0.])
+                    elif rating_one > rating_two:
+                        negative_data.append([self.get_score(scores, sample_one),
+                                              self.get_score(scores, sample_two),
+                                              1.])
+                    else:
+                        negative_data.append([self.get_score(scores, sample_one),
+                                              self.get_score(scores, sample_two),
+                                              -1.])
 
-        shuffle(data)
-        batches = []
-        for batch_n in range(len(data) // self.batch_size):
-            batch = data[self.batch_size * batch_n:self.batch_size * (batch_n + 1)]
-            batches.append([tt.tensor(a) for a in zip(*batch)])
+        shuffle(positive_data)
+        shuffle(negative_data)
+
+        length = min(len(positive_data), len(negative_data))
+        positive_data = positive_data[:length]
+        negative_data = negative_data[:length]
+
+        positive_batches = []
+        negative_batches = []
+
+        for batch_n in range(len(positive_data) // self.batch_size):
+            batch = positive_data[self.batch_size * batch_n:self.batch_size * (batch_n + 1)]
+            positive_batches.append([tt.tensor(a) for a in zip(*batch)])
+
+        for batch_n in range(len(negative_data) // self.batch_size):
+            batch = negative_data[self.batch_size * batch_n:self.batch_size * (batch_n + 1)]
+            negative_batches.append([tt.tensor(a) for a in zip(*batch)])
+
+        batches = positive_batches + negative_batches
+        shuffle(batches)
 
         return batches
+
+    def _create_train(self, training: Dict[int, WarmStartUser]) -> Dict[int, Dict[str, Dict[int, int]]]:
+        data = {}
+        for user, warm in training.items():
+            entities = list(warm.training.items())
+            shuffle(entities)
+            length = min(self.ask_limit, len(entities) // 2)
+            ppr_train = dict(entities[:length])
+            pairwise_train = dict(entities[length:])
+            data[user] = {'ppr': ppr_train, 'pairwise': pairwise_train}
+
+        return data
 
     def fit(self, training: Dict[int, WarmStartUser]):
         self.can_ask_about = set(self.meta.get_question_candidates(training, limit=self.ask_limit))
@@ -186,43 +196,48 @@ class PairLinearPageRankRecommender(RecommenderBase):
                 sentiments.append(sentiment)
 
         self.graphs = self.construct_graph(training)
-
+        train = self._create_train(training)
         if self.optimal_params is None:
             best_score = -1
             best_params = None
-            parameters = _get_parameters()
-            for alpha in parameters['alphas']:
-                logger.debug(f'Trying with alpha: {alpha}')
-                parameter = {'alpha': alpha}
+            for parameter in _get_parameters():
+                logger.debug(f'Trying with alpha: {parameter["alpha"]}')
                 self._set_parameters(parameter)
 
-                preds = self._fit(training)
-                batches = self._get_batches(preds)
-                score = self.meta.validator.score(self._optimize_weights(batches, preds, 50), self.meta)
+                val_preds, train_preds = self._fit(training, train)
+                batches = self._get_batches(train_preds, training)
+                score = self.meta.validator.score(self._optimize_weights(batches, val_preds, 1), self.meta)
 
                 # Clear cache
                 self.clear_cache()
 
                 if score > best_score:
-                    logger.debug(f'New best with score: {score} and params, alpha: {alpha}')
+                    logger.debug(f'New best with score: {score} and params, alpha: {parameter["alpha"]}')
                     best_score = score
                     best_params = parameter
 
             self.optimal_params = best_params
 
-        self._set_parameters(self.optimal_params)
-        preds = self._fit(training)
-        batches = self._get_batches(preds)
-        self._optimize_weights(batches, preds, 100)
+        # Todo insert when multiple alphas
+        # self._set_parameters(self.optimal_params)
+        # val_preds, train_preds = self._fit(training, train)
+        # batches = self._get_batches(train_preds)
+        # self._optimize_weights(batches, val_preds, 1)
 
-    def _fit(self, training: Dict[int, WarmStartUser]):
-        predictions = []
-        for idx, user in tqdm(training.items(), total=len(training)):
-            scores = [graph.get_score(user.training, user.validation.to_list()) for graph in self.graphs]
+    def _fit(self, train_val: Dict[int, WarmStartUser], train_pair: Dict[int, Dict[str, Dict[int, int]]]):
+        val_predictions = []
+        pair_predictions = []
+        break_num = 100000
+        i = 0
+        for (val_idx, val_user), (train_idx, train_user) in tqdm(list(zip(train_val.items(), train_pair.items()))[:break_num],
+                                                                 total=min(break_num, len(train_val))):
+            i += 1
+            val_scores = [graph.get_score(val_user.training, val_user.validation.to_list()) for graph in self.graphs]
+            train_scores = [graph.get_score(train_user['ppr'], list(train_user['pairwise'].keys())) for graph in self.graphs]
+            val_predictions.append((val_idx, val_user.validation, val_scores))
+            pair_predictions.append((train_idx, train_user['pairwise'], train_scores))
 
-            predictions.append((idx, user.validation, scores))
-
-        return predictions
+        return val_predictions, pair_predictions
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         with tt.no_grad():
