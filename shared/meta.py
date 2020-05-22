@@ -26,15 +26,19 @@ class Meta:
     def get_idx_uri(self):
         return {idx: uri for uri, idx in self.uri_idx.items()}
 
-    def get_question_candidates(self, training: Dict[int, WarmStartUser], limit: int = None):
+    def get_question_candidates(self, training: Dict[int, WarmStartUser], limit: int = None,
+                                recommendable_only: bool = None):
         """
         Get entity index candidates for interviews. The flag recommendable_only on the meta instance determines whether
-        only recommendable entities are allowed.
+        only recommendable entities are allowed, but can be overwritten through the function parameter.
         """
         candidates = get_top_entities(training)
 
-        if self.recommendable_only:
+        recommendable_only = self.recommendable_only if recommendable_only is None else recommendable_only
+        if recommendable_only:
             candidates = [entity for entity in candidates if entity in self.recommendable_entities]
+        else:
+            candidates = [entity for entity in candidates if entity not in self.recommendable_entities]
 
         if limit:
             candidates = candidates[:limit]

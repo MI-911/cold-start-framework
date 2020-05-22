@@ -118,7 +118,7 @@ class LRMFInterviewer(InterviewerBase):
     def _fit(self, users: Dict[int, WarmStartUser], n_iterations=5) -> float:
         self.best_score = 0
         R = get_rating_matrix(users, self.n_users, self.n_entities)
-        candidates = choose_candidates(R, n=100)
+        candidates = self.meta.get_question_candidates(users, limit=self.n_candidates)
 
         for iteration in tqdm(range(n_iterations), desc=f'[Training LRMF]'):
             self.model.fit(R, candidates)

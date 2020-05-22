@@ -17,7 +17,7 @@ from configurations.models import models
 from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
-from shared.utility import join_paths, valid_dir, get_popular_items
+from shared.utility import join_paths, valid_dir
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--input', nargs=1, type=valid_dir, help='path to input data')
@@ -25,6 +25,7 @@ parser.add_argument('--output', nargs=1, type=valid_dir, help='path to output re
 parser.add_argument('--include', nargs='*', type=str, choices=models.keys(), help='models to include')
 parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), help='models to exclude')
 parser.add_argument('--experiments', nargs='*', type=str, help='experiments to run')
+parser.add_argument('--splits', nargs='*', type=str, help='splits to run')
 parser.add_argument('--debug', action='store_true', help='enable debug mode')
 parser.add_argument('--recommendable', action='store_true', help='only recommendable candidates', default=False)
 
@@ -159,7 +160,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
             model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
             model_instance.warmup(training, num_questions)
 
-        popular_items = get_popular_items(meta.recommendable_entities, training)
+        popular_items = meta.get_question_candidates(training, recommendable_only=True)
 
         hits, ndcgs, taus, sers, covs, answers = _test(testing, model_instance, num_questions, upper_cutoff, meta,
                                                        popular_items)
@@ -257,11 +258,11 @@ def _parse_args():
         args.output = ['results']
 
     return model_selection, args.input[0], args.output[0], set(
-        args.experiments) if args.experiments else set(), args.recommendable
+        args.experiments) if args.experiments else set(), set(args.splits) if args.splits else set(), args.recommendable
 
 
 def run():
-    model_selection, input_path, output_path, experiments, recommendable_only = _parse_args()
+    model_selection, input_path, output_path, experiments, splits, recommendable_only = _parse_args()
 
     dataset = Dataset(input_path)
     for experiment in dataset.experiments():
@@ -271,7 +272,8 @@ def run():
             continue
 
         for split in experiment.splits():
-            _run_split(model_selection, split, output_path, recommendable_only)
+            if not splits or split.name in splits:
+                _run_split(model_selection, split, output_path, recommendable_only)
 
 
 if __name__ == '__main__':

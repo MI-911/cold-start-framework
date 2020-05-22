@@ -2,15 +2,16 @@ import operator
 from functools import reduce
 from typing import List, Dict
 
-from loguru import logger
 import networkx as nx
 import numpy as np
+from loguru import logger
 from tqdm import tqdm
+
 from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
 from shared.user import WarmStartUser
-from shared.utility import get_combinations, get_top_entities
+from shared.utility import get_combinations, hashable_lru
 
 RATING_CATEGORIES = {1, 0, -1}
 
@@ -58,8 +59,6 @@ def get_cache_key(answers):
 class PageRankRecommender(RecommenderBase):
     def __init__(self, meta: Meta, ask_limit: int):
         super().__init__(meta)
-        self.predictions_cache = dict()
-        self.use_caching = True
         self.parameters = None
 
         self.entity_indices = set()
@@ -69,29 +68,10 @@ class PageRankRecommender(RecommenderBase):
         self.ask_limit = ask_limit
 
     def clear_cache(self):
-        self.sparse_graph.scores.cache_clear()
+        self._get_scores.cache_clear()
 
     def construct_graph(self, training: Dict[int, WarmStartUser]):
         raise NotImplementedError()
-
-    def _scores(self, alpha, node_weights, items):
-        """
-        Produces a ranking of items. If answers is not none, the ranking
-        will be reused if produced previously.
-        """
-        def get_scores():
-            scores = self.sparse_graph.scores(alpha=alpha, personalization=node_weights)
-            return {item: scores.get(item, 0) for item in items}
-
-        if not self.use_caching or True:
-            return get_scores()
-
-        # Get cache key, excluding "don't know" to decrease cache misses
-        cache_key = get_cache_key({e: r for e, r in answers.items() if r})
-        if cache_key not in self.predictions_cache:
-            self.predictions_cache[cache_key] = {entity: score for entity, score in get_scores().items()}
-
-        return {item: self.predictions_cache[cache_key].get(item, 0) for item in items}
 
     @staticmethod
     def _weight(category, ratings, importance):
@@ -133,9 +113,7 @@ class PageRankRecommender(RecommenderBase):
                 'alpha': np.arange(0.1, 1, 0.15),
                 'importance': [
                     {1: 0.95, 0: 0.05, -1: 0.0},
-                    {1: 0.80, 0: 0.20, -1: 0.0},
-                    {1: 1/3, 0: 1/3, -1: 1/3},
-                    {1: 0.45, 0: 0.10, -1: 0.45}
+                    {1: 0.85, 0: 0.15, -1: 0.0},
                 ]
             }
 
@@ -144,12 +122,13 @@ class PageRankRecommender(RecommenderBase):
             results = list()
 
             for combination in combinations:
-                logger.debug(f'Trying {combination}')
-
                 self.parameters = combination
 
+                progress = tqdm(training.items())
+                progress.set_description(str(combination))
+
                 predictions = list()
-                for _, user in tqdm(training.items()):
+                for _, user in progress:
                     user_answers = {idx: rating for idx, rating in user.training.items() if idx in can_ask_about}
                     prediction = self.predict(user.validation.to_list(), user_answers)
 
@@ -158,17 +137,26 @@ class PageRankRecommender(RecommenderBase):
                 score = self.meta.validator.score(predictions, self.meta)
                 results.append((combination, score))
 
-                logger.info(f'Score: {score}')
+                logger.info(f'Score: {score:.4f}')
 
                 self.clear_cache()
 
-            self.parameters = sorted(results, key=operator.itemgetter(1), reverse=True)[0][0]
+            best_pair = sorted(results, key=operator.itemgetter(1), reverse=True)[0]
+            self.parameters = best_pair[0]
 
-            logger.info(f'Found optimal: {self.parameters}')
+            logger.info(f'Found optimal ({best_pair[1]:.4f}): {self.parameters}')
+
+    @hashable_lru(maxsize=1024)
+    def _get_scores(self, answers):
+        return self.sparse_graph.scores(alpha=self.parameters['alpha'],
+                                        personalization=self.get_node_weights(answers, self.parameters['importance']))
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         # Remove unknown answers
         answers = {idx: sentiment for idx, sentiment in answers.items() if sentiment}
 
-        return self._scores(self.parameters['alpha'],
-                            self.get_node_weights(answers, self.parameters['importance']), items)
+        # Get scores for all entities
+        all_scores = self._get_scores(answers)
+
+        # Return only requested item scores
+        return {item: all_scores.get(item, 0) for item in items}

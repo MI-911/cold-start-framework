@@ -17,19 +17,22 @@ from shared.utility import get_top_entities
 def pprint_tree(node, prefix="- ", label=''):
     print(prefix, label, node, sep="")
 
-    children = [(text, child) for text, child in [('L: ', node.LIKE), ('D: ', node.DISLIKE), ('U: ', node.UNKNOWN)] if child]
+    children = [(text, child) for text, child in [('L: ', node.LIKE), ('D: ', node.DISLIKE)] if child]
     for i, (text, child) in enumerate(children):
         pprint_tree(child, f'  {prefix}', text)
 
 
 class GreedyInterviewer(InterviewerBase):
-    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, adaptive=False):
+    def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, adaptive=False,
+                 cov_fraction=None):
         super().__init__(meta, use_cuda)
 
         self.questions = None
         self.idx_uri = self.meta.get_idx_uri()
         self.adaptive = adaptive
         self.root = None
+        # self.meta.validator.metric = Metric.HR
+        self.cov_fraction = cov_fraction
 
         if isinstance(recommender, RecommenderBase):
             self.recommender = recommender
@@ -57,14 +60,26 @@ class GreedyInterviewer(InterviewerBase):
         if not node:
             return []
 
-        # Check if we can answer the current node
-        if node.question in answers:
-            next_nodes = {-1: node.DISLIKE, 0: node.UNKNOWN, 1: node.LIKE}
+        # If there are no answers left, just return these questions
+        # so we can continue
+        if len(answers) == 0:
+            return node.questions
 
-            return self._traverse(answers, next_nodes.get(answers.get(node.question, 0)))
+        # If the node has fixed questions, we don't need to traverse further
+        # since it's a leaf that stopped growing due to too few users
+        if node.is_fixed():
+            return node.questions
 
-        # If not, then ask about the current node
-        return [node.question]
+        # Otherwise, check the answers for this question and determine
+        # the appropriate child node to go to
+        question = node.questions[0]
+        if question in answers:
+            traverse_to = {-1: node.DISLIKE, 0: node.DISLIKE, 1: node.LIKE}
+            remaining_answers = {e: a for e, a in answers.items() if not e == question}
+            return self._traverse(remaining_answers, traverse_to.get(answers.get(question, 0)))
+
+        # As a final catch all, just return this node's questions
+        return node.questions
 
     def interview(self, answers, max_n_questions=5):
         # Follow decision tree
@@ -74,7 +89,7 @@ class GreedyInterviewer(InterviewerBase):
         # Exclude answers to entities already asked about
         return self.questions
 
-    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None):
+    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None, desc=None):
         entity_scores = list()
         progress = tqdm(entities)
 
@@ -89,51 +104,61 @@ class GreedyInterviewer(InterviewerBase):
             score = self.meta.validator.score(user_validation, self.meta, metric=metric)
             entity_scores.append((entity, score))
 
-            progress.set_description(f'{self.get_entity_name(entity)}: {score}')
+            progress.set_description(f'{desc if desc else ""} {self.get_entity_name(entity)}: {score}')
 
         return list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
 
     def _get_label_scores(self, training):
-        entities = get_top_entities(training)[:200]
+        entities = self.meta.get_question_candidates(training, limit=200)
 
         label_scores = defaultdict(list)
-        entity_scores = self.get_entity_scores(training, entities, [], metric=Metric.COV)
+        entity_scores = self.get_entity_scores(training, entities, [], metric=Metric.NDCG)
 
         for entity, score in entity_scores:
             primary_label = self.get_entity_labels(entity)[0]
 
             label_scores[primary_label].append((entities.index(entity) + 1, score))
 
-        json.dump(label_scores, open('label_cov.json', 'w'))
+        json.dump(label_scores, open('label_ndcg_joint.json', 'w'))
 
     def _get_questions(self, training):
         questions = list()
 
         entities = self.meta.get_question_candidates(training, limit=100)
-
         for question in range(10):
-            entity_scores = self.get_entity_scores(training, entities, questions, metric=Metric.HR)
-            # return [entity for entity, _ in entity_scores if entity]
+            entity_scores = self.get_entity_scores(training, entities, questions)
+
+            if self.cov_fraction:
+                top_entities = [entity for entity, score in entity_scores]
+                top_entities = top_entities[:max(1, ceil(len(top_entities) * self.cov_fraction))]
+
+                entity_scores = self.get_entity_scores(training, top_entities, questions, metric=Metric.COV)
 
             next_question = entity_scores[0][0]
+
             # top_entities = [entity for entity, score in entity_scores[:ceil(len(entity_scores) * 0.05)]]
             # next_question = self.get_entity_scores(training, top_entities, questions, metric=Metric.HR)[0][0]
             questions.append(next_question)
 
             logger.debug(f'Question {question + 1}: {self.get_entity_name(next_question)}')
 
-            entities = [entity for entity, _ in entity_scores if entity != next_question]
+            entities = [entity for entity in entities if entity != next_question]
 
         return questions
 
-    def warmup(self, training, interview_length=5):
+    def warmup(self, training, interview_length=10):
+        entities = self.meta.get_question_candidates(training, limit=5)
+        for idx, entity in enumerate(entities):
+            logger.info(f'{1 + idx}. {self.get_entity_name(entity)}')
+
         self.recommender.parameters = {'alpha': 0.1, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
         if self.adaptive:
             logger.debug('Constructing adaptive interview')
 
-            self.root = Node(self).construct(training, get_top_entities(training)[:50])
+            self.root = Node(self).construct(
+                training, self.meta.get_question_candidates(training, limit=100), max_depth=interview_length - 1)
             pprint_tree(self.root)
         else:
             logger.debug('Constructing fixed-question interview')
@@ -161,33 +186,54 @@ class Node:
 
         self.LIKE = None
         self.DISLIKE = None
-        self.UNKNOWN = None
-        self.question = None
+        self.questions = None
+        self.users = []
+        self.depth = 0
 
     def select_question(self, users, entities):
-        question_scores = self.interviewer.get_entity_scores(users, entities, self.base_questions)
+        question_scores = self.interviewer.get_entity_scores(users, entities, self.base_questions,
+                                                             desc=f'[Searching candidates at depth {self.depth}]')
 
         return question_scores[0][0]
 
-    def construct(self, users, entities, depth=0):
-        self.question = self.select_question(users, entities)
+    def construct(self, users, entities, max_depth, depth=0):
+        min_users = 10
+        self.depth = depth
 
-        # In the nodes below, do not consider entity split on in this parent node
-        entities = [entity for entity in entities if entity != self.question]
+        # If this node doesn't have enough users to warrant a node split, we
+        # can just assign the remaining interview questions as fixed questions
+        # (selected as the most popular of the remaining question candidates)
+        if len(users) < min_users:
+            n_remaining_questions = max_depth - depth
+            self.questions = entities[:n_remaining_questions]
+            return self
+
+        # We have enough users to split, so continue
+        self.questions = [self.select_question(users, entities)]
+
+        # Don't split if this is the last question of the interview
+        if depth == max_depth:
+            return self
+
+        # We should split the users - first remove this question from the
+        # candidate questions
+        entities = [entity for entity in entities if entity not in self.questions]
 
         # Partition user groups for children
-        liked_users = filter_users(users, self.question, [0, 1])
-        disliked_users = filter_users(users, self.question, [0, -1])
-        unknown_users = filter_users(users, self.question, [0])
+        question = self.questions[0]
 
-        base_questions = self.base_questions + [self.question]
+        liked_users = filter_users(users, question, [1])
+        disliked_users = filter_users(users, question, [0, -1])
 
-        if depth < 5:
-            self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1) if liked_users else None
-            self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, depth + 1) if disliked_users else None
-            self.UNKNOWN = Node(self.interviewer, base_questions).construct(unknown_users, entities, depth + 1) if unknown_users else None
+        base_questions = self.base_questions + self.questions
+
+        self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, max_depth, depth + 1)
+        self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, max_depth, depth + 1)
 
         return self
 
+    def is_fixed(self):
+        return len(self.questions) > 1
+
     def __repr__(self):
-        return self.interviewer.get_entity_name(self.question)
+        return str([self.interviewer.get_entity_name(q) for q in self.questions])

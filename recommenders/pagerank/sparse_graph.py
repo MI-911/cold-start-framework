@@ -1,7 +1,6 @@
+
 import scipy
 import networkx as nx
-
-from shared.utility import hashable_lru
 
 
 class SparseGraph:
@@ -18,7 +17,6 @@ class SparseGraph:
 
         self.M = Q * self.M
 
-    @hashable_lru(maxsize=2048)
     def scores(self, alpha=0.85, personalization=None, max_iterations=100, tol=1.0e-6):
         # Initialize with equal PageRank to each node
         x = scipy.repeat(1.0 / self.N, self.N)

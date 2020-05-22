@@ -23,8 +23,7 @@ class Validator:
 
         for ranking, item_scores in predictions:
             # Convert scores of item->score pairs to a ranked list
-            sorted_scores = sorted(item_scores.items(), key=operator.itemgetter(1), reverse=reverse)
-            prediction = [pair[0] for pair in sorted_scores]
+            prediction = sorted(item_scores, key=item_scores.get, reverse=reverse)
 
             if metric == Metric.COV:
                 covered.update(set(prediction[:cutoff]))
