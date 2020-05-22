@@ -82,8 +82,8 @@ class FMFInterviewer(InterviewerBase):
         if not self.params:
             param_scores = []
             for params in get_combinations({
-                'k': [1, 2, 5, 10],
-                'reg': [0.001]
+                'k': [3, 5, 10],
+                'reg': [0.03]
             }):
                 logger.info(f'Fitting FMF with params {params}')
                 self.model = FMF(n_users=self.n_users, n_entities=self.n_entities, max_depth=interview_length,
@@ -107,7 +107,8 @@ class FMFInterviewer(InterviewerBase):
         R = get_rating_matrix(users, self.n_users, self.n_entities)
         candidates = self.meta.get_question_candidates(users, limit=self.n_candidates)
 
-        for iteration in tqdm(range(n_iterations), desc=f'[Training FMF]'):
+        # for iteration in tqdm(range(n_iterations), desc=f'[Training FMF]'):
+        for iteration in range(n_iterations):
             self.model.fit(R, candidates)
             score = self._validate(users)
 

@@ -1,6 +1,7 @@
 from typing import List, Tuple, Union, Dict
 
 import numpy as np
+from loguru import logger
 from numpy.linalg import solve
 from tqdm import tqdm
 
@@ -43,22 +44,29 @@ def optimal_entity_embeddings(ratings: np.ndarray, tree, n_latent_factors: int, 
 
 
 def optimal_group_embedding(users: List[int], entity_embeddings: np.ndarray, ratings: np.ndarray,
-                            regularization: float) -> np.ndarray:
-    A = np.zeros((entity_embeddings.shape[1], entity_embeddings.shape[1]))
-    B = np.zeros((1, entity_embeddings.shape[1]))
+                            regularization: float, parent_embedding: np.ndarray) -> np.ndarray:
+    k = entity_embeddings.shape[1]
+    A = np.zeros((k, k))
+    B = np.zeros((1, k))
+
+    regularization_term = (
+        (np.eye(k) * regularization)
+        if parent_embedding is None else
+        parent_embedding * regularization
+    )
 
     for user in users:
         rated_entities, = np.where(ratings[user] != UNKNOWN)
         for entity in rated_entities:
             rating = ratings[user, entity]
             v = entity_embeddings[entity]
-            A += v.T @ v + np.eye(entity_embeddings.shape[1]) * regularization
+            A += v.T @ v + regularization_term
             B += rating * v
     try:
         return solve(A, B.reshape(-1)).reshape(1, -1)
     except np.linalg.LinAlgError:
         # A is a singular matrix, nothing we can do
-        return np.zeros((1, entity_embeddings.shape[1]))
+        return parent_embedding
 
 
 def group_loss(users_in_group: List[int], group_embedding: np.ndarray,
@@ -67,6 +75,22 @@ def group_loss(users_in_group: List[int], group_embedding: np.ndarray,
     user_embeddings = np.ones((len(users_in_group), 1)) * group_embedding
     predicted_ratings_submatrix = user_embeddings @ entity_embeddings.T
     return ((ratings_submatrix - predicted_ratings_submatrix) ** 2).sum()
+
+
+def update_user_embeddings(ratings: np.ndarray, tree, n_users, n_latent_factors):
+    user_embeddings = np.zeros((n_users, n_latent_factors))
+    for u, user_ratings_vector in enumerate(ratings):
+        user_embeddings[u] = tree.interview_existing_user(u)
+
+    return user_embeddings
+
+
+def validate_training_rmse(ratings, user_embeddings, entity_embeddings):
+    nz = ratings.nonzero()
+    predictions = user_embeddings @ entity_embeddings.T
+
+    se = (ratings[nz] - predictions[nz]) ** 2
+    return np.sqrt(se.mean())
 
 
 class FMF:
@@ -89,17 +113,24 @@ class FMF:
 
         self.ratings = np.zeros((n_users, n_entities))
         self.entity_embeddings: np.ndarray = np.random.rand(n_entities, n_latent_factors)
-        self.T: Tree = Tree(depth=0, max_depth=max_depth, fmf=self)
+        self.user_embeddings: np.ndarray = np.random.rand(n_users, n_latent_factors)
+        self.T: Tree = Tree(depth=0, max_depth=max_depth, fmf=self, parent=None)
+
+        self.rmses = []
 
     def fit(self, ratings: np.ndarray, candidates: List[int]):
         self.ratings = ratings
 
         all_users = [u for u in range(self.n_users)]
 
-        # self.T.grow_test(all_users, candidates)
+        rmse = validate_training_rmse(ratings, self.user_embeddings, self.entity_embeddings)
+        logger.info(f'RMSE: {rmse}')
+        self.rmses.append(rmse)
+
         self.T.grow(all_users, candidates)
         self.entity_embeddings = optimal_entity_embeddings(ratings, self.T,
                                                            self.n_latent_factors, self.regularization)
+        self.user_embeddings = update_user_embeddings(ratings, self.T, self.n_users, self.n_latent_factors)
 
     def validate(self, user: int, to_validate: List[int]) -> Dict[int, float]:
         u = self.T.interview_existing_user(user)
@@ -123,20 +154,21 @@ class FMF:
 
 
 class Tree:
-    def __init__(self, depth: int, max_depth: int, fmf: FMF):
+    def __init__(self, depth: int, max_depth: int, fmf: FMF, parent):
         self.depth = depth
         self.max_depth = max_depth
         self.fmf = fmf
         self.user_embedding: np.ndarray = np.random.rand(1, fmf.n_latent_factors)
         self.entity_embeddings: np.ndarray = fmf.entity_embeddings
+        self.parent = parent
 
         self.users: List[int] = []
         self.question: Union[int, None] = None
         # Continue tree growth downwards
         self.children = None if self.is_leaf() else {
-            LIKE: Tree(depth=depth+1, max_depth=max_depth, fmf=fmf),
-            DISLIKE: Tree(depth=depth+1, max_depth=max_depth, fmf=fmf),
-            UNKNOWN: Tree(depth=depth+1, max_depth=max_depth, fmf=fmf)
+            LIKE: Tree(depth=depth+1, max_depth=max_depth, fmf=fmf, parent=self),
+            DISLIKE: Tree(depth=depth+1, max_depth=max_depth, fmf=fmf, parent=self),
+            UNKNOWN: Tree(depth=depth+1, max_depth=max_depth, fmf=fmf, parent=self)
         }
 
     def is_leaf(self):
@@ -146,7 +178,8 @@ class Tree:
         self.users = users
         if self.is_leaf():
             self.user_embedding = optimal_group_embedding(self.users, self.fmf.entity_embeddings, self.fmf.ratings,
-                                                          self.fmf.regularization)
+                                                          self.fmf.regularization,
+                                                          self.parent.user_embedding if self.parent else None)
             return
 
         self.question = np.random.choice(candidates)
@@ -158,10 +191,11 @@ class Tree:
 
     def grow(self, users: List[int], candidates: List[int]):
         self.users = users
+        parent_embedding = self.parent.user_embedding if self.parent else None
 
         if self.is_leaf():
             self.user_embedding = optimal_group_embedding(self.users, self.fmf.entity_embeddings, self.fmf.ratings,
-                                                          self.fmf.regularization)
+                                                          self.fmf.regularization, parent_embedding)
             return
 
         min_loss, question = np.inf, None
@@ -170,9 +204,12 @@ class Tree:
             # Split users on this candidate
             likes, dislikes, unknowns = split_users(users, candidate, self.fmf.ratings)
             # Get optimal profiles for both groups
-            uL = optimal_group_embedding(likes, self.fmf.entity_embeddings, self.fmf.ratings, self.fmf.regularization)
-            uD = optimal_group_embedding(dislikes, self.fmf.entity_embeddings, self.fmf.ratings, self.fmf.regularization)
-            uU = optimal_group_embedding(unknowns, self.fmf.entity_embeddings, self.fmf.ratings, self.fmf.regularization)
+            uL = optimal_group_embedding(
+                likes, self.fmf.entity_embeddings, self.fmf.ratings, self.fmf.regularization, parent_embedding)
+            uD = optimal_group_embedding(
+                dislikes, self.fmf.entity_embeddings, self.fmf.ratings, self.fmf.regularization, parent_embedding)
+            uU = optimal_group_embedding(
+                unknowns, self.fmf.entity_embeddings, self.fmf.ratings, self.fmf.regularization, parent_embedding)
             # Get the prediction loss for both groups
             loss = group_loss(likes, uL, self.fmf.entity_embeddings, self.fmf.ratings)
             loss += group_loss(dislikes, uD, self.fmf.entity_embeddings, self.fmf.ratings)
