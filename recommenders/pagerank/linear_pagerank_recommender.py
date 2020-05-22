@@ -19,7 +19,7 @@ from shared.utility import hashable_lru
 
 
 class GraphWrapper:
-    def __init__(self, training, rating, meta, ask_limit, only_kg=False, use_meta=False):
+    def __init__(self, training, rating, meta, ask_limit, only_kg=False, use_meta=False, normalize=False):
         if only_kg:
             self.graph = SparseGraph(construct_knowledge_graph(meta))
         elif not use_meta:
@@ -32,16 +32,19 @@ class GraphWrapper:
         self.entity_indices = {idx for _, warm in training.items() for idx, _ in warm.training.items()}
         self.can_ask_about = set(self.meta.get_question_candidates(training, limit=ask_limit))
         self.alpha = None
+        self.normalize = normalize
 
     def get_score(self, answers, items):
         scores = self._all_scores(answers)
-
-        return {item: scores.get(item, 0) for item in items}
+        scores = {item: scores.get(item, 0) for item in items}
+        if self.normalize:
+            return self._normalize_scores(scores)
+        else:
+            return scores
 
     @hashable_lru(maxsize=1024)
     def _all_scores(self, answers):
         node_weights = self._get_node_weights(answers)
-
         return self.graph.scores(alpha=self.alpha, personalization=node_weights)
 
     def clear_cache(self):
@@ -51,6 +54,7 @@ class GraphWrapper:
         answers = {k: v for k, v in answers.items() if v == self.rating_type and k in self.can_ask_about}
         return self._get_node_weights_cached(answers)
 
+    @hashable_lru()
     def _get_node_weights_cached(self, answers):
         rated_entities = list(answers.keys())
 
@@ -62,6 +66,10 @@ class GraphWrapper:
 
         # Assign weight to each node depending on their rating
         return {idx: weight for sentiment, weight in weights.items() for idx in ratings[sentiment]}
+
+    def _normalize_scores(self, scores):
+        factor = max(scores.values())
+        return {k: v/factor for k, v in scores.items()}
 
 
 def _get_parameters():
