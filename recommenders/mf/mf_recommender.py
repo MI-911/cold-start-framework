@@ -103,18 +103,17 @@ class MatrixFactorizationRecommender(RecommenderBase):
         return self.meta.validator.score(predictions, self.meta)
 
     def clear_cache(self):
-        self.predict.cache_clear()
+        self._predict.cache_clear()
 
     @hashable_lru(maxsize=1024)
+    def _predict(self, likes):
+        self.model.predict_avg_items(likes, [e for e in range(len(self.meta.entities))])
+
     def predict(self, items, answers):
         # Predict a user as the avg embedding of the items they liked
-        u_embedding_items = [e for e, r in answers.items() if r == 1]
+        prediction = self._predict([e for e, r in answers.items() if r == 1])
 
-        cache_id = get_cache_id(answers)
-        if cache_id not in self.predictions_cache:
-            self.predictions_cache[cache_id] = self.model.predict_avg_items(
-                u_embedding_items, [e for e in range(len(self.meta.entities))])
-        return {item: self.predictions_cache[cache_id][item] for item in items}
+        return {item: prediction[item] for item in items}
 
     def get_parameters(self):
         return self.optimal_params
