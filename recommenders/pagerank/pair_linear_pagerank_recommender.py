@@ -33,9 +33,10 @@ def _get_parameters():
 
 
 class PairwiseLinear(nn.Module):
-    def __init__(self, num_graphs):
+    def __init__(self, num_graphs, limit=5.):
         super().__init__()
         self.weights = nn.Linear(num_graphs, 1, bias=True)
+        self.weights.weight.data.uniform_(-limit, limit)
         # self.weights = nn.Parameter(tt.rand(1, num_graphs), requires_grad=True)
 
     def forward(self, scores):
@@ -67,14 +68,43 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.ask_limit = ask_limit
         self.can_ask_about = None
         self.model = None
-        self.positive_optimizer = None
-        self.negative_optimizer = None
-        self.positive_loss_func = nn.MSELoss()
-        self.negative_loss_func = nn.MarginRankingLoss(margin=.001)
+        self.optimizer = None
+        self.positive_loss_func = nn.MSELoss(reduction='sum')
+        self.negative_loss_func = self.logistic_loss_function
         self.batch_size = 64
+
+    @staticmethod
+    def hinge_loss_function(x, y, t):
+        x = x - y
+        x = tt.pow(x, 2)
+        x = tt.sub(1.0, x)
+        x = tt.relu(x)
+        return tt.sum(x)
+
+    @staticmethod
+    def exponential_loss(x, y, t):
+        x = x - y
+        x = tt.exp(-x)
+        return tt.sum(x)
+
+    @staticmethod
+    def logistic_loss_function(x, y, t):
+        diff = x - y
+        temp = tt.exp(-diff)
+        temp = tt.add(temp, 1.0)
+        temp = tt.log(temp)
+        return tt.sum(temp)
 
     def construct_graph(self, training: Dict[int, WarmStartUser]) -> List[GraphWrapper]:
         raise NotImplementedError()
+
+    def limit_weight_loss(self, limit):
+        extra = self.model.weights.weight
+        extra = tt.abs(extra)
+        extra = tt.sub(extra, limit)
+        extra = tt.relu(extra)
+        extra = tt.sum(extra)
+        return extra
 
     def _optimize_weights(self, batches, predictions, epochs=100) -> List[Tuple[Ranking, Dict[int, float]]]:
         for epoch in range(epochs):
@@ -83,25 +113,28 @@ class PairLinearPageRankRecommender(RecommenderBase):
             shuffle(batches)
 
             t = tqdm(batches)
-            for pos, neg, target in t:
-                self.positive_optimizer.zero_grad()
-                self.negative_optimizer.zero_grad()
-                pos_val = self.model(pos)
-                neg_val = self.model(neg)
+            for sample_one, sample_two, target in t:
+                self.optimizer.zero_grad()
+                sample_one_pred = self.model(sample_one)
+                sample_two_pred = self.model(sample_two)
 
-                if tt.any(target.bool()):
-                    loss = self.negative_loss_func(pos_val, neg_val, target)
-                    loss.backward()
-                    self.negative_optimizer.step()
-                else:
-                    loss = self.positive_loss_func(pos_val, neg_val)
-                    loss.backward()
-                    self.positive_optimizer.step()
+                positive = (target == 0).nonzero()
+                negative = target.nonzero()
+
+                pos_loss = self.positive_loss_func(sample_one_pred[positive], sample_two_pred[positive])
+                neg_loss = self.negative_loss_func(sample_one_pred[negative], sample_two_pred[negative],
+                                                   target[negative])
+
+                loss = pos_loss + neg_loss + tt.mul(self.limit_weight_loss(1.), 0.001)
+                loss.backward()
+                self.optimizer.step()
 
                 with tt.no_grad():
                     running_loss += loss
                     count += tt.tensor(1.)
-                    t.set_description(f'[Epoch {epoch}] Loss: {running_loss / count:.16f}')
+                    weights = ["%.4f" % item for item in self.model.weights.weight.tolist()[0]]
+                    t.set_description(f'[Epoch {epoch}] Loss: {running_loss / count:.10f}, '
+                                      f'Weight: {weights}')
 
         preds = []
         with tt.no_grad():
@@ -115,8 +148,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
     def _set_parameters(self, parameters):
         self.alpha = parameters['alpha']
         self.model = PairwiseLinear(len(self.graphs))
-        self.positive_optimizer = tt.optim.Adam(self.model.parameters())
-        self.negative_optimizer = tt.optim.Adam(self.model.parameters())
+        self.optimizer = tt.optim.Adam(self.model.parameters(), lr=0.0005)#, weight_decay=0.9999999)
 
         for graph in self.graphs:
             graph.alpha = self.alpha
@@ -125,50 +157,39 @@ class PairLinearPageRankRecommender(RecommenderBase):
     def get_score(scores, entity):
         return [score[entity] for score in scores]
 
-    def _get_batches(self, preds, training):
-        positive_data = []
-        negative_data = []
+    def _get_batches(self, preds):
+        data = []
         for idx, val, scores in preds:
-            # user = training[idx].validation.sentiment_samples[Sentiment.UNSEEN]
-            # extra = {entity: 0 for entity in user}
             for sample_one, rating_one in val.items():
+                # if rating_one == 0:
+                #     continue
+
                 for sample_two, rating_two in val.items():
                     if sample_one == sample_two:
                         continue
 
                     if rating_one == rating_two:
                         # continue
-                        positive_data.append([self.get_score(scores, sample_one),
+                        data.append([self.get_score(scores, sample_one),
                                               self.get_score(scores, sample_two),
                                               0.])
                     elif rating_one > rating_two:
-                        negative_data.append([self.get_score(scores, sample_one),
+                        data.append([self.get_score(scores, sample_one),
                                               self.get_score(scores, sample_two),
                                               1.])
-                    else:
-                        negative_data.append([self.get_score(scores, sample_one),
-                                              self.get_score(scores, sample_two),
-                                              -1.])
+                    # else:
+                    #     negative_data.append([self.get_score(scores, sample_one),
+                    #                           self.get_score(scores, sample_two),
+                    #                           -1.])
 
-        shuffle(positive_data)
-        shuffle(negative_data)
+        shuffle(data)
 
-        length = min(len(positive_data), len(negative_data))
-        positive_data = positive_data[:length]
-        negative_data = negative_data[:length]
+        batches = []
 
-        positive_batches = []
-        negative_batches = []
+        for batch_n in range(len(data) // self.batch_size):
+            batch = data[self.batch_size * batch_n:self.batch_size * (batch_n + 1)]
+            batches.append([tt.tensor(a) for a in zip(*batch)])
 
-        for batch_n in range(len(positive_data) // self.batch_size):
-            batch = positive_data[self.batch_size * batch_n:self.batch_size * (batch_n + 1)]
-            positive_batches.append([tt.tensor(a) for a in zip(*batch)])
-
-        for batch_n in range(len(negative_data) // self.batch_size):
-            batch = negative_data[self.batch_size * batch_n:self.batch_size * (batch_n + 1)]
-            negative_batches.append([tt.tensor(a) for a in zip(*batch)])
-
-        batches = positive_batches + negative_batches
         shuffle(batches)
 
         return batches
@@ -176,11 +197,22 @@ class PairLinearPageRankRecommender(RecommenderBase):
     def _create_train(self, training: Dict[int, WarmStartUser]) -> Dict[int, Dict[str, Dict[int, int]]]:
         data = {}
         for user, warm in training.items():
-            entities = list(warm.training.items())
-            shuffle(entities)
-            length = min(self.ask_limit, len(entities) // 2)
-            ppr_train = dict(entities[:length])
-            pairwise_train = dict(entities[length:])
+            entities = warm.training
+
+            # Get ask set
+            ask_set = set(entities.keys()).difference(self.can_ask_about)
+            ask_set = [(entity, entities[entity]) for entity in ask_set]
+            shuffle(ask_set)
+            ppr_train = dict(ask_set[:self.ask_limit])
+
+            # Recome ppr data from entities.
+            pairwise_train = set(entities.keys()).difference(ppr_train.keys())
+            pairwise_train = {entity: entities[entity] for entity in pairwise_train}
+
+            # Add unseen samples
+            val = {entity: 0 for entity in warm.validation.sentiment_samples[Sentiment.UNSEEN]}
+            pairwise_train.update(val)
+
             data[user] = {'ppr': ppr_train, 'pairwise': pairwise_train}
 
         return data
@@ -205,14 +237,15 @@ class PairLinearPageRankRecommender(RecommenderBase):
                 self._set_parameters(parameter)
 
                 val_preds, train_preds = self._fit(training, train)
-                batches = self._get_batches(train_preds, training)
-                score = self.meta.validator.score(self._optimize_weights(batches, val_preds, 1), self.meta)
+                batches = self._get_batches(train_preds)
+                score = self.meta.validator.score(self._optimize_weights(batches, val_preds, 2), self.meta)
 
                 # Clear cache
                 self.clear_cache()
 
                 if score > best_score:
                     logger.debug(f'New best with score: {score} and params, alpha: {parameter["alpha"]}')
+                    logger.debug(f'Weights were {self.model.weights.weight}')
                     best_score = score
                     best_params = parameter
 
