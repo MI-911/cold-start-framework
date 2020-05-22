@@ -1,25 +1,12 @@
 #!/bin/bash
+bash build_base.sh
 cd ..
 docker build -f Dockerfile.interview -t mindreader/interview .
 
-EXPERIMENT="default"
+EXPERIMENT="equal"
+BASE="/home/anders/Code/cold-start-framework/debug"
 
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include random top-pop
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include naive-mf
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include naive-ppr-collab
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include naive-ppr-joint
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include naive-ppr-kg
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-ppr-kg
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-ppr-kg-rec
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-ppr-joint
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-ppr-joint-rec
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-ppr-collab
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-ppr-collab-rec
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include lrmf
-#docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include fmf
-docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-knn
-docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include melu
-docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-ppr-linear-joint
-docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-ppr-linear-kg
-docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-ppr-linear-collab
-docker run -d --rm -v "${PWD}"/data:/app/data -v "${PWD}"/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include random
+docker run -d --rm -v $BASE/data:/app/data -v $BASE/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-adaptive-ppr-joint --splits split_1 split_0
+docker run -d --rm -v $BASE/data:/app/data -v $BASE/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-adaptive-ppr-joint --splits split_2 split_3
+docker run -d --rm -v $BASE/data:/app/data -v $BASE/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-adaptive-ppr-joint --splits split_1 split_0 --recommendable
+docker run -d --rm -v $BASE/data:/app/data -v $BASE/results:/app/results mindreader/interview --input data --output results --debug --experiments $EXPERIMENT --include greedy-adaptive-ppr-joint --splits split_2 split_3 --recommendable
