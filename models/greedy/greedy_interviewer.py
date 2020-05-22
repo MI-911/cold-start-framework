@@ -31,6 +31,7 @@ class GreedyInterviewer(InterviewerBase):
         self.idx_uri = self.meta.get_idx_uri()
         self.adaptive = adaptive
         self.root = None
+        # self.meta.validator.metric = Metric.HR
         self.cov_fraction = cov_fraction
 
         if isinstance(recommender, RecommenderBase):
