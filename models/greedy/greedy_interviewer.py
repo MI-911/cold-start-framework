@@ -151,7 +151,6 @@ class GreedyInterviewer(InterviewerBase):
         for idx, entity in enumerate(entities):
             logger.info(f'{1 + idx}. {self.get_entity_name(entity)}')
 
-        self.recommender.parameters = {'alpha': 0.1, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
         if self.adaptive:
