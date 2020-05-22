@@ -43,7 +43,6 @@ class MatrixFactorizationRecommender(RecommenderBase):
         self.meta = meta
         self.optimal_params = None
         self.model: Union[MatrixFactorisation, None] = None
-        self.predictions_cache = {}
 
         self.normalize = normalize_embeddings
         self.n_iterations = 100
