@@ -59,6 +59,16 @@ models = {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
     },
+    'greedy-adaptive-ppr-pair-linear': {
+        'class': GreedyInterviewer,
+        'recommender': PairLinearCombinedPageRankRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        },
+        'recommender_kwargs': {
+            'ask_limit': 101
+        }
+    },
     'greedy-adaptive-ppr-kg': {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender,

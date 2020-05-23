@@ -28,7 +28,7 @@ from statistics import mean, median, stdev
 def _get_parameters():
     params = []
 
-    for alpha in np.arange(0.1, 1, 0.15):
+    for alpha in np.arange(0.55, 1, 0.15):
         params.append({'alpha': alpha})
 
     return params
@@ -76,7 +76,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.negative_loss_func = nn.MarginRankingLoss(margin=self.margin, reduction='sum')
         self.loss_func = nn.MSELoss(reduction='sum')
         self.lr = 0.01
-        self.lr_decay = 0.9996
+        self.lr_decay = 0.996
         self.lr_decay_scheduler = None
         self.batch_size = 32
 
@@ -209,7 +209,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
                                         .nonzero().flatten()]
 
                                     if len(negative_indexes) > 0:
-                                        negative_index = tt.argmax(distances[negative_indexes])
+                                        negative_index = tt.argmax(distances[negative_indexes])  # TODO maybe reverse
                                     else:
                                         # If we did not find any, find negative min d(a, n)
                                         negative_indexes = (ratings == 0).nonzero().flatten()
@@ -318,7 +318,6 @@ class PairLinearPageRankRecommender(RecommenderBase):
             shuffle(preds)
             batch = []
             # Sample from 8 users each time. We sample 8 posititives and 56 negatives
-            # todo ensure user have at least 8 pos and 56 neg
             i = 0
             while len(batch) < 8:
                 idx, val, scores = preds[i]
@@ -405,6 +404,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
                     best_model = model
 
             self.optimal_params = best_params
+            self._set_parameters(self.optimal_params)
             self.model.load_state_dict(best_model)
         else:
             self._set_parameters(self.optimal_params)
