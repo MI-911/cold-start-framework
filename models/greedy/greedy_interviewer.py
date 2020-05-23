@@ -11,7 +11,6 @@ from models.base_interviewer import InterviewerBase
 from recommenders.base_recommender import RecommenderBase
 from shared.enums import Metric
 from shared.meta import Meta
-from shared.utility import get_top_entities
 
 
 def pprint_tree(node, prefix="- ", label=''):
@@ -89,7 +88,8 @@ class GreedyInterviewer(InterviewerBase):
         # Exclude answers to entities already asked about
         return self.questions
 
-    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None, desc=None):
+    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None, desc=None,
+                          cutoff=None):
         entity_scores = list()
         progress = tqdm(entities)
 
@@ -101,7 +101,7 @@ class GreedyInterviewer(InterviewerBase):
                 prediction = self.predict(ratings.validation.to_list(), answers)
                 user_validation.append((ratings.validation, prediction))
 
-            score = self.meta.validator.score(user_validation, self.meta, metric=metric)
+            score = self.meta.validator.score(user_validation, self.meta, metric=metric, cutoff=cutoff)
             entity_scores.append((entity, score))
 
             progress.set_description(f'{desc if desc else ""} {self.get_entity_name(entity)}: {score}')
@@ -121,18 +121,21 @@ class GreedyInterviewer(InterviewerBase):
 
         json.dump(label_scores, open('label_ndcg_joint.json', 'w'))
 
-    def _get_questions(self, training):
+    def get_questions(self, training, num_questions=10, entities=None, desc=None, base_questions=None):
         questions = list()
 
-        entities = self.meta.get_question_candidates(training, limit=100)
-        for question in range(10):
-            entity_scores = self.get_entity_scores(training, entities, questions)
+        entities = entities if entities else self.meta.get_question_candidates(training, limit=100)
+        base_questions = base_questions if base_questions else list()
+
+        for question in range(num_questions):
+            entity_scores = self.get_entity_scores(training, entities, questions + base_questions, desc=desc)
 
             if self.cov_fraction:
                 top_entities = [entity for entity, score in entity_scores]
                 top_entities = top_entities[:max(1, ceil(len(top_entities) * self.cov_fraction))]
 
-                entity_scores = self.get_entity_scores(training, top_entities, questions, metric=Metric.COV)
+                entity_scores = self.get_entity_scores(training, top_entities, questions, metric=Metric.COV,
+                                                       desc=desc)
 
             next_question = entity_scores[0][0]
 
@@ -151,6 +154,7 @@ class GreedyInterviewer(InterviewerBase):
         for idx, entity in enumerate(entities):
             logger.info(f'{1 + idx}. {self.get_entity_name(entity)}')
 
+        self.recommender.parameters = {'alpha': 0.5499999999999999, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
         if self.adaptive:
@@ -162,7 +166,7 @@ class GreedyInterviewer(InterviewerBase):
         else:
             logger.debug('Constructing fixed-question interview')
 
-            self.questions = self._get_questions(training)
+            self.questions = self.get_questions(training)
 
     def get_parameters(self):
         pass
@@ -179,8 +183,9 @@ def filter_users(users, entity: int, sentiments: List[int]):
 
 
 class Node:
-    def __init__(self, interviewer, entities=None):
+    def __init__(self, interviewer: GreedyInterviewer, entities=None):
         self.interviewer = interviewer
+        self.interviewer.cov_fraction = 0.05
         self.base_questions = entities if entities else list()
 
         self.LIKE = None
@@ -190,21 +195,23 @@ class Node:
         self.depth = 0
 
     def select_question(self, users, entities):
-        question_scores = self.interviewer.get_entity_scores(users, entities, self.base_questions,
-                                                             desc=f'[Searching candidates at depth {self.depth}]')
-
-        return question_scores[0][0]
+        return self.interviewer.get_questions(users, num_questions=1, base_questions=self.base_questions,
+                                              entities=entities,
+                                              desc=f'[Searching candidates at depth {self.depth}]')[0]
 
     def construct(self, users, entities, max_depth, depth=0):
-        min_users = 10
+        min_users = 5
         self.depth = depth
 
         # If this node doesn't have enough users to warrant a node split, we
         # can just assign the remaining interview questions as fixed questions
-        # (selected as the most popular of the remaining question candidates)
         if len(users) < min_users:
-            n_remaining_questions = max_depth - depth
-            self.questions = entities[:n_remaining_questions]
+            # Use GreedyExtend to get remaining questions
+            self.questions = self.interviewer.get_questions(users, entities=entities,
+                                                            base_questions=self.base_questions,
+                                                            num_questions=max_depth - (depth - 1),
+                                                            desc='[Ordering final questions]')
+
             return self
 
         # We have enough users to split, so continue
