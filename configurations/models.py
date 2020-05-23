@@ -65,6 +65,13 @@ models = {
             'adaptive': True
         }
     },
+    'greedy-adaptive-ppr-collab': {
+        'class': GreedyInterviewer,
+        'recommender': CollaborativePageRankRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
+    },
     'greedy-ppr-collab': {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender
