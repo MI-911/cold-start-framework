@@ -28,7 +28,7 @@ from statistics import mean, median, stdev
 def _get_parameters():
     params = []
 
-    for alpha in [0.7]:  # np.arange(0.1, 1, 0.15):
+    for alpha in np.arange(0.1, 1, 0.15):
         params.append({'alpha': alpha})
 
     return params
@@ -71,10 +71,13 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.can_ask_about = None
         self.model = None
         self.optimizer = None
-        self.margin = 1.
+        self.margin = 2.
         self.positive_loss_func = nn.MSELoss(reduction='mean')
         self.negative_loss_func = nn.MarginRankingLoss(margin=self.margin, reduction='sum')
         self.loss_func = nn.MSELoss(reduction='sum')
+        self.lr = 0.01
+        self.lr_decay = 0.9996
+        self.lr_decay_scheduler = None
         self.batch_size = 32
 
     @staticmethod
@@ -176,8 +179,6 @@ class PairLinearPageRankRecommender(RecommenderBase):
         best_model = None
         best_score = -1
         # t = tqdm(range(epochs), total=epochs)
-        user_lengths = []
-        triple_lengths = []
         for epoch in range(epochs):
             running_loss = tt.tensor(0.)
             count = tt.tensor(0.)
@@ -218,9 +219,6 @@ class PairLinearPageRankRecommender(RecommenderBase):
                                     positives.append(samples[positive_index].tolist())
                                     negatives.append(samples[negative_indexes[negative_index]].tolist())
 
-                user_lengths.append(len(ratings))
-                triple_lengths.append(len(anchors))
-
                 self.optimizer.zero_grad()
                 anchors, positives, negatives = tt.tensor(anchors), tt.tensor(positives), tt.tensor(negatives)
 
@@ -245,17 +243,14 @@ class PairLinearPageRankRecommender(RecommenderBase):
                 with tt.no_grad():
                     running_loss += loss
                     count += tt.tensor(1.)
-                    if True:
+                    if best_model is None:
                         weights = ["%.4f" % item for item in self.model.weights.weight.tolist()[0]]
                     else:
                         weights = best_model['weights.weight']
                     t.set_description(f'[Epoch {epoch}] Loss: {running_loss / count:.4f}, '
                                       f'BW: {weights}, BS: {best_score:.3f}')
 
-            logger.debug(
-                f'[Users] Mean: {mean(user_lengths)}, Median: {median(user_lengths)}, Std: {stdev(user_lengths)}')
-            logger.debug(f'[Triples] Mean: {mean(triple_lengths)}, Median: {median(triple_lengths)}, '
-                         f'Std: {stdev(triple_lengths)}')
+            self.lr_decay_scheduler.step()
 
             preds = []
             with tt.no_grad():
@@ -274,7 +269,8 @@ class PairLinearPageRankRecommender(RecommenderBase):
     def _set_parameters(self, parameters):
         self.alpha = parameters['alpha']
         self.model = PairwiseLinear(len(self.graphs))
-        self.optimizer = tt.optim.Adam(self.model.parameters(), lr=0.01)  # , weight_decay=0.999)
+        self.optimizer = tt.optim.Adam(self.model.parameters(), lr=self.lr)  # , weight_decay=0.999)
+        self.lr_decay_scheduler = tt.optim.lr_scheduler.ExponentialLR(optimizer=self.optimizer, gamma=self.lr_decay)
 
         for graph in self.graphs:
             graph.alpha = self.alpha
@@ -323,16 +319,24 @@ class PairLinearPageRankRecommender(RecommenderBase):
             batch = []
             # Sample from 8 users each time. We sample 8 posititives and 56 negatives
             # todo ensure user have at least 8 pos and 56 neg
-            for idx, val, scores in preds[:8]:
+            i = 0
+            while len(batch) < 8:
+                idx, val, scores = preds[i]
+                i += 1
+
                 positives = [[self.get_score(scores, entity), rating] for entity, rating in val.items() if rating == 1]
                 shuffle(positives)
                 positives = positives[:8]
 
-                negatives = [[self.get_score(scores, entity), rating] for entity, rating in val.items() if rating == 0]
+                negatives = [[self.get_score(scores, entity), 0.] for entity, rating in val.items() if rating <= 0]
                 shuffle(negatives)
                 negatives = negatives[:56]
 
+                if len(positives) <= 0 or len(negatives) <= 0:
+                    continue
+
                 batch.append([tt.tensor(a) for a in zip(*(positives + negatives))])
+
 
             batches.append(batch)
 
@@ -347,17 +351,16 @@ class PairLinearPageRankRecommender(RecommenderBase):
 
             # Sample one positive item.
             positives = [e for e, r in entities.items() if r == 1 and e not in self.can_ask_about]
+            negatives = [e for e, r in entities.items() if r == -1 and e not in self.can_ask_about]
 
             if len(positives) <= 1:
-                logger.debug('hmm')
                 continue
 
             #  Assign unseen to training
-            pairwise_train = {entity: 0 for entity in warm.validation.sentiment_samples[Sentiment.UNSEEN]}
+            pairwise_train = {}  #{entity: 0 for entity in warm.validation.sentiment_samples[Sentiment.UNSEEN]}
 
             # Add positive sample
-            shuffle(positives)
-            for pos_sample in positives:
+            for pos_sample in positives + negatives:
                 pairwise_train[pos_sample] = entities.pop(pos_sample)
 
             # Rest is used for train
@@ -389,7 +392,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
 
                 val_preds, train_preds = self._fit(training, train)
                 batches = self._get_batches_triplets(train_preds)
-                score, model = self._fit_triples(batches, val_preds, 5)
+                score, model = self._fit_triples(batches, val_preds, 10)
 
                 # Clear cache
                 self.clear_cache()
@@ -407,7 +410,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
             self._set_parameters(self.optimal_params)
             val_preds, train_preds = self._fit(training, train)
             batches = self._get_batches_triplets(train_preds)
-            score, model = self._fit_triples(batches, val_preds, 5)
+            score, model = self._fit_triples(batches, val_preds, 10)
             self.model.load_state_dict(model)
 
     def _fit(self, train_val: Dict[int, WarmStartUser], train_pair: Dict[int, Dict[str, Dict[int, int]]]):
