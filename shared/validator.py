@@ -39,4 +39,4 @@ class Validator:
         if metric == Metric.COV:
             return coverage(covered, meta.recommendable_entities)
         else:
-            return mean(scores)
+            return mean(scores) if scores else 0
