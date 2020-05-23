@@ -130,7 +130,7 @@ class LinearPageRankRecommender(RecommenderBase):
 
         validations = np.array([val for _, val in sorted(user_val_map.items(), key=lambda x: x[0])])
 
-        workers = 6
+        workers = 1
         chunks = [weight_ops[w::workers] for w in range(workers)]
 
         futures = []
