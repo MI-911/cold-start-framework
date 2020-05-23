@@ -185,7 +185,6 @@ def filter_users(users, entity: int, sentiments: List[int]):
 class Node:
     def __init__(self, interviewer: GreedyInterviewer, entities=None):
         self.interviewer = interviewer
-        self.interviewer.cov_fraction = 0.05
         self.base_questions = entities if entities else list()
 
         self.LIKE = None
@@ -200,13 +199,13 @@ class Node:
                                               desc=f'[Searching candidates at depth {self.depth}]')[0]
 
     def construct(self, users, entities, max_depth, depth=0):
-        min_users = 5
+        min_users = 10
         self.depth = depth
 
         # If this node doesn't have enough users to warrant a node split, we
         # can just assign the remaining interview questions as fixed questions
         if len(users) < min_users:
-            # Use GreedyExtend to get remaining questions
+            # Use GreedyExtend to get remaining fixed questions
             self.questions = self.interviewer.get_questions(users, entities=entities,
                                                             base_questions=self.base_questions,
                                                             num_questions=max_depth - (depth - 1),
@@ -242,4 +241,4 @@ class Node:
         return len(self.questions) > 1
 
     def __repr__(self):
-        return str([self.interviewer.get_entity_name(q) for q in self.questions])
+        return str([self.interviewer.get_entity_name(question) for question in self.questions])
