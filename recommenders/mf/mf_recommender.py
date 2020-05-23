@@ -106,7 +106,7 @@ class MatrixFactorizationRecommender(RecommenderBase):
 
     @hashable_lru(maxsize=1024)
     def _predict(self, likes):
-        self.model.predict_avg_items(likes, [e for e in range(len(self.meta.entities))])
+        return self.model.predict_avg_items(likes, [e for e in range(len(self.meta.entities))])
 
     def predict(self, items, answers):
         # Predict a user as the avg embedding of the items they liked
