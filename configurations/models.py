@@ -16,8 +16,6 @@ from recommenders.pagerank.linear_combined_pagerank_recommender import LinearCom
 from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointPageRankRecommender
 from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
-from recommenders.remote.particle_filtering_recommender import ParticleFilteringRecommender
-from recommenders.svd.svd_recommender import SVDRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
 models = {
@@ -117,14 +115,6 @@ models = {
         'class': LRMFInterviewer,
         'requires_interview_length': True,
         'use_cuda': False
-    },
-    'pop-pf': {
-        'class': NaiveInterviewer,
-        'recommender': ParticleFilteringRecommender
-    },
-    'pop-svd': {
-        'class': NaiveInterviewer,
-        'recommender': SVDRecommender
     },
     'pop-ppr-collab': {
         'class': NaiveInterviewer,
