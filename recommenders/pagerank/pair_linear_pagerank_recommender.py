@@ -71,7 +71,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.can_ask_about = None
         self.model = None
         self.optimizer = None
-        self.margin = .002  # 0.001
+        self.margin = .001  # 0.001
         self.positive_loss_func = nn.MSELoss(reduction='mean')
         self.ranking_loss_func = nn.MarginRankingLoss(margin=self.margin, reduction='sum')
         self.triplet_loss_func = nn.MSELoss(reduction='sum')
@@ -245,7 +245,8 @@ class PairLinearPageRankRecommender(RecommenderBase):
                 triplet_loss = temp_loss(anchor_scores, positive_scores, negative_scores)
                 rank_loss = self.ranking_loss_func(anchor_scores, negative_scores, tt.ones(len(anchors)))
                 # loss = triplet_loss + rank_loss
-                loss = tt.mul(tt.sub(1, self.beta), triplet_loss) + tt.mul(rank_loss, self.beta)
+                loss = tt.mul(tt.sub(1, self.beta), triplet_loss) + tt.mul(rank_loss, self.beta) +\
+                       self.limit_weight_loss(3.)
 
                 # loss = tt.relu(tt.add(tt.sub(a_p, a_n), self.margin))
                 loss.backward()
