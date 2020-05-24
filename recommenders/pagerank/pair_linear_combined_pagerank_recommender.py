@@ -19,10 +19,10 @@ class PairLinearCombinedPageRankRecommender(PairLinearPageRankRecommender):
         # Create graphs for collaborative
         graphs = []
         for sentiment in sentiments:
-            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit, normalize=True))
+            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit))
 
         # Create graphs for kg
         for sentiment in sentiments:
-            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit, only_kg=True, normalize=True))
+            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit, only_kg=True))
 
         return graphs
