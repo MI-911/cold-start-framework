@@ -71,12 +71,13 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.can_ask_about = None
         self.model = None
         self.optimizer = None
-        self.margin = 2.
+        self.margin = .002  # 0.001
         self.positive_loss_func = nn.MSELoss(reduction='mean')
-        self.negative_loss_func = nn.MarginRankingLoss(margin=self.margin, reduction='sum')
-        self.loss_func = nn.MSELoss(reduction='sum')
+        self.ranking_loss_func = nn.MarginRankingLoss(margin=self.margin, reduction='sum')
+        self.triplet_loss_func = nn.MSELoss(reduction='sum')
         self.lr = 0.01
-        self.lr_decay = 0.996
+        self.beta = 0.1
+        self.lr_decay = 0.96
         self.lr_decay_scheduler = None
         self.batch_size = 32
 
@@ -147,7 +148,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
                 # neg_loss = self.negative_loss_func(sample_one_pred[negative], sample_two_pred[negative],
                 #                                    target[negative])
 
-                loss = self.loss_func(sample_one_pred, sample_two_pred, sample_three_pred)
+                loss = self.triplet_loss_func(sample_one_pred, sample_two_pred, sample_three_pred)
                 loss.backward()
                 self.optimizer.step()
 
@@ -178,6 +179,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
     def _fit_triples(self, batches, predictions, epochs=100):
         best_model = None
         best_score = -1
+        tt.autograd.set_detect_anomaly(True)
         # t = tqdm(range(epochs), total=epochs)
         for epoch in range(epochs):
             running_loss = tt.tensor(0.)
@@ -226,31 +228,39 @@ class PairLinearPageRankRecommender(RecommenderBase):
                     logger.debug('skipping')
                     continue
 
+                def temp_loss(a, p, n):
+                    a_p = tt.sub(a, p).norm().pow(2)
+                    a_n = tt.sub(a, n).norm().pow(2)
+
+                    return tt.add(tt.sub(a_p, a_n), self.margin).relu().sum()
+
                 anchor_scores = self.model(anchors)
                 positive_scores = self.model(positives)
                 negative_scores = self.model(negatives)
 
-                a_p = tt.pow(self.loss_func(anchor_scores, positive_scores), 2)
-                a_n = tt.pow(self.loss_func(anchor_scores, negative_scores), 2)
+                # a_p = tt.pow(self.triplet_loss_func(anchor_scores, positive_scores), 2)
+                # a_n = tt.pow(self.triplet_loss_func(anchor_scores, negative_scores), 2)
 
-                triple_loss = tt.relu(tt.add(tt.sub(a_p, a_n), self.margin))
-                rank_loss = self.negative_loss_func(anchor_scores, negative_scores, tt.ones(len(anchors)))
-                loss = triple_loss + rank_loss
+                # triple_loss = tt.relu(tt.add(tt.sub(a_p, a_n), self.margin))
+                triplet_loss = temp_loss(anchor_scores, positive_scores, negative_scores)
+                rank_loss = self.ranking_loss_func(anchor_scores, negative_scores, tt.ones(len(anchors)))
+                # loss = triplet_loss + rank_loss
+                loss = tt.mul(tt.sub(1, self.beta), triplet_loss) + tt.mul(rank_loss, self.beta)
+
                 # loss = tt.relu(tt.add(tt.sub(a_p, a_n), self.margin))
                 loss.backward()
+                # nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 self.optimizer.step()
 
                 with tt.no_grad():
                     running_loss += loss
                     count += tt.tensor(1.)
-                    if best_model is None:
-                        weights = ["%.4f" % item for item in self.model.weights.weight.tolist()[0]]
-                    else:
-                        weights = best_model['weights.weight']
+                    weights = ["%.4f" % item for item in self.model.weights.weight.tolist()[0]]
                     t.set_description(f'[Epoch {epoch}] Loss: {running_loss / count:.4f}, '
-                                      f'BW: {weights}, BS: {best_score:.3f}')
+                                      f'W: {weights}, BS: {best_score:.3f}')
 
-            self.lr_decay_scheduler.step()
+            if epoch >= 5:
+                self.lr_decay_scheduler.step()
 
             preds = []
             with tt.no_grad():
@@ -263,6 +273,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
             if score > best_score:
                 best_score = score
                 best_model = deepcopy(self.model.state_dict())
+                logger.debug(f'New best weight {best_model["weights.weight"]}')
 
         return best_score, best_model
 
@@ -313,7 +324,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
 
     def _get_batches_triplets(self, preds):
         batches = []
-        t = tqdm(range(2048), total=2048, desc='Creating data')
+        t = tqdm(range(512), total=512, desc='Creating data')
         for _ in t:
             shuffle(preds)
             batch = []

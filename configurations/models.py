@@ -66,7 +66,7 @@ models = {
             'adaptive': True
         },
         'recommender_kwargs': {
-            'ask_limit': 101
+            'ask_limit': 8
         }
     },
     'greedy-adaptive-ppr-kg': {
