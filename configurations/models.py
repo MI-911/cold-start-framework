@@ -87,6 +87,20 @@ models = {
             'adaptive': True
         }
     },
+    'greedy-adaptive-knn': {
+        'class': GreedyInterviewer,
+        'recommender': KNNRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
+    },
+    'greedy-adaptive-mf': {
+        'class': GreedyInterviewer,
+        'recommender': MatrixFactorizationRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
+    },
     'greedy-ppr-linear-joint': {
         'class': GreedyInterviewer,
         'recommender': LinearJointPageRankRecommender
