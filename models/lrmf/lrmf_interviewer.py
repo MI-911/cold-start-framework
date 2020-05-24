@@ -141,8 +141,6 @@ class LRMFInterviewer(InterviewerBase):
 
     def interview(self, answers: Dict[int, int], max_n_questions=5) -> List[int]:
         questions = [self.model.interview({e: RATING_MAP[a] for e, a in answers.items()})]
-        for question in questions:
-            assert self.is_recommendable(question)
 
         return questions
 
