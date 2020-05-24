@@ -140,7 +140,9 @@ class LRMFInterviewer(InterviewerBase):
         return self.meta.validator.score(predictions, self.meta)
 
     def interview(self, answers: Dict[int, int], max_n_questions=5) -> List[int]:
-        return [self.model.interview({e: RATING_MAP[a] for e, a in answers.items()})]
+        questions = [self.model.interview({e: RATING_MAP[a] for e, a in answers.items()})]
+
+        return questions
 
     def predict(self, items: List[int], answers: Dict[int, int]) -> Dict[int, float]:
         return self.model.rank(items, {e: RATING_MAP[a] for e, a in answers.items()})
@@ -150,3 +152,6 @@ class LRMFInterviewer(InterviewerBase):
 
     def load_parameters(self, params):
         self.params = params
+
+    def is_recommendable(self, entity):
+        return entity in self.meta.recommendable_entities

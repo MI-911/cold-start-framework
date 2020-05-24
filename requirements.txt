@@ -7,3 +7,4 @@ networkx
 torch
 sklearn
 neo4j
+requests

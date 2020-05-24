@@ -36,7 +36,8 @@ def global_questions_vector(questions: List[int], max_length: int) -> List[int]:
 
 def local_questions_vector(candidates: List[int], entity_embeddings: np.ndarray, max_length: int) -> List[int]:
     questions, _ = py_rect_maxvol(entity_embeddings[candidates], maxK=max_length)
-    return questions.tolist()
+    candidates = np.array(candidates)[questions]
+    return candidates.tolist()
 
 
 def group_loss(users: List[int], global_questions: List[int], local_questions: List[int],

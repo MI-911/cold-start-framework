@@ -66,6 +66,8 @@ class KNNRecommender(RecommenderBase):
             self.entity_vectors = self.pearson_entity_vectors.copy()
 
     def fit(self, training: Dict[int, WarmStartUser]):
+        can_ask_about = set(self.meta.get_question_candidates(training))
+
         logger.debug('Building data')
         for user, warm in training.items():
             for entity_id, rating in warm.training.items():
@@ -89,7 +91,7 @@ class KNNRecommender(RecommenderBase):
             for params in self._get_param_combinations():
                 logger.debug(f'Trying with parameters: {params}')
                 self._set_params(params)
-                hr = self._fit(training)
+                hr = self._fit(training, can_ask_about)
                 if hr > best_hr:
                     logger.debug(f'Found better parameters: {params}, score: {hr}')
                     best_hr = hr
@@ -101,10 +103,11 @@ class KNNRecommender(RecommenderBase):
 
         self._set_params(self.optimal_params)
 
-    def _fit(self, training: Dict[int, WarmStartUser]):
+    def _fit(self, training: Dict[int, WarmStartUser], can_ask_about):
         predictions = []
         for user, warm in training.items():
-            user_predictions = self.predict(warm.validation.to_list(), warm.training)
+            user_predictions = self.predict(warm.validation.to_list(),
+                                            {k: v for k, v in warm.training.items() if k in can_ask_about})
 
             predictions.append((warm.validation, user_predictions))
 

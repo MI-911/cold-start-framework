@@ -17,8 +17,6 @@ from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointP
 from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
 from recommenders.pagerank.pair_linear_combined_pagerank_recommender import PairLinearCombinedPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
-from recommenders.remote.particle_filtering_recommender import ParticleFilteringRecommender
-from recommenders.svd.svd_recommender import SVDRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
 models = {
@@ -98,6 +96,20 @@ models = {
             'adaptive': True
         }
     },
+    'greedy-adaptive-knn': {
+        'class': GreedyInterviewer,
+        'recommender': KNNRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
+    },
+    'greedy-adaptive-mf': {
+        'class': GreedyInterviewer,
+        'recommender': MatrixFactorizationRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
+    },
     'greedy-ppr-linear-joint': {
         'class': GreedyInterviewer,
         'recommender': LinearJointPageRankRecommender
@@ -114,14 +126,6 @@ models = {
         'class': LRMFInterviewer,
         'requires_interview_length': True,
         'use_cuda': False
-    },
-    'pop-pf': {
-        'class': NaiveInterviewer,
-        'recommender': ParticleFilteringRecommender
-    },
-    'pop-svd': {
-        'class': NaiveInterviewer,
-        'recommender': SVDRecommender
     },
     'pop-ppr-collab': {
         'class': NaiveInterviewer,

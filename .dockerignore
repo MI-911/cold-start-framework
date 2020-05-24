@@ -11,3 +11,5 @@
 /debug
 /.venv
 /tools
+/results
+/.runs
