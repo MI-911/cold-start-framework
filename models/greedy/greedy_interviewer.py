@@ -150,10 +150,6 @@ class GreedyInterviewer(InterviewerBase):
         return questions
 
     def warmup(self, training, interview_length=10):
-        entities = self.meta.get_question_candidates(training, limit=5)
-        for idx, entity in enumerate(entities):
-            logger.info(f'{1 + idx}. {self.get_entity_name(entity)}')
-
         # self.recommender.parameters = {'alpha': 0.5499999999999999, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
