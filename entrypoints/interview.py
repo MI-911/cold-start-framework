@@ -19,7 +19,6 @@ from shared.meta import Meta
 from shared.ranking import Ranking
 from shared.user import ColdStartUserSet, ColdStartUser, WarmStartUser
 from shared.utility import join_paths, valid_dir
-
 UPLOAD_PATH = 'https://mindreader.tech/spectate/results'
 
 parser = argparse.ArgumentParser()
@@ -267,7 +266,7 @@ def finish_split(upload, output_path, split, model_alias, model_instance, answer
     logger.debug(f'Saving results for {model_alias} ({split.experiment.name}/{split.name}) with {length} questions')
 
     _write_answers(output_path, model_alias, answers, split)
-    # _write_results(output_path, model_alias, metrics, split)
+    _write_results(output_path, model_alias, metrics, split)
     _write_parameters(model_alias, split.experiment, model_instance, length)
 
     if not upload:
