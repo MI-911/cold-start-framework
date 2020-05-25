@@ -28,7 +28,7 @@ from statistics import mean, median, stdev
 def _get_parameters():
     params = []
 
-    for alpha in np.arange(0.55, 1, 0.15):
+    for alpha in np.arange(0.1, 1, 0.15):
         params.append({'alpha': alpha})
 
     return params
@@ -37,7 +37,7 @@ def _get_parameters():
 class PairwiseLinear(nn.Module):
     def __init__(self, num_graphs):
         super().__init__()
-        self.weights = nn.Linear(num_graphs, 1, bias=True)
+        self.weights = nn.Linear(num_graphs, 1, bias=False)
         # self.weights.weight.data.uniform_(-1., 1.)
         # self.weights = nn.Parameter(tt.rand(1, num_graphs), requires_grad=True)
 
@@ -45,7 +45,7 @@ class PairwiseLinear(nn.Module):
         # x = tt.mul(self.weights, scores)
         x = self.weights(scores)
         # x = tt.sum(x, dim=1)
-        return tt.sigmoid(x)
+        return x
         # return tt.sigmoid(x)
 
 
@@ -71,7 +71,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.can_ask_about = None
         self.model = None
         self.optimizer = None
-        self.margin = .0001  # 0.001
+        self.margin = .001  # 0.001
         self.positive_loss_func = nn.MSELoss(reduction='mean')
         self.ranking_loss_func = nn.MarginRankingLoss(margin=self.margin, reduction='sum')
         self.triplet_loss_func = nn.MSELoss(reduction='sum')
@@ -279,13 +279,13 @@ class PairLinearPageRankRecommender(RecommenderBase):
 
             # Sample one positive item.
             positives = [e for e, r in entities.items() if r == 1 and e not in self.can_ask_about]
-            negatives = [e for e, r in entities.items() if r == -1 and e not in self.can_ask_about]
+            negatives = [] #[e for e, r in entities.items() if r == -1 and e not in self.can_ask_about]
 
             if len(positives) <= 1:
                 continue
 
             #  Assign unseen to training
-            pairwise_train = {}  #{entity: 0 for entity in warm.validation.sentiment_samples[Sentiment.UNSEEN]}
+            pairwise_train = {entity: 0 for entity in warm.validation.sentiment_samples[Sentiment.UNSEEN]}
 
             # Add positive sample
             for pos_sample in positives + negatives:
@@ -335,12 +335,15 @@ class PairLinearPageRankRecommender(RecommenderBase):
             self.optimal_params = best_params
             self._set_parameters(self.optimal_params)
             self.model.load_state_dict(best_model)
+            logger.debug(f'Using alpha {self.optimal_params["alpha"]}, and weights {self.model.weights.weight}')
         else:
             self._set_parameters(self.optimal_params)
             val_preds, train_preds = self._fit(training, train)
             batches = self._get_batches_triplets(train_preds)
             score, model = self._fit_triples(batches, val_preds, 10)
             self.model.load_state_dict(model)
+
+        self.clear_cache()
 
     def _fit(self, train_val: Dict[int, WarmStartUser], train_pair: Dict[int, Dict[str, Dict[int, int]]]):
         val_predictions = []

@@ -49,6 +49,7 @@ class GraphWrapper:
 
     def clear_cache(self):
         self._all_scores.cache_clear()
+        self._get_node_weights_cached.cache_clear()
 
     def _get_node_weights(self, answers):
         answers = {k: v for k, v in answers.items() if v == self.rating_type and k in self.can_ask_about}
