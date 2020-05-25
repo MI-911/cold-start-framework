@@ -152,7 +152,7 @@ class GreedyInterviewer(InterviewerBase):
 
         return questions
 
-    def warmup(self, training, interview_length=5):
+    def warmup(self, training, interview_length=4):
         entities = self.meta.get_question_candidates(training, limit=5)
         for idx, entity in enumerate(entities):
             logger.info(f'{1 + idx}. {self.get_entity_name(entity)}')
@@ -169,7 +169,7 @@ class GreedyInterviewer(InterviewerBase):
             self.root = Node(self).construct(training, self.meta.get_question_candidates(training, limit=50))
             graph = nx.DiGraph()
             print(f'Constructing tree graph...')
-            graph, edge_labels, node_labels = pprint_tree_as_graph(graph, self.root, 0, 4)
+            graph, edge_labels, node_labels = pprint_tree_as_graph(graph, self.root, 0, 3)
             edge_labels = {edge: label for edge, label in edge_labels}
             node_labels = {node: label for node, label in node_labels}
 

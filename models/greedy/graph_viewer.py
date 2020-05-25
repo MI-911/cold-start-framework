@@ -11,9 +11,9 @@ if __name__ == '__main__':
         node_labels = dec_tree_graph['node_labels']
 
         print(f'Calculating positions of {graph.number_of_nodes()} nodes...')
-        pos = graphviz_layout(graph)
+        pos = graphviz_layout(graph, prog='twopi')
         print(f'Drawing...')
-        nx.draw(graph, pos=pos, with_labels=False, node_size=600, node_color='lightgrey', node_labels=node_labels)
+        nx.draw(graph, pos=pos, with_labels=False, node_size=750, node_color='lightgrey', node_labels=node_labels)
         nx.draw_networkx_edge_labels(graph, pos, edge_labels=edge_labels)
         nx.draw_networkx_labels(graph, pos, labels=node_labels)
         print(f'Showing...')
