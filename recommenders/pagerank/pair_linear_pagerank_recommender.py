@@ -45,7 +45,7 @@ class PairwiseLinear(nn.Module):
         # x = tt.mul(self.weights, scores)
         x = self.weights(scores)
         # x = tt.sum(x, dim=1)
-        return x
+        return tt.sigmoid(x)
         # return tt.sigmoid(x)
 
 
@@ -71,12 +71,12 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.can_ask_about = None
         self.model = None
         self.optimizer = None
-        self.margin = .001  # 0.001
+        self.margin = .0001  # 0.001
         self.positive_loss_func = nn.MSELoss(reduction='mean')
         self.ranking_loss_func = nn.MarginRankingLoss(margin=self.margin, reduction='sum')
         self.triplet_loss_func = nn.MSELoss(reduction='sum')
         self.lr = 0.01
-        self.beta = 0.1
+        self.beta = 1.
         self.lr_decay = 0.96
         self.lr_decay_scheduler = None
         self.batch_size = 32
