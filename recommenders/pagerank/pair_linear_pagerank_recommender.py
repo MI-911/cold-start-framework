@@ -126,56 +126,6 @@ class PairLinearPageRankRecommender(RecommenderBase):
         extra = tt.sum(extra)
         return extra
 
-    def _optimize_weights(self, batches, predictions, epochs=100) -> Tuple[int, dict]:
-        best_model = None
-        best_score = -1
-        t = tqdm(range(epochs), total=epochs)
-        for epoch in t:
-            running_loss = tt.tensor(0.)
-            count = tt.tensor(0.)
-            shuffle(batches)
-
-            for sample_one, sample_two, sample_three in batches[:]:
-                self.optimizer.zero_grad()
-                sample_one_pred = self.model(sample_one)
-                sample_two_pred = self.model(sample_two)
-                sample_three_pred = self.model(sample_three)
-
-                # positive = (target == 0).nonzero()
-                # negative = target.nonzero()
-                #
-                # pos_loss = self.positive_loss_func(sample_one_pred[positive], sample_two_pred[positive])
-                # neg_loss = self.negative_loss_func(sample_one_pred[negative], sample_two_pred[negative],
-                #                                    target[negative])
-
-                loss = self.triplet_loss_func(sample_one_pred, sample_two_pred, sample_three_pred)
-                loss.backward()
-                self.optimizer.step()
-
-                with tt.no_grad():
-                    running_loss += loss
-                    count += tt.tensor(1.)
-                    if True:
-                        weights = ["%.4f" % item for item in self.model.weights.weight.tolist()[0]]
-                    else:
-                        weights = best_model['weights.weight']
-                    t.set_description(f'[Epoch {epoch}] Loss: {running_loss / count:.4f}, '
-                                      f'BW: {weights}, BS: {best_score:.3f}')
-
-            preds = []
-            with tt.no_grad():
-                for idx, val, scores in predictions:
-                    p = {entity: self.model(tt.tensor(self.get_score(scores, entity)).unsqueeze(0))
-                         for entity in val.to_list()}
-                    preds.append((val, p))
-
-            score = self.meta.validator.score(preds, self.meta)
-            if score > best_score:
-                best_score = score
-                best_model = deepcopy(self.model.state_dict())
-
-        return best_score, best_model
-
     def _fit_triples(self, batches, predictions, epochs=100):
         best_model = None
         best_score = -1
@@ -289,38 +239,6 @@ class PairLinearPageRankRecommender(RecommenderBase):
     @staticmethod
     def get_score(scores, entity):
         return [score[entity] for score in scores]
-
-    def _get_batches(self, preds):
-        data = []
-        for idx, val, scores in preds:
-            for sample_one, rating_one in val.items():
-                if rating_one == 0:
-                    continue
-
-                for sample_two, rating_two in val.items():
-                    if sample_one == sample_two:
-                        continue
-
-                    if rating_one == rating_two:
-                        data.append([self.get_score(scores, sample_one),
-                                     self.get_score(scores, sample_two),
-                                     0.])
-                    if rating_one > rating_two:
-                        data.append([self.get_score(scores, sample_one),
-                                     self.get_score(scores, sample_two),
-                                     1.])
-
-        shuffle(data)
-
-        batches = []
-
-        for batch_n in range(len(data) // self.batch_size):
-            batch = data[self.batch_size * batch_n:self.batch_size * (batch_n + 1)]
-            batches.append([tt.tensor(a) for a in zip(*batch)])
-
-        shuffle(batches)
-
-        return batches
 
     def _get_batches_triplets(self, preds):
         batches = []
