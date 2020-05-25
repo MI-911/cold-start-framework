@@ -12,6 +12,9 @@ from recommenders.pagerank.collaborative_pagerank_recommender import Collaborati
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
 from recommenders.pagerank.linear_combined_pagerank_recommender import LinearCombinedPageRankRecommender
+from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointPageRankRecommender
+from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
+from recommenders.pagerank.pair_linear_combined_pagerank_recommender import PairLinearCombinedPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
@@ -52,6 +55,16 @@ models = {
     'greedy-ppr-kg': {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
+    },
+    'greedy-adaptive-ppr-pair-linear': {
+        'class': GreedyInterviewer,
+        'recommender': PairLinearCombinedPageRankRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        },
+        'recommender_kwargs': {
+            'ask_limit': 10
+        }
     },
     'greedy-adaptive-ppr-kg': {
         'class': GreedyInterviewer,
@@ -116,6 +129,13 @@ models = {
     'pop-ppr-linear-grid': {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
+    },
+    'pop-ppr-pair-linear': {
+        'class': NaiveInterviewer,
+        'recommender': PairLinearCombinedPageRankRecommender,
+        'recommender_kwargs': {
+            'ask_limit': 10
+        }
     },
     'greedy-ppr-linear-grid': {
         'class': NaiveInterviewer,

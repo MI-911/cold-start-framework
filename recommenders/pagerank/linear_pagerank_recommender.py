@@ -1,4 +1,7 @@
 from collections import defaultdict
+from concurrent.futures._base import wait
+from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures.thread import ThreadPoolExecutor
 from copy import deepcopy
 from typing import Dict, List
 
@@ -16,7 +19,7 @@ from shared.utility import hashable_lru
 
 
 class GraphWrapper:
-    def __init__(self, training, rating, meta, ask_limit, only_kg=False, use_meta=False):
+    def __init__(self, training, rating, meta, ask_limit, only_kg=False, use_meta=False, normalize=False):
         if only_kg:
             self.graph = SparseGraph(construct_knowledge_graph(meta))
         elif not use_meta:
@@ -29,25 +32,30 @@ class GraphWrapper:
         self.entity_indices = {idx for _, warm in training.items() for idx, _ in warm.training.items()}
         self.can_ask_about = set(self.meta.get_question_candidates(training, limit=ask_limit))
         self.alpha = None
+        self.normalize = normalize
 
     def get_score(self, answers, items):
         scores = self._all_scores(answers)
-
-        return {item: scores.get(item, 0) for item in items}
+        scores = {item: scores.get(item, 0) for item in items}
+        if self.normalize:
+            return self._normalize_scores(scores)
+        else:
+            return scores
 
     @hashable_lru(maxsize=1024)
     def _all_scores(self, answers):
         node_weights = self._get_node_weights(answers)
-
         return self.graph.scores(alpha=self.alpha, personalization=node_weights)
 
     def clear_cache(self):
         self._all_scores.cache_clear()
+        self._get_node_weights_cached.cache_clear()
 
     def _get_node_weights(self, answers):
         answers = {k: v for k, v in answers.items() if v == self.rating_type and k in self.can_ask_about}
         return self._get_node_weights_cached(answers)
 
+    @hashable_lru()
     def _get_node_weights_cached(self, answers):
         rated_entities = list(answers.keys())
 
@@ -59,6 +67,10 @@ class GraphWrapper:
 
         # Assign weight to each node depending on their rating
         return {idx: weight for sentiment, weight in weights.items() for idx in ratings[sentiment]}
+
+    def _normalize_scores(self, scores):
+        factor = max(scores.values())
+        return {k: v/factor for k, v in scores.items()}
 
 
 def _get_parameters():
@@ -85,7 +97,7 @@ class LinearPageRankRecommender(RecommenderBase):
 
         self.optimal_params = None
 
-        self.ask_limit = 20
+        self.ask_limit = ask_limit
         self.can_ask_about = None
 
     def construct_graph(self, training: Dict[int, WarmStartUser]) -> List[GraphWrapper]:
@@ -119,21 +131,42 @@ class LinearPageRankRecommender(RecommenderBase):
 
         validations = np.array([val for _, val in sorted(user_val_map.items(), key=lambda x: x[0])])
 
-        scores = np.zeros((len(weight_ops)))
+        workers = 1
+        chunks = [weight_ops[w::workers] for w in range(workers)]
 
+        futures = []
+        with ProcessPoolExecutor(max_workers=workers) as e:
+            for chunk in chunks:
+                futures.append(e.submit(self._weight_score, num_users, num_items, chunk,
+                                        data_score, validations, user_entities_map))
+
+        wait(futures)
+
+        scores = np.array([future.result() for future in futures])
+        x, y = 0, 0
+        best = 0
+        for i, score in enumerate(scores):
+            arg = np.argmax(score)
+            current = score[arg]
+            if current > best:
+                x = i
+                y = arg
+
+        return scores[x][y], chunks[x][y]
+
+    def _weight_score(self, num_users, num_items, weight_ops, data_score, validations, user_entities_map):
+        scores = np.zeros((len(weight_ops)))
         for i, weights in tqdm(enumerate(weight_ops), total=len(weight_ops)):
             linear_preds = np.zeros((num_users, num_items), dtype=np.float)
             for preds_index, weight in enumerate(weights):
                 linear_preds += data_score[preds_index] * weight
 
             linear_preds = list(zip(validations, [{**dict(zip(entities, preds))}
-                                                     for entities, preds in zip(user_entities_map, linear_preds)]))
+                                                  for entities, preds in zip(user_entities_map, linear_preds)]))
 
             scores[i] = self.meta.validator.score(linear_preds, self.meta)
 
-        arg = np.argmax(scores)
-
-        return scores[arg], weight_ops[arg]
+        return scores
 
     def _get_weight_options(self, weights, num_graphs):
         if num_graphs <= 1:
