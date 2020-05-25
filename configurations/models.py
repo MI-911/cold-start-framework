@@ -128,23 +128,15 @@ models = {
         'class': NaiveInterviewer,
         'recommender': JointPageRankRecommender
     },
-    'pop-ppr-linear-collab': {
-        'class': NaiveInterviewer,
-        'recommender': LinearCollaborativePageRankRecommender
-    },
     'pop-ppr-linear-joint': {
         'class': NaiveInterviewer,
         'recommender': LinearJointPageRankRecommender
     },
-    'pop-ppr-linear-kg': {
-        'class': NaiveInterviewer,
-        'recommender': LinearKGPageRankRecommender
-    },
-    'pop-ppr-linear': {
+    'pop-ppr-linear-grid': {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
-    'greedy-ppr-linear': {
+    'greedy-ppr-linear-grid': {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
