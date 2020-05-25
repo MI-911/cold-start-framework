@@ -229,8 +229,8 @@ class PairLinearPageRankRecommender(RecommenderBase):
                     continue
 
                 def temp_loss(a, p, n):
-                    a_p = tt.sub(a, p).norm().pow(2)
-                    a_n = tt.sub(a, n).norm().pow(2)
+                    a_p = tt.sub(a, p).norm(dim=1).pow(2)
+                    a_n = tt.sub(a, n).norm(dim=1).pow(2)
 
                     return tt.add(tt.sub(a_p, a_n), self.margin).relu().sum()
 
@@ -245,8 +245,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
                 triplet_loss = temp_loss(anchor_scores, positive_scores, negative_scores)
                 rank_loss = self.ranking_loss_func(anchor_scores, negative_scores, tt.ones(len(anchors)))
                 # loss = triplet_loss + rank_loss
-                loss = tt.mul(tt.sub(1, self.beta), triplet_loss) + tt.mul(rank_loss, self.beta) +\
-                       self.limit_weight_loss(3.)
+                loss = tt.mul(tt.sub(1, self.beta), triplet_loss) + tt.mul(rank_loss, self.beta) #+ self.limit_weight_loss(3.)
 
                 # loss = tt.relu(tt.add(tt.sub(a_p, a_n), self.margin))
                 loss.backward()
