@@ -12,8 +12,6 @@ from recommenders.pagerank.collaborative_pagerank_recommender import Collaborati
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
 from recommenders.pagerank.linear_combined_pagerank_recommender import LinearCombinedPageRankRecommender
-from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointPageRankRecommender
-from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
 from recommenders.pagerank.pair_linear_combined_pagerank_recommender import PairLinearCombinedPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
@@ -148,13 +146,13 @@ models = {
         'class': GreedyInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
-    'pop-knn': {
-      'class': NaiveInterviewer,
-      'recommender': KNNRecommender
-    },
     'greedy-knn': {
         'class': GreedyInterviewer,
         'recommender': KNNRecommender
+    },
+    'pop-knn': {
+      'class': NaiveInterviewer,
+      'recommender': KNNRecommender
     },
     'dqn-knn': {
         'class': DqnInterviewer,
