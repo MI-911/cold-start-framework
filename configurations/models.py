@@ -137,8 +137,15 @@ models = {
             'ask_limit': 10
         }
     },
+    'greedy-ppr-linear-learned': {
+        'class': GreedyInterviewer,
+        'recommender': PairLinearCombinedPageRankRecommender,
+        'recommender_kwargs': {
+            'ask_limit': 10
+        }
+    },
     'greedy-ppr-linear-grid': {
-        'class': NaiveInterviewer,
+        'class': GreedyInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
     'pop-knn': {

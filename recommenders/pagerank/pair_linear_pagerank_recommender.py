@@ -28,7 +28,7 @@ from statistics import mean, median, stdev
 def _get_parameters():
     params = []
 
-    for alpha in [0.7]:#np.arange(0.1, 1, 0.15):
+    for alpha in np.arange(0.1, 1, 0.15):
         params.append({'alpha': alpha})
 
     return params
