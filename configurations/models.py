@@ -130,7 +130,7 @@ models = {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
-    'pop-ppr-pair-linear': {
+    'pop-ppr-linear-learned': {
         'class': NaiveInterviewer,
         'recommender': PairLinearCombinedPageRankRecommender,
         'recommender_kwargs': {
