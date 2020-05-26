@@ -28,7 +28,7 @@ from statistics import mean, median, stdev
 def _get_parameters():
     params = []
 
-    for alpha in np.arange(0.1, 1, 0.15):
+    for alpha in [0.7]:#np.arange(0.1, 1, 0.15):
         params.append({'alpha': alpha})
 
     return params
@@ -71,12 +71,13 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.can_ask_about = None
         self.model = None
         self.optimizer = None
-        self.margin = .001  # 0.001
+        self.margin = 0.001
         self.positive_loss_func = nn.MSELoss(reduction='mean')
         self.ranking_loss_func = nn.MarginRankingLoss(margin=self.margin, reduction='sum')
         self.triplet_loss_func = nn.MSELoss(reduction='sum')
         self.lr = 0.01
         self.beta = 1.
+        self.n_decimals = 2
         self.lr_decay = 0.96
         self.lr_decay_scheduler = None
         self.batch_size = 32
@@ -127,6 +128,9 @@ class PairLinearPageRankRecommender(RecommenderBase):
         return extra
 
     def _fit_triples(self, batches, predictions, epochs=100):
+        logger.debug(f'Beta: {self.beta}')
+        logger.debug(f'Margin: {self.margin}')
+        logger.debug(f'Decimal: {self.n_decimals}')
         best_model = None
         best_score = -1
         tt.autograd.set_detect_anomaly(True)
@@ -148,31 +152,23 @@ class PairLinearPageRankRecommender(RecommenderBase):
                         positive_indexes = ratings.nonzero().flatten()
 
                         for anchor_index in positive_indexes:
-                            # Find L2 distance between pos sample and others squared
+                            margin = tt.add(samples_val[anchor_index], self.margin)
+                            negative_indexes = (samples_val < margin).flatten().nonzero().flatten()
+                            negative_indexes = negative_indexes[(ratings[negative_indexes] == 0).nonzero().flatten()]
                             distances = tt.pow(samples_val[anchor_index] - samples_val, 2)
+                            if len(negative_indexes) > 0:
+                                # Find the negative sample farthest away from the postive while inside the margin.
+                                negative_index = tt.argmax(distances[negative_indexes])  # TODO maybe reverse
+                            else:
+                                # If we did not find any, find negative min d(a, n)
+                                negative_indexes = (ratings == 0).nonzero().flatten()
+                                negative_index = tt.argmin(distances[negative_indexes])
 
-                            for positive_index in positive_indexes:
-                                if anchor_index < positive_index:  # Ensure a positive pair is only used once
-                                    # Find negative indexes, s.t. d(a, p) < d(a, n) < d(a, p) + m
-                                    negative_indexes = (distances[(tt.add(distances[positive_index], self.margin)
-                                                                   > distances).flatten().nonzero().flatten()]
-                                                        > distances[positive_index]).flatten().nonzero().flatten()
-                                    negative_indexes = negative_indexes[(ratings[negative_indexes] == 0)
-                                        .nonzero().flatten()]
-
-                                    if len(negative_indexes) > 0:
-                                        negative_index = tt.argmax(distances[negative_indexes])  # TODO maybe reverse
-                                    else:
-                                        # If we did not find any, find negative min d(a, n)
-                                        negative_indexes = (ratings == 0).nonzero().flatten()
-                                        negative_index = tt.argmin(distances[negative_indexes])
-
-                                    anchors.append(samples[anchor_index].tolist())
-                                    positives.append(samples[positive_index].tolist())
-                                    negatives.append(samples[negative_indexes[negative_index]].tolist())
+                            anchors.append(samples[anchor_index].tolist())
+                            negatives.append(samples[negative_indexes[negative_index]].tolist())
 
                 self.optimizer.zero_grad()
-                anchors, positives, negatives = tt.tensor(anchors), tt.tensor(positives), tt.tensor(negatives)
+                anchors, _, negatives = tt.tensor(anchors), tt.tensor(positives), tt.tensor(negatives)
 
                 if len(anchors) <= 0:
                     logger.debug('skipping')
@@ -185,21 +181,11 @@ class PairLinearPageRankRecommender(RecommenderBase):
                     return tt.add(tt.sub(a_p, a_n), self.margin).relu().sum()
 
                 anchor_scores = self.model(anchors)
-                positive_scores = self.model(positives)
                 negative_scores = self.model(negatives)
-
-                # a_p = tt.pow(self.triplet_loss_func(anchor_scores, positive_scores), 2)
-                # a_n = tt.pow(self.triplet_loss_func(anchor_scores, negative_scores), 2)
-
-                # triple_loss = tt.relu(tt.add(tt.sub(a_p, a_n), self.margin))
-                triplet_loss = temp_loss(anchor_scores, positive_scores, negative_scores)
                 rank_loss = self.ranking_loss_func(anchor_scores, negative_scores, tt.ones(len(anchors)))
-                # loss = triplet_loss + rank_loss
-                loss = tt.mul(tt.sub(1, self.beta), triplet_loss) + tt.mul(rank_loss, self.beta) #+ self.limit_weight_loss(3.)
+                loss = tt.mul(tt.sub(1, self.beta), self.model.weights.weight.norm()) + tt.mul(rank_loss, self.beta)
 
-                # loss = tt.relu(tt.add(tt.sub(a_p, a_n), self.margin))
                 loss.backward()
-                # nn.utils.clip_grad_norm_(self.model.parameters(), 1.0)
                 self.optimizer.step()
 
                 with tt.no_grad():
@@ -214,16 +200,23 @@ class PairLinearPageRankRecommender(RecommenderBase):
 
             preds = []
             with tt.no_grad():
+                current = deepcopy(self.model.weights.weight)
+
+                # Reduce
+                self.model.weights.weight.data = tt.round(self.model.weights.weight * 10 ** self.n_decimals) \
+                                                 / 10 ** self.n_decimals
                 for idx, val, scores in predictions:
                     p = {entity: self.model(tt.tensor(self.get_score(scores, entity)).unsqueeze(0))
                          for entity in val.to_list()}
                     preds.append((val, p))
 
-            score = self.meta.validator.score(preds, self.meta)
-            if score > best_score:
-                best_score = score
-                best_model = deepcopy(self.model.state_dict())
-                logger.debug(f'New best weight {best_model["weights.weight"]}')
+                score = self.meta.validator.score(preds, self.meta)
+                if score > best_score:
+                    best_score = score
+                    best_model = deepcopy(self.model.state_dict())
+                    logger.debug(f'New best weight {best_model["weights.weight"]}')
+
+                self.model.weights.weight.data = current  # Ensures model continues from where it left off.
 
         return best_score, best_model
 
