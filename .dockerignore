@@ -8,3 +8,8 @@
 *.pkl
 /debug
 /.git
+/debug
+/.venv
+/tools
+/results
+/.runs

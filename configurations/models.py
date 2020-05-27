@@ -11,13 +11,9 @@ from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
-from recommenders.pagerank.linear_collaborative_pagerank_recommender import LinearCollaborativePageRankRecommender
 from recommenders.pagerank.linear_combined_pagerank_recommender import LinearCombinedPageRankRecommender
-from recommenders.pagerank.linear_joint_pagerank_recommender import LinearJointPageRankRecommender
-from recommenders.pagerank.linear_kg_pagerank_recommender import LinearKGPageRankRecommender
+from recommenders.pagerank.pair_linear_combined_pagerank_recommender import PairLinearCombinedPageRankRecommender
 from recommenders.random.random_recommender import RandomRecommender
-from recommenders.remote.particle_filtering_recommender import ParticleFilteringRecommender
-from recommenders.svd.svd_recommender import SVDRecommender
 from recommenders.toppop.toppop_recommender import TopPopRecommender
 
 models = {
@@ -56,10 +52,24 @@ models = {
     },
     'greedy-ppr-kg': {
         'class': GreedyInterviewer,
-        'recommender': KnowledgeGraphPageRankRecommender,
+        'recommender': KnowledgeGraphPageRankRecommender
+    },
+    'greedy-adaptive-ppr-pair-linear': {
+        'class': GreedyInterviewer,
+        'recommender': PairLinearCombinedPageRankRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        },
         'recommender_kwargs': {
             'ask_limit': 10
         }
+    },
+    'greedy-adaptive-ppr-linear-grid': {
+        'class': GreedyInterviewer,
+        'recommender': LinearCombinedPageRankRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        },
     },
     'greedy-adaptive-ppr-kg': {
         'class': GreedyInterviewer,
@@ -68,19 +78,20 @@ models = {
             'adaptive': True
         }
     },
-    'greedy-ppr-collab': {
+    'greedy-adaptive-ppr-collab': {
         'class': GreedyInterviewer,
         'recommender': CollaborativePageRankRecommender,
-        'recommender_kwargs': {
-            'ask_limit': 10
+        'interviewer_kwargs': {
+            'adaptive': True
         }
+    },
+    'greedy-ppr-collab': {
+        'class': GreedyInterviewer,
+        'recommender': CollaborativePageRankRecommender
     },
     'greedy-ppr-joint': {
         'class': GreedyInterviewer,
-        'recommender': JointPageRankRecommender,
-        'recommender_kwargs': {
-            'ask_limit': 10
-        }
+        'recommender': JointPageRankRecommender
     },
     'greedy-adaptive-ppr-joint': {
         'class': GreedyInterviewer,
@@ -89,30 +100,24 @@ models = {
             'adaptive': True
         }
     },
-    'greedy-ppr-linear-joint': {
+    'greedy-adaptive-knn': {
         'class': GreedyInterviewer,
-        'recommender': LinearJointPageRankRecommender
+        'recommender': KNNRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
     },
-    'greedy-ppr-linear-collab': {
+    'greedy-adaptive-mf': {
         'class': GreedyInterviewer,
-        'recommender': LinearCollaborativePageRankRecommender
-    },
-    'greedy-ppr-linear-kg': {
-        'class': GreedyInterviewer,
-        'recommender': LinearKGPageRankRecommender
+        'recommender': MatrixFactorizationRecommender,
+        'interviewer_kwargs': {
+            'adaptive': True
+        }
     },
     'lrmf': {
         'class': LRMFInterviewer,
         'requires_interview_length': True,
         'use_cuda': False
-    },
-    'pop-pf': {
-        'class': NaiveInterviewer,
-        'recommender': ParticleFilteringRecommender
-    },
-    'pop-svd': {
-        'class': NaiveInterviewer,
-        'recommender': SVDRecommender
     },
     'pop-ppr-collab': {
         'class': NaiveInterviewer,
@@ -126,33 +131,29 @@ models = {
         'class': NaiveInterviewer,
         'recommender': JointPageRankRecommender
     },
-    'pop-ppr-linear-collab': {
-        'class': NaiveInterviewer,
-        'recommender': LinearCollaborativePageRankRecommender
-    },
-    'pop-ppr-linear-joint': {
-        'class': NaiveInterviewer,
-        'recommender': LinearJointPageRankRecommender
-    },
-    'pop-ppr-linear-kg': {
-        'class': NaiveInterviewer,
-        'recommender': LinearKGPageRankRecommender
-    },
-    'pop-ppr-linear': {
+    'pop-ppr-linear-grid': {
         'class': NaiveInterviewer,
         'recommender': LinearCombinedPageRankRecommender
     },
-    'greedy-ppr-linear': {
+    'pop-ppr-linear-learned': {
         'class': NaiveInterviewer,
-        'recommender': LinearCombinedPageRankRecommender
+        'recommender': PairLinearCombinedPageRankRecommender
     },
-    'pop-knn': {
-      'class': NaiveInterviewer,
-      'recommender': KNNRecommender
+    'greedy-ppr-linear-learned': {
+        'class': GreedyInterviewer,
+        'recommender': PairLinearCombinedPageRankRecommender
+    },
+    'greedy-ppr-linear-grid': {
+        'class': GreedyInterviewer,
+        'recommender': LinearCombinedPageRankRecommender
     },
     'greedy-knn': {
         'class': GreedyInterviewer,
         'recommender': KNNRecommender
+    },
+    'pop-knn': {
+      'class': NaiveInterviewer,
+      'recommender': KNNRecommender
     },
     'dqn-knn': {
         'class': DqnInterviewer,
@@ -188,24 +189,6 @@ models = {
     'dqn-ppr-joint': {
         'class': DqnInterviewer,
         'recommender': JointPageRankRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'dqn-ppr-linear-kg': {
-        'class': DqnInterviewer,
-        'recommender': LinearKGPageRankRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'dqn-ppr-linear-joint': {
-        'class': DqnInterviewer,
-        'recommender': LinearJointPageRankRecommender,
-        'requires_interview_length': True,
-        'use_cuda': True
-    },
-    'dqn-ppr-linear-collab': {
-        'class': DqnInterviewer,
-        'recommender': LinearCollaborativePageRankRecommender,
         'requires_interview_length': True,
         'use_cuda': True
     },

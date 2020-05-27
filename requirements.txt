@@ -7,4 +7,8 @@ networkx
 torch
 sklearn
 neo4j
+<<<<<<< HEAD
 pygraphviz
+=======
+requests
+>>>>>>> origin
