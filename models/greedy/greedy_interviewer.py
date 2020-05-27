@@ -11,7 +11,6 @@ from models.base_interviewer import InterviewerBase
 from recommenders.base_recommender import RecommenderBase
 from shared.enums import Metric
 from shared.meta import Meta
-<<<<<<< HEAD
 from shared.utility import get_top_entities
 import numpy as np
 import networkx as nx
@@ -40,8 +39,6 @@ def pprint_tree_as_graph(graph, node, depth, max_depth):
             node_labels += new_node_labels
 
     return graph, edge_labels, node_labels
-=======
->>>>>>> origin
 
 
 def pprint_tree(node, prefix="- ", label=''):
@@ -187,7 +184,6 @@ class GreedyInterviewer(InterviewerBase):
         if self.adaptive:
             logger.debug('Constructing adaptive interview')
 
-<<<<<<< HEAD
             self.root = Node(self).construct(training, self.meta.get_question_candidates(training, limit=50))
             graph = nx.DiGraph()
             print(f'Constructing tree graph...')
@@ -211,11 +207,6 @@ class GreedyInterviewer(InterviewerBase):
             print(f'Showing...')
             plt.savefig('dec_tree_graph.pdf')
             plt.show()
-=======
-            self.root = Node(self).construct(
-                training, self.meta.get_question_candidates(training, limit=100), max_depth=interview_length - 1)
-            pprint_tree(self.root)
->>>>>>> origin
         else:
             logger.debug('Constructing fixed-question interview')
 
@@ -252,15 +243,9 @@ class Node:
 
         self.LIKE = None
         self.DISLIKE = None
-<<<<<<< HEAD
-        self.UNKNOWN = None
-        self.question = None
-        self.users = {}
-=======
         self.questions = None
         self.users = []
         self.depth = 0
->>>>>>> origin
 
     def select_question(self, users, entities):
         return self.interviewer.get_questions(users, num_questions=1, base_questions=self.base_questions,
@@ -271,13 +256,6 @@ class Node:
         min_users = 10
         self.depth = depth
 
-<<<<<<< HEAD
-    def construct(self, users, entities, depth=0):
-        self.users = users
-        self.question = self.select_question(users, entities)
-        # most_popular_entities = self.meta.get_question_candidates(users, limit=100)
-        # self.question = most_popular_entities[0]
-=======
         # If this node doesn't have enough users to warrant a node split, we
         # can just assign the remaining interview questions as fixed questions
         if len(users) < min_users:
@@ -286,34 +264,19 @@ class Node:
                                                             base_questions=self.base_questions,
                                                             num_questions=max_depth - (depth - 1),
                                                             desc='[Ordering final questions]')
->>>>>>> origin
 
             return self
 
-<<<<<<< HEAD
-        # Partition user groups for children
-        liked_users = filter_users(users, self.question, [1])
-        disliked_users = filter_users(users, self.question, [-1])
-        unknown_users = filter_users(users, self.question, [0])
-=======
         # We have enough users to split, so continue
         self.questions = [self.select_question(users, entities)]
->>>>>>> origin
 
         # Don't split if this is the last question of the interview
         if depth == max_depth:
             return self
 
-<<<<<<< HEAD
-        min_users = 1
-        if depth < 5:
-            if len(liked_users) >= min_users:
-                self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, depth + 1)
-=======
         # We should split the users - first remove this question from the
         # candidate questions
         entities = [entity for entity in entities if entity not in self.questions]
->>>>>>> origin
 
         # Partition user groups for children
         question = self.questions[0]
@@ -328,28 +291,8 @@ class Node:
 
         return self
 
-<<<<<<< HEAD
-    def get_num_co_ratings(self):
-        ratings = construct_rating_matrix(self.users, self.meta)
-        n_co_ratings = 0
-        for u in self.users:
-            for v in self.users:
-                u_rated, = np.where(ratings[u] != 0)
-                v_rated, = np.where(ratings[v] != 0)
-                n_co_ratings += len(set(u_rated).intersection(set(v_rated)))
-
-        return n_co_ratings
-
-    def n_users(self):
-        return len(self.users)
-
-    def __repr__(self):
-        n_users = len(self.users)
-        return f'{self.interviewer.get_entity_name(self.question)} ({n_users} users, {self.base_questions})'
-=======
     def is_fixed(self):
         return len(self.questions) > 1
 
     def __repr__(self):
         return str([self.interviewer.get_entity_name(question) for question in self.questions])
->>>>>>> origin
