@@ -239,7 +239,7 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         for j in range(max_iteration):
             if j == max_iteration - 1:
                 logger.debug(f'Reached final iteration')
-            logger.debug(f'Starting epoch {i + 1}')
+            logger.debug(f'Starting epoch {j + 1}')
             # Ensure random order
             shuffle(train_data)
 

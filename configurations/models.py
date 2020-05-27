@@ -54,7 +54,7 @@ models = {
         'class': GreedyInterviewer,
         'recommender': KnowledgeGraphPageRankRecommender
     },
-    'greedy-adaptive-ppr-pair-linear': {
+    'greedy-adaptive-ppr-linear-learned': {
         'class': GreedyInterviewer,
         'recommender': PairLinearCombinedPageRankRecommender,
         'interviewer_kwargs': {
@@ -198,6 +198,7 @@ models = {
     },
     'melu': {
         'class': MeLUInterviewer,
-        'use_cuda': True
+        'use_cuda': False,
+        'use_sparse': True
     }
 }
