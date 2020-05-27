@@ -213,9 +213,9 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         return grad_norms
 
     def _get_all_parameters(self):
-        learning_rates = [(5e-4, 5e-5)]#, (5e-5, 5e-6), (5e-6, 5e-7)]  # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
-        latent_factors = [8]#, 16, 32, 64, 128]  # [8, 16, 32, 64]
-        hidden_units = [32]#, 64, 128]  # [32, 64]
+        learning_rates = [(5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]  # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
+        latent_factors = [8, 16, 32, 64, 128]  # [8, 16, 32, 64]
+        hidden_units = [32, 64, 128]  # [32, 64]
         all_params = []
         param = {}
         for learning_rate in learning_rates:
@@ -239,7 +239,7 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         for j in range(max_iteration):
             if j == max_iteration - 1:
                 logger.debug(f'Reached final iteration')
-            # logger.debug(f'Starting epoch {i + 1}')
+            logger.debug(f'Starting epoch {i + 1}')
             # Ensure random order
             shuffle(train_data)
 
@@ -252,7 +252,7 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
                 batch = [list(b) for b in zip(*batch)]
                 self._global_update(*batch)
 
-            # logger.debug('Starting validation')
+            logger.debug('Starting validation')
             t = tt.ones(validation_limit)
             p = tt.zeros(validation_limit).float()
             shuffle(validation_data)
