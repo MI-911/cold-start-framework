@@ -75,8 +75,8 @@ class PairLinearPageRankRecommender(RecommenderBase):
         self.positive_loss_func = nn.MSELoss(reduction='mean')
         self.ranking_loss_func = nn.MarginRankingLoss(margin=self.margin, reduction='sum')
         self.triplet_loss_func = nn.MSELoss(reduction='sum')
-        self.lr = 0.01
-        self.beta = 1.
+        self.lr = 0.005
+        self.beta = 0.8
         self.n_decimals = 2
         self.lr_decay = 0.96
         self.lr_decay_scheduler = None
@@ -241,17 +241,20 @@ class PairLinearPageRankRecommender(RecommenderBase):
             batch = []
             # Sample from 8 users each time. We sample 8 posititives and 56 negatives
             i = 0
-            while len(batch) < 8:
+            while len(batch) < 16:
                 idx, val, scores = preds[i]
                 i += 1
 
                 positives = [[self.get_score(scores, entity), rating] for entity, rating in val.items() if rating == 1]
                 shuffle(positives)
-                positives = positives[:8]
+                positives = positives
 
-                negatives = [[self.get_score(scores, entity), 0.] for entity, rating in val.items() if rating <= 0]
+                negatives = [[self.get_score(scores, entity), 0.] for entity, rating in val.items() if rating == 0]
+                if len(negatives) <= 1:
+                    negatives = [[self.get_score(scores, entity), 0.] for entity, rating in val.items() if rating <= 0]
+
                 shuffle(negatives)
-                negatives = negatives[:56]
+                negatives = negatives
 
                 if len(positives) <= 0 or len(negatives) <= 0:
                     continue
@@ -272,7 +275,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
 
             # Sample one positive item.
             positives = [e for e, r in entities.items() if r == 1 and e not in self.can_ask_about]
-            negatives = [] #[e for e, r in entities.items() if r == -1 and e not in self.can_ask_about]
+            negatives = [e for e, r in entities.items() if r <= 0 and e not in self.can_ask_about]
 
             if len(positives) <= 1:
                 continue

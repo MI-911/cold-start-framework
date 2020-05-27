@@ -137,17 +137,11 @@ models = {
     },
     'pop-ppr-linear-learned': {
         'class': NaiveInterviewer,
-        'recommender': PairLinearCombinedPageRankRecommender,
-        'recommender_kwargs': {
-            'ask_limit': 10
-        }
+        'recommender': PairLinearCombinedPageRankRecommender
     },
     'greedy-ppr-linear-learned': {
         'class': GreedyInterviewer,
-        'recommender': PairLinearCombinedPageRankRecommender,
-        'recommender_kwargs': {
-            'ask_limit': 10
-        }
+        'recommender': PairLinearCombinedPageRankRecommender
     },
     'greedy-ppr-linear-grid': {
         'class': GreedyInterviewer,
