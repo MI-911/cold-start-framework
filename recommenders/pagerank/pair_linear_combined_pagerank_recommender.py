@@ -16,6 +16,8 @@ class PairLinearCombinedPageRankRecommender(PairLinearPageRankRecommender):
             for entity, sentiment in user.training.items():
                 sentiments.add(sentiment)
 
+        sentiments = sorted(list(sentiments), reverse=True)  # Ensure order, like, dont know, dislike.
+
         # Create graphs for collaborative
         graphs = []
         for sentiment in sentiments:

@@ -55,7 +55,7 @@ class GraphWrapper:
         answers = {k: v for k, v in answers.items() if v == self.rating_type and k in self.can_ask_about}
         return self._get_node_weights_cached(answers)
 
-    @hashable_lru()
+    @hashable_lru(maxsize=1024)
     def _get_node_weights_cached(self, answers):
         rated_entities = list(answers.keys())
 
