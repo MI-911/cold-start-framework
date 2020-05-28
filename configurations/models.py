@@ -199,6 +199,6 @@ models = {
     'melu': {
         'class': MeLUInterviewer,
         'use_cuda': False,
-        'use_sparse': True
+        'use_sparse': False
     }
 }
