@@ -363,7 +363,7 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         valid_candidates = self.meta.get_question_candidates(training)
         user_ratings = {}
         items = []
-        for user, datasets in list(training.items())[:10]:
+        for user, datasets in training.items():
             ratings = list(datasets.training.items())
             tmp = max(len(ratings) - 3, len(ratings) // 2)
             num_support = min(tmp, 10)
