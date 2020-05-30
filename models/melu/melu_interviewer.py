@@ -214,9 +214,9 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         return grad_norms
 
     def _get_all_parameters(self):
-        learning_rates = [(5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]  # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
-        latent_factors = [8, 16, 32, 64, 128]  # [8, 16, 32, 64]
-        hidden_units = [32, 64, 128]  # [32, 64]
+        learning_rates = [(5e-4, 5e-5)] # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
+        latent_factors = [128]  # [8, 16, 32, 64]
+        hidden_units = [128]  # [32, 64]
         all_params = []
         param = {}
         for learning_rate in learning_rates:
@@ -446,7 +446,9 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
             logger.debug(f'Found best param with score:{best_score}')
         else:
             self.load_parameters(self.optimal_params)
-            _, _ = self._train(train_data, val, batch_size)
+            _, model = self._train(train_data, val, batch_size)
+            self.model.load_state_dict(model)
+            self.store_parameters()
 
         grad_norms = self._calculate_grad_norms(train_data, items)
         grad_norms = {entity: grad_norms[entity] for entity in grad_norms.keys() if entity in valid_candidates}
