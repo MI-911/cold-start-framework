@@ -178,8 +178,9 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         grad_norms = {}
         start = 0
         for i, (support_x, support_y, _, _) in enumerate(train_data):
-            support_x = support_x.to_dense()
-            support_y = support_y.to_dense()
+            if self.use_sparse:
+                support_x = support_x.to_dense()
+                support_y = support_y.to_dense()
             entity_vec = support_x[:, :self.n_entities]
             stop = start + len(entity_vec)
             norm = self._get_weight_avg_norm(support_x, support_y)
