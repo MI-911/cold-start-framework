@@ -36,7 +36,7 @@ def _choice(lst, count, probabilities):
 
 def _get_unseen_weights(item_ratings, unseen_items: List, options: RankingOptions, positive_items: List[int] = None,
                         alpha=10):
-    if options.unseen_sampling == UnseenSampling.UNIFORM:
+    if options.unseen_sampling == UnseenSampling.RANDOM:
         return [1 for _ in unseen_items]
 
     entity_weight = dict(zip(item_ratings['entityIdx'], item_ratings['num_ratings']))

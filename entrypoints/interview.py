@@ -51,7 +51,7 @@ def _instantiate_model(model_name, experiment: Experiment, meta, interview_lengt
     if recommender:
         kwargs['recommender'] = recommender
 
-    instance = models[model_name]['class'](**kwargs)
+    instance = models[model_name]['interviewer'](**kwargs)
     parameters = _get_parameters(model_name, experiment, interview_length)
     if parameters:
         instance.load_parameters(parameters)

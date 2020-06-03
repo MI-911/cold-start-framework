@@ -14,7 +14,7 @@ separation = ExperimentOptions(name='separation', seed=123, count_filters=[
 
 default = ExperimentOptions(name='uniform', cold_start_ratio=0.25, seed=123, count_filters=[
         CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE)
-    ], ranking_options=RankingOptions(unseen_sampling=UnseenSampling.UNIFORM, num_positive=1, num_unseen=100),
+    ], ranking_options=RankingOptions(unseen_sampling=UnseenSampling.RANDOM, num_positive=1, num_unseen=100),
                             include_unknown=False, evaluation_samples=1)
 
 movielens = ExperimentOptions(name='movielens', seed=123, count_filters=[
