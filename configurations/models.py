@@ -133,6 +133,10 @@ models = {
         'class': NaiveInterviewer,
         'recommender': PairLinearJointPageRankRecommender
     },
+    'greedy-ppr-linear-joint-learned': {
+        'class': NaiveInterviewer,
+        'recommender': PairLinearJointPageRankRecommender
+    },
     'greedy-ppr-linear-learned': {
         'interviewer': GreedyInterviewer,
         'recommender': PairLinearCombinedPageRankRecommender
