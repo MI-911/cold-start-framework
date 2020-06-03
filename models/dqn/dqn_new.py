@@ -205,7 +205,7 @@ class DqnInterviewer(InterviewerBase):
 
         self.agent = DqnAgent(candidates=self.candidates, n_entities=self.n_entities,
                               batch_size=720, alpha=0.0001, gamma=1.0, epsilon=1.0,
-                              eps_end=0.1, eps_dec=0.996, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda,
+                              eps_end=0.1, eps_dec=0.999, fc1_dims=params['fc1_dims'], use_cuda=self.use_cuda,
                               interview_length=interview_length)
 
         self.agent.Q_eval.eval()
