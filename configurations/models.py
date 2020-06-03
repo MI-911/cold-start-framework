@@ -9,6 +9,7 @@ from models.naive.naive_interviewer import NaiveInterviewer
 from recommenders.knn.knn_recommender import KNNRecommender
 from recommenders.mf.mf_recommender import MatrixFactorizationRecommender
 from recommenders.pagerank.collaborative_pagerank_recommender import CollaborativePageRankRecommender
+from recommenders.pagerank.joint_linear_learned_pagerank_recommender import PairLinearJointPageRankRecommender
 from recommenders.pagerank.joint_pagerank_recommender import JointPageRankRecommender
 from recommenders.pagerank.kg_pagerank_recommender import KnowledgeGraphPageRankRecommender
 from recommenders.pagerank.linear_combined_pagerank_recommender import LinearCombinedPageRankRecommender
@@ -138,6 +139,10 @@ models = {
     'pop-ppr-linear-learned': {
         'class': NaiveInterviewer,
         'recommender': PairLinearCombinedPageRankRecommender
+    },
+    'pop-ppr-linear-joint-learned': {
+        'class': NaiveInterviewer,
+        'recommender': PairLinearJointPageRankRecommender
     },
     'greedy-ppr-linear-learned': {
         'class': GreedyInterviewer,
