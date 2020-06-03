@@ -235,7 +235,7 @@ class PairLinearPageRankRecommender(RecommenderBase):
 
     def _get_batches_triplets(self, preds):
         batches = []
-        t = tqdm(range(512), total=512, desc='Creating data')
+        t = tqdm(range(256), total=256, desc='Creating data')
         for _ in t:
             shuffle(preds)
             batch = []
