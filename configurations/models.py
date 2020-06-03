@@ -134,7 +134,7 @@ models = {
         'recommender': PairLinearJointPageRankRecommender
     },
     'greedy-ppr-linear-joint-learned': {
-        'interviewer': NaiveInterviewer,
+        'interviewer': GreedyInterviewer,
         'recommender': PairLinearJointPageRankRecommender
     },
     'greedy-ppr-linear-learned': {
