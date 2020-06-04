@@ -150,7 +150,7 @@ class DDPGInterviewer(InterviewerBase):
 
         steps_taken = 0
 
-        for iteration in range(3):
+        for iteration in range(20):
             warmup_steps = 2000
 
             t = tqdm(training.items())
