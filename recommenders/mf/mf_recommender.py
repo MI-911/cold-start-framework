@@ -53,7 +53,7 @@ class MatrixFactorizationRecommender(RecommenderBase):
 
         if self.optimal_params is None:
             scores = []
-            parameters = {'k': [1, 2, 5, 10, 20]}
+            parameters = {'k': [1, 2, 5, 10]}
 
             # Find optimal parameters
             for params in get_combinations(parameters):
