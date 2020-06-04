@@ -110,9 +110,11 @@ class DDPGInterviewer(InterviewerBase):
 
         self.n_users = len(self.meta.users)
         self.n_entities = len(self.meta.entities)
-        self.n_candidates = 20
+        self.n_candidates = 100
         self.candidate_embeddings = []
         self.state_size = self.n_candidates * 2
+
+        self.retrain_recommender = True
 
     def _choose_candidates(self, training, n):
         greedy_interviewer = GreedyInterviewer(self.meta, self.recommender)
@@ -124,7 +126,10 @@ class DDPGInterviewer(InterviewerBase):
         return [entity for entity, score in entity_scores[:n]]
 
     def warmup(self, training: Dict[int, WarmStartUser], interview_length=5) -> None:
-        self.recommender.fit(training)
+        if self.retrain_recommender:
+            self.recommender.fit(training)
+        else:
+            logger.info(f'Skipping recommender retraining')
         self.candidates = self.meta.get_question_candidates(training, limit=self.n_candidates)
 
         self.ratings = get_rating_matrix(training, n_users=self.n_users, n_entities=self.n_entities)
@@ -145,7 +150,7 @@ class DDPGInterviewer(InterviewerBase):
 
         steps_taken = 0
 
-        for iteration in range(20):
+        for iteration in range(3):
             warmup_steps = 2000
 
             t = tqdm(training.items())

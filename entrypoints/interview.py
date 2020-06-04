@@ -156,12 +156,20 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
     if not requires_interview_length:
         model_instance.warmup(training)
 
+    recommender = None
+
     for num_questions in range(1, max_n_questions + 1, 1):
         logger.info(f'Conducting interviews of length {num_questions}...')
 
         if requires_interview_length:
             model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
-            model_instance.warmup(training, num_questions)
+            if recommender is None:
+                model_instance.warmup(training, num_questions)
+                recommender = model_instance.recommender
+            else:
+                model_instance.recommender = recommender
+                model_instance.retrain_recommender = False
+                model_instance.warmup(training, num_questions)
 
         popular_items = meta.get_question_candidates(training, recommendable_only=True)
 
