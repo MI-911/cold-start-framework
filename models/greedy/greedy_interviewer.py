@@ -149,7 +149,7 @@ class GreedyInterviewer(InterviewerBase):
 
         return questions
 
-    def warmup(self, training, interview_length=10):
+    def warmup(self, training, interview_length=20):
         # self.recommender.parameters = {'alpha': 0.5499999999999999, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
@@ -157,7 +157,7 @@ class GreedyInterviewer(InterviewerBase):
             logger.debug('Constructing adaptive interview')
 
             self.root = Node(self).construct(
-                training, self.meta.get_question_candidates(training, limit=100), max_depth=interview_length - 1)
+                training, self.meta.get_question_candidates(training, limit=200), max_depth=interview_length - 1)
             pprint_tree(self.root)
         else:
             logger.debug('Constructing fixed-question interview')
@@ -195,7 +195,7 @@ class Node:
                                               desc=f'[Searching candidates at depth {self.depth}]')[0]
 
     def construct(self, users, entities, max_depth, depth=0):
-        min_users = 10
+        min_users = 5
         self.depth = depth
 
         # If this node doesn't have enough users to warrant a node split, we
