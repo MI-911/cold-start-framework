@@ -1,6 +1,6 @@
 import os
 import pickle
-from typing import Dict
+from typing import Dict, List
 
 from shared.meta import Meta
 from shared.user import WarmStartUser, ColdStartUser
@@ -20,8 +20,9 @@ class DataLoader:
     def testing(self) -> Dict[int, ColdStartUser]:
         return self._load('testing.pkl')
 
-    def meta(self, recommendable_only: bool = False) -> Meta:
+    def meta(self, recommendable_only: bool = False, type_limit: List = None) -> Meta:
         meta = self._load('meta.pkl')
         meta.recommendable_only = recommendable_only
+        meta.type_limit = type_limit
 
         return meta

@@ -21,7 +21,10 @@ class Meta:
         self.default_cutoff = default_cutoff
         self.sentiment_utility = sentiment_utility
         self.validator = validator
+
+        # Live parameters set when running the interviewers, should not be changed here
         self.recommendable_only = False
+        self.type_limit = None
 
     def get_idx_uri(self):
         return {idx: uri for uri, idx in self.uri_idx.items()}
@@ -33,12 +36,19 @@ class Meta:
         only recommendable entities are allowed, but can be overwritten through the function parameter.
         """
         candidates = get_top_entities(training)
+        idx_uri = self.get_idx_uri()
+        idx_labels = {idx: set([label.lower() for label in self.entities[idx_uri[idx]]['labels']]) for idx in idx_uri}
 
-        recommendable_only = self.recommendable_only if recommendable_only is None else recommendable_only
-        if recommendable_only:
-            candidates = [entity for entity in candidates if entity in self.recommendable_entities]
+        if not self.type_limit:
+            recommendable_only = self.recommendable_only if recommendable_only is None else recommendable_only
+            if recommendable_only:
+                candidates = [entity for entity in candidates if entity in self.recommendable_entities]
+            else:
+                candidates = [entity for entity in candidates if entity not in self.recommendable_entities]
         else:
-            candidates = [entity for entity in candidates if entity not in self.recommendable_entities]
+            type_limit = set(self.type_limit)
+
+            candidates = [entity for entity in candidates if type_limit.intersection(idx_labels[entity])]
 
         if limit:
             candidates = candidates[:limit]

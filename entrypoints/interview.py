@@ -28,6 +28,7 @@ parser.add_argument('--include', nargs='*', type=str, choices=models.keys(), hel
 parser.add_argument('--exclude', nargs='*', type=str, choices=models.keys(), help='models to exclude')
 parser.add_argument('--experiments', nargs='*', type=str, help='experiments to run')
 parser.add_argument('--splits', nargs='*', type=str, help='splits to run')
+parser.add_argument('--limit', nargs='*', type=str, help='entity types to limit to')
 parser.add_argument('--debug', action='store_true', help='enable debug mode')
 parser.add_argument('--recommendable', action='store_true', help='only recommendable candidates', default=False)
 parser.add_argument('--upload', action='store_true', help='upload results after each split', default=False)
@@ -187,14 +188,14 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
         yield model_instance, metrics, num_questions, all_answers
 
 
-def _run_split(model_selection: Set[str], split: Split, recommendable_only, done_callback):
+def _run_split(model_selection: Set[str], split: Split, recommendable_only, type_limit, done_callback):
     training = split.data_loader.training()
     testing = split.data_loader.testing()
-    meta = split.data_loader.meta(recommendable_only)
+    meta = split.data_loader.meta(recommendable_only, type_limit)
 
     for model in model_selection:
         # If recommendable only, then append flag to model alias
-        model_alias = f'{model}-rec' if recommendable_only else model
+        model_alias = f'{model}-rec' if recommendable_only else f'{model}-{"_".join(type_limit)}' if type_limit else model
 
         logger.info(f'Running {model_alias} on {split}')
         start_time = time.time()
@@ -256,10 +257,11 @@ def _parse_args():
     if not args.output:
         args.output = ['results']
 
-    experiments = set(args.experiments) if args.experiments else set()
-    splits = set(args.splits) if args.splits else set()
+    experiments = sorted(set(args.experiments)) if args.experiments else set()
+    splits = sorted(set(args.splits)) if args.splits else set()
+    limit = sorted(set([limit.lower() for limit in args.limit])) if args.limit else set()
 
-    return model_selection, args.input[0], args.output[0], experiments, splits, args.recommendable, args.upload
+    return model_selection, args.input[0], args.output[0], experiments, splits, args.recommendable, args.upload, limit
 
 
 def finish_split(upload, output_path, split, model_alias, model_instance, answers, metrics, length):
@@ -281,13 +283,22 @@ def finish_split(upload, output_path, split, model_alias, model_instance, answer
 
 
 def run():
-    model_selection, input_path, output_path, experiments, splits, recommendable_only, upload = _parse_args()
+    model_selection, input_path, output_path, experiments, splits, recommendable_only, upload, type_limit = \
+        _parse_args()
 
     if recommendable_only:
+        if type_limit:
+            logger.error('Cannot use entity type limit with recommendable entities')
+
+            return
+
         logger.warning('Recommendable entities only')
 
     if upload:
         logger.warning('Results will be uploaded to origin')
+
+    if type_limit:
+        logger.warning(f'Limiting entities to {", ".join(type_limit)}')
 
     def done_callback(*args):
         finish_split(upload, output_path, *args)
@@ -301,7 +312,7 @@ def run():
 
         for split in experiment.splits():
             if not splits or split.name in splits:
-                _run_split(model_selection, split, recommendable_only, done_callback)
+                _run_split(model_selection, split, recommendable_only, type_limit, done_callback)
 
 
 if __name__ == '__main__':
