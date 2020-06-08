@@ -128,6 +128,10 @@ class GreedyInterviewer(InterviewerBase):
         base_questions = base_questions if base_questions else list()
 
         for question in range(num_questions):
+            # If there are no possible questions to consider, then stop here
+            if not entities:
+                break
+
             entity_scores = self.get_entity_scores(training, entities, questions + base_questions, desc=desc)
 
             if self.cov_fraction:
@@ -149,12 +153,12 @@ class GreedyInterviewer(InterviewerBase):
 
         return questions
 
-    def warmup(self, training, interview_length=20):
+    def warmup(self, training, interview_length=30):
         # self.recommender.parameters = {'alpha': 0.5499999999999999, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
         if self.adaptive:
-            logger.debug('Constructing adaptive interview')
+            logger.debug(f'Constructing adaptive interview of length {interview_length}')
 
             self.root = Node(self).construct(
                 training, self.meta.get_question_candidates(training, limit=200), max_depth=interview_length - 1)
@@ -195,12 +199,12 @@ class Node:
                                               desc=f'[Searching candidates at depth {self.depth}]')[0]
 
     def construct(self, users, entities, max_depth, depth=0):
-        min_users = 5
+        min_users = 10
         self.depth = depth
 
         # If this node doesn't have enough users to warrant a node split, we
         # can just assign the remaining interview questions as fixed questions
-        if len(users) < min_users:
+        if len(users) < min_users or depth > 14:
             # Use GreedyExtend to get remaining fixed questions
             self.questions = self.interviewer.get_questions(users, entities=entities,
                                                             base_questions=self.base_questions,
