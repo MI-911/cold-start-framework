@@ -158,7 +158,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 
     recommender = None
 
-    for num_questions in range(1, max_n_questions + 1, 1):
+    for num_questions in [5]:
         logger.info(f'Conducting interviews of length {num_questions}...')
 
         if requires_interview_length:
