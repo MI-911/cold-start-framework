@@ -215,7 +215,7 @@ def _get_ranking(ratings: DataFrame, user_id: int, options: RankingOptions, shor
     ranking.sentiment_samples[Sentiment.UNSEEN] = _sample_unseen(ratings, user_id, options, ranking.get_seen_samples())
 
     # Return user's ratings without items to rank
-    return u_ratings[~u_ratings.entityIdx.isin(ranking.to_list())], ranking
+    return u_ratings[~u_ratings.entityIdx.isin(set(ranking.to_list()))], ranking
 
 
 def _get_entities(entities_path):

@@ -104,7 +104,9 @@ class PageRankRecommender(RecommenderBase):
             for entity in user.training.keys():
                 self.entity_indices.add(entity)
 
-        self.sparse_graph = SparseGraph(self.construct_graph(training))
+        nx_graph = self.construct_graph(training)
+        self.sparse_graph = SparseGraph(nx_graph)
+        nx_graph.clear()
 
         can_ask_about = set(self.meta.get_question_candidates(training, limit=self.ask_limit))
         logger.debug(f'Can ask about {len(can_ask_about)} entities')
@@ -147,7 +149,7 @@ class PageRankRecommender(RecommenderBase):
 
             logger.info(f'Found optimal ({best_pair[1]:.4f}): {self.parameters}')
 
-    @hashable_lru(maxsize=1024)
+    @hashable_lru(maxsize=2048)
     def _get_scores(self, answers):
         return self.sparse_graph.scores(alpha=self.parameters['alpha'],
                                         personalization=self.get_node_weights(answers, self.parameters['importance']))

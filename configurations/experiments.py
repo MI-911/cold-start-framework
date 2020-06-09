@@ -17,10 +17,11 @@ default = ExperimentOptions(name='uniform', cold_start_ratio=0.25, seed=123, cou
     ], ranking_options=RankingOptions(unseen_sampling=UnseenSampling.RANDOM, num_positive=1, num_unseen=100),
                             include_unknown=False, evaluation_samples=1)
 
-movielens = ExperimentOptions(name='movielens', seed=123, count_filters=[
-    CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE)
-    ], ranking_options=RankingOptions(num_positive=1, num_unseen=100), include_unknown=False, evaluation_samples=1,
-                              ratings_file='movielens.csv')
+movielens = ExperimentOptions(name='movielens_big', seed=123, count_filters=[
+    CountFilter(lambda count: count >= 1, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.POSITIVE),
+    CountFilter(lambda count: count >= 100, entity_type=EntityType.RECOMMENDABLE, sentiment=Sentiment.ANY)
+    ], ranking_options=RankingOptions(unseen_sampling=UnseenSampling.RANDOM, num_positive=1, num_unseen=100),
+                              include_unknown=False, evaluation_samples=1, ratings_file='ml_transformed.csv')
 
 default_equal_probability = deepcopy(default)
 default_equal_probability.name = 'equal'
@@ -30,5 +31,5 @@ default_long_tail = deepcopy(default)
 default_long_tail.name = 'default_long_tail'
 default_long_tail.ranking_options.seen_sampling = SeenSampling.LONG_TAIL
 
-experiments = [default, separation, default_equal_probability, default_long_tail]
+experiments = [default, separation, default_equal_probability, default_long_tail, movielens]
 experiment_names = [experiment.name for experiment in experiments]

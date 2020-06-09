@@ -1,6 +1,9 @@
 import json
 import pickle
+import time
 from collections import defaultdict
+from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures.thread import ThreadPoolExecutor
 from math import ceil
 from typing import List
 
@@ -8,6 +11,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
+from partitioners.partition_interview import _chunks
 from recommenders.base_recommender import RecommenderBase
 from shared.enums import Metric
 from shared.meta import Meta
@@ -88,12 +92,10 @@ class GreedyInterviewer(InterviewerBase):
         # Exclude answers to entities already asked about
         return self.questions
 
-    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None, desc=None,
-                          cutoff=None):
+    def _get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None, cutoff=None):
         entity_scores = list()
-        progress = tqdm(entities)
 
-        for entity in progress:
+        for entity in entities:
             user_validation = list()
             for user, ratings in training.items():
                 answers = {e: ratings.training.get(e, 0) for e in existing_entities + [entity]}
@@ -104,7 +106,25 @@ class GreedyInterviewer(InterviewerBase):
             score = self.meta.validator.score(user_validation, self.meta, metric=metric, cutoff=cutoff)
             entity_scores.append((entity, score))
 
-            progress.set_description(f'{desc if desc else ""} {self.get_entity_name(entity)}: {score}')
+        return entity_scores
+
+    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None, desc=None,
+                          cutoff=None):
+        entity_scores = list()
+
+        now = time.time()
+
+        futures = list()
+        with ProcessPoolExecutor(max_workers=6) as e:
+            for chunk in _chunks(entities, 1 / 6):
+                futures.append(e.submit(self._get_entity_scores, training, chunk, existing_entities, metric, cutoff))
+
+        for future in futures:
+            entity_scores.extend(future.result())
+
+        took_time = time.time() - now
+
+        logger.info(f'Took {took_time:.2f}s, {len(training)} users, {len(entity_scores) / took_time:.2f} it/s, {(len(entity_scores) * len(training)) / took_time:.2f} rec/s')
 
         return list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
 
@@ -150,11 +170,11 @@ class GreedyInterviewer(InterviewerBase):
         return questions
 
     def warmup(self, training, interview_length=10):
-        # self.recommender.parameters = {'alpha': 0.5499999999999999, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        self.recommender.parameters = {'alpha': 0.2, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
         if self.adaptive:
-            logger.debug('Constructing adaptive interview')
+            logger.debug(f'Constructing {interview_length}-length adaptive interview')
 
             self.root = Node(self).construct(
                 training, self.meta.get_question_candidates(training, limit=100), max_depth=interview_length - 1)
@@ -195,7 +215,7 @@ class Node:
                                               desc=f'[Searching candidates at depth {self.depth}]')[0]
 
     def construct(self, users, entities, max_depth, depth=0):
-        min_users = 10
+        min_users = 50
         self.depth = depth
 
         # If this node doesn't have enough users to warrant a node split, we

@@ -5,7 +5,7 @@ import networkx as nx
 
 class SparseGraph:
     def __init__(self, graph: nx.Graph):
-        self.node_list = graph.nodes()
+        self.node_list = list(graph.nodes())
         self.node_set = set(self.node_list)
 
         self.N = len(graph)
