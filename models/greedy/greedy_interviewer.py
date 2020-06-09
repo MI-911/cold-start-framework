@@ -1,6 +1,9 @@
 import json
 import pickle
+import time
 from collections import defaultdict
+from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures.thread import ThreadPoolExecutor
 from math import ceil
 from typing import List
 
@@ -8,6 +11,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
+from partitioners.partition_interview import _chunks
 from recommenders.base_recommender import RecommenderBase
 from shared.enums import Metric
 from shared.meta import Meta
@@ -88,12 +92,10 @@ class GreedyInterviewer(InterviewerBase):
         # Exclude answers to entities already asked about
         return self.questions
 
-    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None, desc=None,
-                          cutoff=None):
+    def _get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None, cutoff=None):
         entity_scores = list()
-        progress = tqdm(entities)
 
-        for entity in progress:
+        for entity in entities:
             user_validation = list()
             for user, ratings in training.items():
                 answers = {e: ratings.training.get(e, 0) for e in existing_entities + [entity]}
@@ -104,7 +106,24 @@ class GreedyInterviewer(InterviewerBase):
             score = self.meta.validator.score(user_validation, self.meta, metric=metric, cutoff=cutoff)
             entity_scores.append((entity, score))
 
-            progress.set_description(f'{desc if desc else ""} {self.get_entity_name(entity)}: {score}')
+        return entity_scores
+
+    def get_entity_scores(self, training, entities: List, existing_entities: List, metric: Metric = None, cutoff=None):
+        entity_scores = list()
+
+        now = time.time()
+
+        futures = list()
+        with ProcessPoolExecutor(max_workers=4) as e:
+            for chunk in _chunks(entities, 1 / 4):
+                futures.append(e.submit(self._get_entity_scores, training, chunk, existing_entities, metric, cutoff))
+
+        for future in futures:
+            entity_scores.extend(future.result())
+
+        took_time = time.time() - now
+
+        logger.info(f'Took {took_time:.2f}s, {len(training)} users, {len(entity_scores) / took_time:.2f} it/s, {(len(entity_scores) * len(training)) / took_time:.2f} rec/s')
 
         return list(sorted(entity_scores, key=lambda pair: pair[1], reverse=True))
 
@@ -121,25 +140,20 @@ class GreedyInterviewer(InterviewerBase):
 
         json.dump(label_scores, open('label_ndcg_joint.json', 'w'))
 
-    def get_questions(self, training, num_questions=10, entities=None, desc=None, base_questions=None):
+    def get_questions(self, training, num_questions=10, entities=None, base_questions=None):
         questions = list()
 
         entities = entities if entities else self.meta.get_question_candidates(training, limit=100)
         base_questions = base_questions if base_questions else list()
 
         for question in range(num_questions):
-            # If there are no possible questions to consider, then stop here
-            if not entities:
-                break
-
-            entity_scores = self.get_entity_scores(training, entities, questions + base_questions, desc=desc)
+            entity_scores = self.get_entity_scores(training, entities, questions + base_questions)
 
             if self.cov_fraction:
                 top_entities = [entity for entity, score in entity_scores]
                 top_entities = top_entities[:max(1, ceil(len(top_entities) * self.cov_fraction))]
 
-                entity_scores = self.get_entity_scores(training, top_entities, questions, metric=Metric.COV,
-                                                       desc=desc)
+                entity_scores = self.get_entity_scores(training, top_entities, questions, metric=Metric.COV)
 
             next_question = entity_scores[0][0]
 
@@ -154,11 +168,11 @@ class GreedyInterviewer(InterviewerBase):
         return questions
 
     def warmup(self, training, interview_length=30):
-        # self.recommender.parameters = {'alpha': 0.5499999999999999, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        # self.recommender.parameters = {'alpha': 0.2, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
         if self.adaptive:
-            logger.debug(f'Constructing adaptive interview of length {interview_length}')
+            logger.debug(f'Constructing {interview_length}-length adaptive interview')
 
             self.root = Node(self).construct(
                 training, self.meta.get_question_candidates(training, limit=200), max_depth=interview_length - 1)
@@ -195,21 +209,30 @@ class Node:
 
     def select_question(self, users, entities):
         return self.interviewer.get_questions(users, num_questions=1, base_questions=self.base_questions,
-                                              entities=entities,
-                                              desc=f'[Searching candidates at depth {self.depth}]')[0]
+                                              entities=entities)[0]
+
+    def get_popular_questions(self, users):
+        questions = self.interviewer.meta.get_question_candidates(users)
+
+        return [question for question in questions if question not in self.base_questions]
+
+    def get_fixed_questions(self, users):
+        # Consider the top-100 locally most popular entities
+        entities = self.get_popular_questions(users)[:100]
+        entity_scores = self.interviewer.get_entity_scores(users, entities, self.base_questions)
+
+        return [entity for entity, score in entity_scores]
 
     def construct(self, users, entities, max_depth, depth=0):
-        min_users = 10
+        min_users = 15
         self.depth = depth
 
         # If this node doesn't have enough users to warrant a node split, we
         # can just assign the remaining interview questions as fixed questions
-        if len(users) < min_users or depth > 14:
+        if len(users) < min_users or depth > 9:
             # Use GreedyExtend to get remaining fixed questions
-            self.questions = self.interviewer.get_questions(users, entities=entities,
-                                                            base_questions=self.base_questions,
-                                                            num_questions=max_depth - (depth - 1),
-                                                            desc='[Ordering final questions]')
+            self.questions = self.get_popular_questions(users)[:max_depth - (depth - 1)]
+            # self.questions = self.get_fixed_questions(users)[:max_depth - (depth - 1)]
 
             return self
 
