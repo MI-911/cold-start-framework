@@ -147,7 +147,7 @@ class PageRankRecommender(RecommenderBase):
 
             logger.info(f'Found optimal ({best_pair[1]:.4f}): {self.parameters}')
 
-    @hashable_lru(maxsize=1024 * 8)
+    @hashable_lru(maxsize=1024)
     def _get_scores(self, answers):
         return self.sparse_graph.scores(alpha=self.parameters['alpha'],
                                         personalization=self.get_node_weights(answers, self.parameters['importance']))

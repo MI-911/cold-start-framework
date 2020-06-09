@@ -114,13 +114,13 @@ class GreedyInterviewer(InterviewerBase):
         now = time.time()
 
         futures = list()
-        with ProcessPoolExecutor(max_workers=4) as e:
-            for chunk in _chunks(entities, 1 / 4):
-                futures.append(e.submit(self._get_entity_scores, training, chunk, existing_entities, metric, cutoff))
-
-        for future in futures:
-            entity_scores.extend(future.result())
-
+        # with ProcessPoolExecutor(max_workers=2) as e:
+        #     for chunk in _chunks(entities, 1 / 2):
+        #         futures.append(e.submit(self._get_entity_scores, training, chunk, existing_entities, metric, cutoff))
+        #
+        # for future in futures:
+        #     entity_scores.extend(future.result())
+        entity_scores = self._get_entity_scores(training, entities, existing_entities, metric, cutoff)
         took_time = time.time() - now
 
         logger.info(f'Took {took_time:.2f}s, {len(training)} users, {len(entity_scores) / took_time:.2f} it/s, {(len(entity_scores) * len(training)) / took_time:.2f} rec/s')
@@ -218,13 +218,13 @@ class Node:
 
     def get_fixed_questions(self, users):
         # Consider the top-100 locally most popular entities
-        entities = self.get_popular_questions(users)[:100]
+        entities = self.get_popular_questions(users)[:200]
         entity_scores = self.interviewer.get_entity_scores(users, entities, self.base_questions)
 
         return [entity for entity, score in entity_scores]
 
     def construct(self, users, entities, max_depth, depth=0):
-        min_users = 15
+        min_users = 30
         self.depth = depth
 
         # If this node doesn't have enough users to warrant a node split, we
@@ -232,7 +232,7 @@ class Node:
         if len(users) < min_users or depth > 9:
             # Use GreedyExtend to get remaining fixed questions
             self.questions = self.get_popular_questions(users)[:max_depth - (depth - 1)]
-            # self.questions = self.get_fixed_questions(users)[:max_depth - (depth - 1)]
+            self.questions = self.get_fixed_questions(users)[:max_depth - (depth - 1)]
 
             return self
 
