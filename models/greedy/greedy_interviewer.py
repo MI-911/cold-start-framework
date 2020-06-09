@@ -1,4 +1,5 @@
 import json
+import multiprocessing
 import pickle
 from collections import defaultdict
 from math import ceil
@@ -8,6 +9,7 @@ from loguru import logger
 from tqdm import tqdm
 
 from models.base_interviewer import InterviewerBase
+from models.greedy.processing import Consumer
 from recommenders.base_recommender import RecommenderBase
 from shared.enums import Metric
 from shared.meta import Meta
@@ -23,7 +25,7 @@ def pprint_tree(node, prefix="- ", label=''):
 
 class GreedyInterviewer(InterviewerBase):
     def __init__(self, meta: Meta, recommender, recommender_kwargs=None, use_cuda=False, adaptive=False,
-                 cov_fraction=None):
+                 cov_fraction=None, multi_processing=True):
         super().__init__(meta, use_cuda)
 
         self.questions = None
@@ -41,6 +43,24 @@ class GreedyInterviewer(InterviewerBase):
                 kwargs.update(recommender_kwargs)
 
             self.recommender = recommender(**kwargs)
+
+        # Multi-processing
+        if multi_processing:
+            num_consumers = multiprocessing.cpu_count()
+            logger.debug(f'Using multi-processing with {num_consumers} consumers')
+
+            self.tasks = multiprocessing.JoinableQueue()
+            self.results = multiprocessing.Queue()
+            self.consumers = [Consumer(self.tasks, self.results) for _ in range(num_consumers)]
+
+            for consumer in self.consumers:
+                logger.debug(f'Starting {consumer.name}')
+
+                consumer.start()
+
+            logger.debug('All consumers started')
+
+            # self.kill_consumers()
 
     def get_entity_name(self, idx):
         return self._get_entity_property(idx, 'name')
@@ -150,19 +170,23 @@ class GreedyInterviewer(InterviewerBase):
         return questions
 
     def warmup(self, training, interview_length=10):
-        # self.recommender.parameters = {'alpha': 0.5499999999999999, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        self.recommender.parameters = {'alpha': 0.2, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
         if self.adaptive:
-            logger.debug('Constructing adaptive interview')
+            logger.debug(f'Constructing {interview_length}-length adaptive interview')
 
             self.root = Node(self).construct(
                 training, self.meta.get_question_candidates(training, limit=100), max_depth=interview_length - 1)
             pprint_tree(self.root)
         else:
-            logger.debug('Constructing fixed-question interview')
+            logger.debug(f'Constructing {interview_length}-length fixed-question interview')
 
             self.questions = self.get_questions(training)
+
+    def kill_consumers(self):
+        for _ in range(len(self.consumers)):
+            self.tasks.put(None)
 
     def get_parameters(self):
         pass
@@ -195,7 +219,7 @@ class Node:
                                               desc=f'[Searching candidates at depth {self.depth}]')[0]
 
     def construct(self, users, entities, max_depth, depth=0):
-        min_users = 10
+        min_users = 50
         self.depth = depth
 
         # If this node doesn't have enough users to warrant a node split, we
