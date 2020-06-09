@@ -2,7 +2,7 @@ from enum import Enum, IntEnum
 
 
 class UnseenSampling(Enum):
-    UNIFORM = 1
+    RANDOM = 1
     POPULARITY = 2
     EQUAL_POPULARITY = 3
 

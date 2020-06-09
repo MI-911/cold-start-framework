@@ -3,6 +3,11 @@ import json
 import matplotlib.pyplot as plt
 import pyplot_themes as themes
 #themes.theme_dark()
+
+plt.rcParams['axes.linewidth'] = 0.8
+print(plt.style.available)
+plt.style.use('seaborn-deep')
+
 if __name__ == '__main__':
     benchmark_data = {int(k): v for k, v in json.load(open('ppr_benchmark.json', 'r')).items()}
 

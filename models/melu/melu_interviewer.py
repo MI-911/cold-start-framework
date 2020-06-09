@@ -178,8 +178,9 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         grad_norms = {}
         start = 0
         for i, (support_x, support_y, _, _) in enumerate(train_data):
-            support_x = support_x.to_dense()
-            support_y = support_y.to_dense()
+            if self.use_sparse:
+                support_x = support_x.to_dense()
+                support_y = support_y.to_dense()
             entity_vec = support_x[:, :self.n_entities]
             stop = start + len(entity_vec)
             norm = self._get_weight_avg_norm(support_x, support_y)
@@ -213,9 +214,9 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         return grad_norms
 
     def _get_all_parameters(self):
-        learning_rates = [(5e-4, 5e-5)]#, (5e-5, 5e-6), (5e-6, 5e-7)]  # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
-        latent_factors = [8]#, 16, 32, 64, 128]  # [8, 16, 32, 64]
-        hidden_units = [32]#, 64, 128]  # [32, 64]
+        learning_rates = [(5e-4, 5e-5)] # [(5e-2, 5e-3), (5e-4, 5e-5), (5e-5, 5e-6), (5e-6, 5e-7)]
+        latent_factors = [128]  # [8, 16, 32, 64]
+        hidden_units = [128]  # [32, 64]
         all_params = []
         param = {}
         for learning_rate in learning_rates:
@@ -239,7 +240,7 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
         for j in range(max_iteration):
             if j == max_iteration - 1:
                 logger.debug(f'Reached final iteration')
-            # logger.debug(f'Starting epoch {i + 1}')
+            logger.debug(f'Starting epoch {j + 1}')
             # Ensure random order
             shuffle(train_data)
 
@@ -252,7 +253,7 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
                 batch = [list(b) for b in zip(*batch)]
                 self._global_update(*batch)
 
-            # logger.debug('Starting validation')
+            logger.debug('Starting validation')
             t = tt.ones(validation_limit)
             p = tt.zeros(validation_limit).float()
             shuffle(validation_data)
@@ -445,7 +446,9 @@ class MeLUInterviewer(InterviewerBase, tt.nn.Module):
             logger.debug(f'Found best param with score:{best_score}')
         else:
             self.load_parameters(self.optimal_params)
-            _, _ = self._train(train_data, val, batch_size)
+            _, model = self._train(train_data, val, batch_size)
+            self.model.load_state_dict(model)
+            self.store_parameters()
 
         grad_norms = self._calculate_grad_norms(train_data, items)
         grad_norms = {entity: grad_norms[entity] for entity in grad_norms.keys() if entity in valid_candidates}

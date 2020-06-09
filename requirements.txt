@@ -4,7 +4,7 @@ tqdm
 loguru
 scipy
 networkx
-torch
+torch==1.4.0
 sklearn
 neo4j
 pygraphviz

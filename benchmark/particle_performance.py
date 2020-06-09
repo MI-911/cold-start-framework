@@ -9,6 +9,7 @@ import tqdm
 from neo4j import GraphDatabase
 from loguru import logger
 
+
 num_particles = [10, 25, 50, 75, 100, 200, 500, 1000]
 alphas = [0.1, 0.25, 0.4, 0.55, 0.7, 0.85]
 

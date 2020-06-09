@@ -17,7 +17,7 @@ def sentiment_to_int(sentiment):
 class RankingOptions:
     def __init__(self, num_positive: int, num_negative: int = 0, num_unknown: int = 0, num_unseen: int = 0,
                  sentiment_utility: Dict[Sentiment, float] = None, default_cutoff: int = 10,
-                 unseen_sampling=UnseenSampling.UNIFORM, seen_sampling=SeenSampling.STANDARD):
+                 unseen_sampling=UnseenSampling.RANDOM, seen_sampling=SeenSampling.STANDARD):
         # Note discrepancy between 'unknown' and 'unseen', as 'unknown' is an explicit rating
         self.sentiment_count = {Sentiment.POSITIVE: num_positive, Sentiment.NEGATIVE: num_negative,
                                 Sentiment.UNKNOWN: num_unknown, Sentiment.UNSEEN: num_unseen}

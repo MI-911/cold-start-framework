@@ -107,6 +107,7 @@ class PageRankRecommender(RecommenderBase):
         self.sparse_graph = SparseGraph(self.construct_graph(training))
 
         can_ask_about = set(self.meta.get_question_candidates(training, limit=self.ask_limit))
+        logger.debug(f'Can ask about {len(can_ask_about)} entities')
 
         self.parameters = {
             'alpha': 0.1,

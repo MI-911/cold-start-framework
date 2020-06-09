@@ -5,7 +5,7 @@ from recommenders.pagerank.pair_linear_pagerank_recommender import PairLinearPag
 from shared.user import WarmStartUser
 
 
-class PairLinearCombinedPageRankRecommender(PairLinearPageRankRecommender):
+class PairLinearJointPageRankRecommender(PairLinearPageRankRecommender):
     def __init__(self, meta, ask_limit: int = None):
         super().__init__(meta, ask_limit)
 
@@ -26,5 +26,9 @@ class PairLinearCombinedPageRankRecommender(PairLinearPageRankRecommender):
         # Create graphs for kg
         for sentiment in sentiments:
             graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit, only_kg=True))
+
+        # Create graphs for joint
+        for sentiment in sentiments:
+            graphs.append(GraphWrapper(training, sentiment, self.meta, self.ask_limit, use_meta=True))
 
         return graphs
