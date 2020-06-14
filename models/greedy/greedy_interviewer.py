@@ -115,8 +115,8 @@ class GreedyInterviewer(InterviewerBase):
         now = time.time()
 
         futures = list()
-        with ProcessPoolExecutor(max_workers=6) as e:
-            for chunk in _chunks(entities, 1 / 6):
+        with ProcessPoolExecutor(max_workers=8) as e:
+            for chunk in _chunks(entities, 1 / 8):
                 futures.append(e.submit(self._get_entity_scores, training, chunk, existing_entities, metric, cutoff))
 
         for future in futures:
@@ -170,7 +170,7 @@ class GreedyInterviewer(InterviewerBase):
         return questions
 
     def warmup(self, training, interview_length=10):
-        self.recommender.parameters = {'alpha': 0.2, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
+        # self.recommender.parameters = {'alpha': 0.2, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
         if self.adaptive:

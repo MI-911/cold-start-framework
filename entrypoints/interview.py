@@ -200,7 +200,7 @@ def _run_split(model_selection: Set[str], split: Split, recommendable_only, done
         start_time = time.time()
 
         for model_instance, metrics, length, answers in _run_model(model, split.experiment, meta, training, testing,
-                                                                   max_n_questions=10):
+                                                                   max_n_questions=5):
             done_callback(split, model_alias, model_instance, answers, metrics, length)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')
