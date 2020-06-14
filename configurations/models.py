@@ -59,7 +59,9 @@ models = {
         'interviewer': GreedyInterviewer,
         'recommender': PairLinearCombinedPageRankRecommender,
         'interviewer_kwargs': {
-            'adaptive': True,
+            'adaptive': True
+        },
+        'recommender_kwargs': {
             'ask_limit': 10
         }
     },
