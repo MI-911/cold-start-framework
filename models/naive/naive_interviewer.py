@@ -1,10 +1,11 @@
 import operator
 
 import numpy as np
+from loguru import logger
 
 from models.base_interviewer import InterviewerBase
 from shared.meta import Meta
-
+from time import time
 
 class NaiveInterviewer(InterviewerBase):
     def __init__(self, meta: Meta, recommender=None, use_cuda=False, recommender_kwargs=None):
@@ -29,9 +30,13 @@ class NaiveInterviewer(InterviewerBase):
         return [entity for entity in self.questions if entity not in answers]
 
     def warmup(self, training, interview_length=5):
+        now = time()
+        self.questions = self.meta.get_question_candidates(training)
+        logger.info(time() - now)
+        self.recommender.parameters = {'alpha': 0.2, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
-        self.questions = self.meta.get_question_candidates(training)
+
 
     def get_parameters(self):
         pass

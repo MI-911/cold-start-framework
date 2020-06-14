@@ -164,10 +164,8 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
             model_instance, _ = _instantiate_model(model_name, experiment, meta, num_questions)
             model_instance.warmup(training, num_questions)
 
-        popular_items = meta.get_question_candidates(training, recommendable_only=True)
-
         hits, ndcgs, taus, sers, covs, answers = _test(testing, model_instance, num_questions, upper_cutoff, meta,
-                                                       popular_items)
+                                                       meta.popular_items)
 
         # Compute metrics at different cutoffs
         metric = defaultdict(dict)
@@ -191,7 +189,7 @@ def _run_model(model_name, experiment: Experiment, meta: Meta, training: Dict[in
 def _run_split(model_selection: Set[str], split: Split, recommendable_only, type_limit, done_callback):
     training = split.data_loader.training()
     testing = split.data_loader.testing()
-    meta = split.data_loader.meta(recommendable_only, type_limit)
+    meta = split.data_loader.meta(training, recommendable_only, type_limit)
 
     for model in model_selection:
         # If recommendable only, then append flag to model alias
@@ -201,7 +199,7 @@ def _run_split(model_selection: Set[str], split: Split, recommendable_only, type
         start_time = time.time()
 
         for model_instance, metrics, length, answers in _run_model(model, split.experiment, meta, training, testing,
-                                                                   max_n_questions=30):
+                                                                   max_n_questions=5):
             done_callback(split, model_alias, model_instance, answers, metrics, length)
 
         logger.info(f'Finished {model}, elapsed {time.time() - start_time:.2f}s')

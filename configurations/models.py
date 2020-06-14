@@ -91,7 +91,7 @@ models = {
         'interviewer': GreedyInterviewer,
         'recommender': JointPageRankRecommender
     },
-    'greedy-adaptive-ppr-joint': {
+    'greedy-adaptive-ppr-joint-threeway': {
         'interviewer': GreedyInterviewer,
         'recommender': JointPageRankRecommender,
         'interviewer_kwargs': {

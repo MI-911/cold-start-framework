@@ -20,9 +20,10 @@ class DataLoader:
     def testing(self) -> Dict[int, ColdStartUser]:
         return self._load('testing.pkl')
 
-    def meta(self, recommendable_only: bool = False, type_limit: List = None) -> Meta:
+    def meta(self, training=None, recommendable_only: bool = False, type_limit: List = None) -> Meta:
         meta = self._load('meta.pkl')
         meta.recommendable_only = recommendable_only
         meta.type_limit = type_limit
+        meta.popular_items = meta.get_question_candidates(training, recommendable_only=True) if training else None
 
         return meta

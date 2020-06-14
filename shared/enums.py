@@ -32,3 +32,4 @@ class Metric(Enum):
     SER = 3
     COV = 4
     TAU = 5
+    MIXED = 6

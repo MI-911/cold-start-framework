@@ -7,6 +7,7 @@ import numpy as np
 from loguru import logger
 from tqdm import tqdm
 
+from partitioners.partition_interview import _chunks
 from recommenders.base_recommender import RecommenderBase
 from recommenders.pagerank.sparse_graph import SparseGraph
 from shared.meta import Meta
@@ -99,12 +100,17 @@ class PageRankRecommender(RecommenderBase):
         # Assign weight to each node depending on their rating
         return {idx: rating_weight[category] for category in RATING_CATEGORIES for idx in ratings[category]}
 
+    def update_graph(self, training: Dict[int, WarmStartUser]):
+        del self.sparse_graph
+        self.sparse_graph = SparseGraph(self.construct_graph(training))
+        self.clear_cache()
+
     def fit(self, training: Dict[int, WarmStartUser]):
         for _, user in training.items():
             for entity in user.training.keys():
                 self.entity_indices.add(entity)
 
-        self.sparse_graph = SparseGraph(self.construct_graph(training))
+        self.update_graph(training)
 
         can_ask_about = set(self.meta.get_question_candidates(training, limit=self.ask_limit))
         logger.debug(f'Can ask about {len(can_ask_about)} entities')
@@ -129,6 +135,7 @@ class PageRankRecommender(RecommenderBase):
                 progress.set_description(str(combination))
 
                 predictions = list()
+
                 for _, user in progress:
                     user_answers = {idx: rating for idx, rating in user.training.items() if idx in can_ask_about}
                     prediction = self.predict(user.validation.to_list(), user_answers)

@@ -36,6 +36,7 @@ class GreedyInterviewer(InterviewerBase):
         self.root = None
         # self.meta.validator.metric = Metric.HR
         self.cov_fraction = cov_fraction
+        logger.info(f'Cov fraction: {self.cov_fraction}')
 
         if isinstance(recommender, RecommenderBase):
             self.recommender = recommender
@@ -77,7 +78,7 @@ class GreedyInterviewer(InterviewerBase):
         # the appropriate child node to go to
         question = node.questions[0]
         if question in answers:
-            traverse_to = {-1: node.DISLIKE, 0: node.DISLIKE, 1: node.LIKE}
+            traverse_to = {-1: node.DISLIKE, 0: node.UNKNOWN, 1: node.LIKE}
             remaining_answers = {e: a for e, a in answers.items() if not e == question}
             return self._traverse(remaining_answers, traverse_to.get(answers.get(question, 0)))
 
@@ -114,13 +115,12 @@ class GreedyInterviewer(InterviewerBase):
         now = time.time()
 
         futures = list()
-        # with ProcessPoolExecutor(max_workers=2) as e:
-        #     for chunk in _chunks(entities, 1 / 2):
-        #         futures.append(e.submit(self._get_entity_scores, training, chunk, existing_entities, metric, cutoff))
-        #
-        # for future in futures:
-        #     entity_scores.extend(future.result())
-        entity_scores = self._get_entity_scores(training, entities, existing_entities, metric, cutoff)
+        with ProcessPoolExecutor(max_workers=3) as e:
+            for chunk in _chunks(entities, 1 / 3):
+                futures.append(e.submit(self._get_entity_scores, training, chunk, existing_entities, metric, cutoff))
+
+        for future in futures:
+            entity_scores.extend(future.result())
         took_time = time.time() - now
 
         logger.info(f'Took {took_time:.2f}s, {len(training)} users, {len(entity_scores) / took_time:.2f} it/s, {(len(entity_scores) * len(training)) / took_time:.2f} rec/s')
@@ -147,13 +147,13 @@ class GreedyInterviewer(InterviewerBase):
         base_questions = base_questions if base_questions else list()
 
         for question in range(num_questions):
-            entity_scores = self.get_entity_scores(training, entities, questions + base_questions)
+            entity_scores = self.get_entity_scores(training, entities, questions + base_questions, metric=Metric.MIXED)
 
             if self.cov_fraction:
                 top_entities = [entity for entity, score in entity_scores]
                 top_entities = top_entities[:max(1, ceil(len(top_entities) * self.cov_fraction))]
 
-                entity_scores = self.get_entity_scores(training, top_entities, questions, metric=Metric.COV)
+                entity_scores = self.get_entity_scores(training, top_entities, questions, metric=Metric.MIXED)
 
             next_question = entity_scores[0][0]
 
@@ -167,7 +167,7 @@ class GreedyInterviewer(InterviewerBase):
 
         return questions
 
-    def warmup(self, training, interview_length=30):
+    def warmup(self, training, interview_length=10):
         # self.recommender.parameters = {'alpha': 0.2, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
@@ -175,12 +175,12 @@ class GreedyInterviewer(InterviewerBase):
             logger.debug(f'Constructing {interview_length}-length adaptive interview')
 
             self.root = Node(self).construct(
-                training, self.meta.get_question_candidates(training, limit=200), max_depth=interview_length - 1)
+                training, self.meta.get_question_candidates(training, limit=100), max_depth=interview_length - 1)
             pprint_tree(self.root)
         else:
             logger.debug('Constructing fixed-question interview')
 
-            self.questions = self.get_questions(training)
+            self.questions = self.get_questions(training, interview_length)
 
     def get_parameters(self):
         pass
@@ -203,6 +203,7 @@ class Node:
 
         self.LIKE = None
         self.DISLIKE = None
+        self.UNKNOWN = None
         self.questions = None
         self.users = []
         self.depth = 0
@@ -227,11 +228,13 @@ class Node:
         min_users = 30
         self.depth = depth
 
+        # self.interviewer.recommender.update_graph(users)
+
         # If this node doesn't have enough users to warrant a node split, we
         # can just assign the remaining interview questions as fixed questions
         if len(users) < min_users or depth > 9:
             # Use GreedyExtend to get remaining fixed questions
-            self.questions = self.get_popular_questions(users)[:max_depth - (depth - 1)]
+            # self.questions = self.get_popular_questions(users)[:max_depth - (depth - 1)]
             self.questions = self.get_fixed_questions(users)[:max_depth - (depth - 1)]
 
             return self
@@ -251,12 +254,13 @@ class Node:
         question = self.questions[0]
 
         liked_users = filter_users(users, question, [1])
-        disliked_users = filter_users(users, question, [0, -1])
+        disliked_users = filter_users(users, question, [-1])
 
         base_questions = self.base_questions + self.questions
 
         self.LIKE = Node(self.interviewer, base_questions).construct(liked_users, entities, max_depth, depth + 1)
         self.DISLIKE = Node(self.interviewer, base_questions).construct(disliked_users, entities, max_depth, depth + 1)
+        self.UNKNOWN = Node(self.interviewer, base_questions).construct(users, entities, max_depth, depth + 1)
 
         return self
 
