@@ -18,8 +18,14 @@ import matplotlib.pyplot as plt
 from networkx.drawing.nx_agraph import graphviz_layout
 
 
-def pprint_tree_as_graph(graph, node, depth, max_depth):
+def build_labelled_graph(graph, node, depth, max_depth):
     node_labels = []
+
+    # Label this node by node.n_users()
+    # Important: NetworkX hashes this node by str(node).
+    #            If the graph is looking weird, it's probably because
+    #            some nodes have the same str(node) and are considered as the same node.
+    #            Modify node.__repr__() to rectify.
     node_labels.append((node, node.n_users()))
 
     if depth == max_depth:
@@ -29,12 +35,12 @@ def pprint_tree_as_graph(graph, node, depth, max_depth):
 
     graph.add_node(node)
 
-    for symbol, child in [('L', node.LIKE), ('U', node.UNKNOWN), ('D', node.DISLIKE)]:
+    for symbol, child in [('L', node.LIKE), ('D', node.DISLIKE)]:
 
         if child:
             graph.add_edge(node, child)
             edge_labels.append(((node, child), symbol))
-            graph, new_edge_labels, new_node_labels = pprint_tree_as_graph(graph, child, depth + 1, max_depth)
+            graph, new_edge_labels, new_node_labels = build_labelled_graph(graph, child, depth + 1, max_depth)
             edge_labels += new_edge_labels
             node_labels += new_node_labels
 
@@ -188,10 +194,10 @@ class GreedyInterviewer(InterviewerBase):
         if self.adaptive:
             logger.debug('Constructing adaptive interview')
 
-            self.root = Node(self).construct(training, self.meta.get_question_candidates(training, limit=50))
+            self.root = Node(self).construct(training, self.meta.get_question_candidates(training, limit=50), max_depth=4)
             graph = nx.DiGraph()
             print(f'Constructing tree graph...')
-            graph, edge_labels, node_labels = pprint_tree_as_graph(graph, self.root, 0, 3)
+            graph, edge_labels, node_labels = build_labelled_graph(graph, self.root, 0, 3)
             edge_labels = {edge: label for edge, label in edge_labels}
             node_labels = {node: label for node, label in node_labels}
 
@@ -201,16 +207,16 @@ class GreedyInterviewer(InterviewerBase):
                     'edge_labels': edge_labels,
                     'node_labels': node_labels
                 }, fp)
-
-            print(f'Calculating positions of {graph.number_of_nodes()} nodes...')
-            pos = graphviz_layout(graph)
-            print(f'Drawing...')
-            nx.draw(graph, pos=pos, with_labels=False, node_size=600, node_color='lightgrey', node_labels=node_labels)
-            nx.draw_networkx_edge_labels(graph, pos, edge_labels=edge_labels)
-            nx.draw_networkx_labels(graph, pos, labels=node_labels)
-            print(f'Showing...')
-            plt.savefig('dec_tree_graph.pdf')
-            plt.show()
+            #
+            # print(f'Calculating positions of {graph.number_of_nodes()} nodes...')
+            # pos = graphviz_layout(graph)
+            # print(f'Drawing...')
+            # nx.draw(graph, pos=pos, with_labels=False, node_size=600, node_color='lightgrey', node_labels=node_labels)
+            # nx.draw_networkx_edge_labels(graph, pos, edge_labels=edge_labels)
+            # nx.draw_networkx_labels(graph, pos, labels=node_labels)
+            # print(f'Showing...')
+            # plt.savefig('dec_tree_graph.pdf')
+            # plt.show()
         else:
             logger.debug('Constructing fixed-question interview')
 
@@ -259,6 +265,7 @@ class Node:
     def construct(self, users, entities, max_depth, depth=0):
         min_users = 10
         self.depth = depth
+        self.users = users
 
         # If this node doesn't have enough users to warrant a node split, we
         # can just assign the remaining interview questions as fixed questions
@@ -298,5 +305,8 @@ class Node:
     def is_fixed(self):
         return len(self.questions) > 1
 
+    def n_users(self):
+        return len(self.users)
+
     def __repr__(self):
-        return str([self.interviewer.get_entity_name(question) for question in self.questions])
+        return f'{self.depth}-{self.n_users()}-{str([self.interviewer.get_entity_name(question) for question in self.questions])}'
