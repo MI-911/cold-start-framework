@@ -167,7 +167,7 @@ class GreedyInterviewer(InterviewerBase):
 
         return questions
 
-    def warmup(self, training, interview_length=10):
+    def warmup(self, training, interview_length=5):
         # self.recommender.parameters = {'alpha': 0.2, 'importance': {1: 0.95, 0: 0.05, -1: 0.0}}
         self.recommender.fit(training)
 
